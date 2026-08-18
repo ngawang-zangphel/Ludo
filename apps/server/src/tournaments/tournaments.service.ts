@@ -1,0 +1,179 @@
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { InjectModel } from '@nestjs/mongoose';
+import { Model, Types } from 'mongoose';
+import {
+  DEFAULT_DISCONNECT_RULES,
+  DEFAULT_LUDO_RULES,
+  ParticipantDto,
+  ParticipantStatus,
+  TournamentDto,
+  TournamentStatus,
+} from '@ludo-game/shared-types';
+import { Tournament, TournamentDocument } from './schemas/tournament.schema';
+import {
+  TournamentParticipant,
+  TournamentParticipantDocument,
+} from './schemas/participant.schema';
+import { CreateTournamentDto, RegisterParticipantDto } from './dto/tournament.dto';
+import { UsersService } from '../users/users.service';
+import { toObjectIdString } from '../common/types';
+import { logEvent } from '../common/logger';
+import { MatchesService } from '../matches/matches.service';
+
+@Injectable()
+export class TournamentsService {
+  constructor(
+    @InjectModel(Tournament.name) private readonly tournaments: Model<TournamentDocument>,
+    @InjectModel(TournamentParticipant.name)
+    private readonly participants: Model<TournamentParticipantDocument>,
+    private readonly users: UsersService,
+    private readonly matches: MatchesService
+  ) {}
+
+  async create(dto: CreateTournamentDto): Promise<TournamentDto> {
+    const tournament = await this.tournaments.create({
+      name: dto.name,
+      status: TournamentStatus.REGISTRATION,
+      rules: DEFAULT_LUDO_RULES,
+      disconnectRules: DEFAULT_DISCONNECT_RULES,
+      rounds: dto.rounds ?? [
+        { name: 'ROUND_1', number: 1 },
+        { name: 'SEMI_FINAL', number: 2 },
+        { name: 'FINAL', number: 3 },
+      ],
+    });
+    logEvent('Tournament created', { tournamentId: toObjectIdString(tournament._id), name: dto.name });
+    return this.toDto(tournament);
+  }
+
+  async list(): Promise<TournamentDto[]> {
+    const rows = await this.tournaments.find().sort({ createdAt: -1 }).exec();
+    return rows.map((row) => this.toDto(row));
+  }
+
+  async get(id: string): Promise<TournamentDto> {
+    return this.toDto(await this.require(id));
+  }
+
+  async setStatus(id: string, status: TournamentStatus): Promise<TournamentDto> {
+    const tournament = await this.require(id);
+    tournament.status = status;
+    await tournament.save();
+    return this.toDto(tournament);
+  }
+
+  async register(tournamentId: string, dto: RegisterParticipantDto): Promise<ParticipantDto> {
+    const tournament = await this.require(tournamentId);
+    const user = await this.users.findById(dto.userId);
+    const count = await this.participants.countDocuments({ tournamentId: tournament._id });
+    const participant = await this.participants.create({
+      tournamentId: tournament._id,
+      userId: user._id,
+      seed: count + 1,
+      status: ParticipantStatus.REGISTERED,
+    });
+    return {
+      id: toObjectIdString(participant._id),
+      tournamentId,
+      userId: toObjectIdString(user._id),
+      name: user.name,
+      email: user.email,
+      seed: participant.seed,
+      status: participant.status,
+    };
+  }
+
+  async listParticipants(tournamentId: string): Promise<ParticipantDto[]> {
+    const rows = await this.participants.find({ tournamentId: new Types.ObjectId(tournamentId) }).exec();
+    const result: ParticipantDto[] = [];
+    for (const row of rows) {
+      const user = await this.users.findById(toObjectIdString(row.userId));
+      result.push({
+        id: toObjectIdString(row._id),
+        tournamentId,
+        userId: toObjectIdString(user._id),
+        name: user.name,
+        email: user.email,
+        seed: row.seed,
+        status: row.status,
+        finalRank: row.finalRank,
+      });
+    }
+    return result.sort((a, b) => a.seed - b.seed);
+  }
+
+  async advance(tournamentId: string, fromRoundNumber: number): Promise<void> {
+    const tournament = await this.require(tournamentId);
+    const round = tournament.rounds.find((item) => item.number === fromRoundNumber);
+    const nextRound = tournament.rounds.find((item) => item.number === fromRoundNumber + 1);
+    if (!round) {
+      throw new BadRequestException('Round not found');
+    }
+    const matches = await this.matches.list({ tournamentId });
+    const completed = matches.filter(
+      (match) => match.roundNumber === fromRoundNumber && match.status === 'COMPLETED'
+    );
+    const winners = completed
+      .map((match) => match.winnerIds[0])
+      .filter((id): id is string => Boolean(id));
+    if (winners.length === 0) {
+      throw new BadRequestException('No winners to advance');
+    }
+    if (!nextRound || winners.length === 1) {
+      tournament.status = TournamentStatus.COMPLETED;
+      await tournament.save();
+      const winnerId = winners[0];
+      if (winnerId) {
+        await this.participants.findOneAndUpdate(
+          { tournamentId: tournament._id, userId: new Types.ObjectId(winnerId) },
+          { status: ParticipantStatus.WINNER, finalRank: 1 }
+        );
+      }
+      return;
+    }
+
+    const existing = matches.filter((match) => match.roundNumber === nextRound.number);
+    let matchNumber =
+      matches.reduce((max, match) => Math.max(max, match.matchNumber), 0) + 1;
+    for (let index = 0; index < winners.length; index += 4) {
+      const group = winners.slice(index, index + 4);
+      if (group.length < 2) {
+        break;
+      }
+      if (existing.some((match) => match.players.some((player) => group.includes(player.userId)))) {
+        continue;
+      }
+      await this.matches.create({
+        tournamentId,
+        round: nextRound.name,
+        roundNumber: nextRound.number,
+        matchNumber,
+        playerUserIds: group,
+      });
+      matchNumber += 1;
+    }
+    tournament.status = TournamentStatus.LIVE;
+    await tournament.save();
+  }
+
+  private async require(id: string): Promise<TournamentDocument> {
+    const tournament = await this.tournaments.findById(id).exec();
+    if (!tournament) {
+      throw new NotFoundException('Tournament not found');
+    }
+    return tournament;
+  }
+
+  private toDto(tournament: TournamentDocument): TournamentDto {
+    return {
+      id: toObjectIdString(tournament._id),
+      name: tournament.name,
+      status: tournament.status,
+      rules: tournament.rules,
+      disconnectRules: tournament.disconnectRules,
+      rounds: tournament.rounds,
+      createdAt: tournament.createdAt?.toISOString() ?? new Date().toISOString(),
+      updatedAt: tournament.updatedAt?.toISOString() ?? new Date().toISOString(),
+    };
+  }
+}

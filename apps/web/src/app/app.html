@@ -1,0 +1,24 @@
+@if (showChrome()) {
+  <header class="border-b border-arena-line/80 bg-arena-navy/70 backdrop-blur">
+    <div class="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3 px-4 py-3">
+      <a routerLink="/" class="font-display text-lg font-semibold text-white">Ludo Arena</a>
+      <nav class="flex flex-wrap items-center gap-3 text-sm text-arena-mist/80">
+        @if (auth.user(); as user) {
+          <a routerLink="/" class="hover:text-arena-gold">Lobby</a>
+          @if (user.role === 'ADMIN') {
+            <a routerLink="/admin" class="hover:text-arena-gold">Admin</a>
+            <a routerLink="/admin/tournaments" class="hover:text-arena-gold">Tournaments</a>
+          }
+          <a routerLink="/broadcast" class="hover:text-arena-gold">Broadcast</a>
+          <a routerLink="/local" class="hover:text-arena-gold">Hot-seat</a>
+          <span class="text-arena-mist/50">{{ user.name }}</span>
+          <button type="button" class="hover:text-piece-red" (click)="auth.logout()">Sign out</button>
+        } @else {
+          <a routerLink="/login" class="hover:text-arena-gold">Sign in</a>
+          <a routerLink="/local" class="hover:text-arena-gold">Hot-seat</a>
+        }
+      </nav>
+    </div>
+  </header>
+}
+<router-outlet />

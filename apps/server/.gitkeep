@@ -1,0 +1,11 @@
+{
+  "name": "@ludo-game/source",
+  "version": "0.0.0",
+  "license": "MIT",
+  "scripts": {
+    "start": "nx serve web",
+    "build": "nx build web",
+    "test": "nx test game-engine",
+    "test:engine": "nx test game-engine"
+  },
+  "private": true,

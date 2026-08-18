@@ -1,0 +1,74 @@
+export enum PlayerColor {
+  RED = 'RED',
+  GREEN = 'GREEN',
+  YELLOW = 'YELLOW',
+  BLUE = 'BLUE',
+}
+
+export enum MatchStatus {
+  WAITING = 'WAITING',
+  READY = 'READY',
+  LIVE = 'LIVE',
+  PAUSED = 'PAUSED',
+  COMPLETED = 'COMPLETED',
+  CANCELLED = 'CANCELLED',
+}
+
+export enum TurnPhase {
+  WAITING_FOR_ROLL = 'WAITING_FOR_ROLL',
+  WAITING_FOR_MOVE = 'WAITING_FOR_MOVE',
+  MATCH_OVER = 'MATCH_OVER',
+}
+
+export enum PieceState {
+  YARD = 'YARD',
+  BOARD = 'BOARD',
+  HOME_PATH = 'HOME_PATH',
+  HOME = 'HOME',
+}
+
+export enum UserRole {
+  PLAYER = 'PLAYER',
+  ADMIN = 'ADMIN',
+}
+
+export enum TournamentStatus {
+  DRAFT = 'DRAFT',
+  REGISTRATION = 'REGISTRATION',
+  LIVE = 'LIVE',
+  COMPLETED = 'COMPLETED',
+  CANCELLED = 'CANCELLED',
+}
+
+export enum ParticipantStatus {
+  REGISTERED = 'REGISTERED',
+  ACTIVE = 'ACTIVE',
+  ELIMINATED = 'ELIMINATED',
+  WINNER = 'WINNER',
+}
+
+export enum GameEventType {
+  MATCH_STARTED = 'MATCH_STARTED',
+  DICE_ROLLED = 'DICE_ROLLED',
+  NO_VALID_MOVES = 'NO_VALID_MOVES',
+  PIECE_MOVED = 'PIECE_MOVED',
+  PIECE_CAPTURED = 'PIECE_CAPTURED',
+  PIECE_ENTERED_BOARD = 'PIECE_ENTERED_BOARD',
+  PIECE_ENTERED_HOME_PATH = 'PIECE_ENTERED_HOME_PATH',
+  PIECE_REACHED_HOME = 'PIECE_REACHED_HOME',
+  PLAYER_FINISHED = 'PLAYER_FINISHED',
+  TURN_CHANGED = 'TURN_CHANGED',
+  EXTRA_TURN = 'EXTRA_TURN',
+  CONSECUTIVE_SIXES_FORFEIT = 'CONSECUTIVE_SIXES_FORFEIT',
+  MATCH_PAUSED = 'MATCH_PAUSED',
+  MATCH_RESUMED = 'MATCH_RESUMED',
+  MATCH_FINISHED = 'MATCH_FINISHED',
+}
+
+/** Clockwise order around the board, starting from RED (bottom-left). */
+export const PLAYER_COLOR_ORDER: readonly PlayerColor[] = [
+  PlayerColor.RED,
+  PlayerColor.GREEN,
+  PlayerColor.YELLOW,
+  PlayerColor.BLUE,
+] as const;

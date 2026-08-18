@@ -1,0 +1,102 @@
+@import "tailwindcss";
+
+@theme {
+  --font-display: "Sora", "Outfit", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "Outfit", ui-sans-serif, system-ui, sans-serif;
+  --color-arena-ink: #070b14;
+  --color-arena-navy: #10182b;
+  --color-arena-panel: #172038;
+  --color-arena-line: #2a3b63;
+  --color-arena-gold: #e4c16a;
+  --color-arena-mist: #d7e0f2;
+  --color-piece-red: #ff4d6d;
+  --color-piece-green: #22c55e;
+  --color-piece-yellow: #f5c842;
+  --color-piece-blue: #38bdf8;
+  --color-track: #f3efe4;
+  --color-track-line: #cfc4a8;
+}
+
+html,
+body {
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  background:
+    radial-gradient(circle at top, rgba(56, 189, 248, 0.08), transparent 28%),
+    radial-gradient(circle at 80% 20%, rgba(228, 193, 106, 0.08), transparent 24%),
+    var(--color-arena-ink);
+  color: var(--color-arena-mist);
+  font-family: var(--font-sans);
+}
+
+.ludo-board-grid {
+  display: grid;
+  grid-template-columns: repeat(15, minmax(0, 1fr));
+  grid-template-rows: repeat(15, minmax(0, 1fr));
+  aspect-ratio: 1;
+  width: min(92vw, 72vh, 760px);
+  border-radius: 1.5rem;
+  overflow: hidden;
+  background: #0c1426;
+  box-shadow:
+    0 0 0 1px rgba(228, 193, 106, 0.25),
+    0 24px 80px rgba(0, 0, 0, 0.45);
+}
+
+.piece-token {
+  width: 68%;
+  height: 68%;
+  border-radius: 999px;
+  box-shadow:
+    inset 0 -6px 10px rgba(0, 0, 0, 0.28),
+    inset 0 6px 8px rgba(255, 255, 255, 0.28),
+    0 4px 10px rgba(0, 0, 0, 0.35);
+  transition:
+    transform 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.piece-token.is-valid {
+  box-shadow:
+    inset 0 -6px 10px rgba(0, 0, 0, 0.28),
+    0 0 0 3px #fff,
+    0 0 18px currentColor;
+  animation: pulse-valid 1.2s ease-in-out infinite;
+}
+
+@keyframes pulse-valid {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.08);
+  }
+}
+
+.dice-face {
+  width: 5.5rem;
+  height: 5.5rem;
+  border-radius: 1.1rem;
+  background: linear-gradient(160deg, #fff8e8, #e8d9b0);
+  color: #1b1408;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.8),
+    0 12px 24px rgba(0, 0, 0, 0.35);
+}
+
+.dice-face.is-rolling {
+  animation: dice-spin 0.55s linear infinite;
+}
+
+@keyframes dice-spin {
+  from {
+    transform: rotateX(0deg) rotateY(0deg);
+  }
+  to {
+    transform: rotateX(360deg) rotateY(220deg);
+  }
+}

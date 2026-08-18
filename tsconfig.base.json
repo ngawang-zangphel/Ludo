@@ -1,0 +1,24 @@
+{
+  "compileOnSave": false,
+  "compilerOptions": {
+    "rootDir": ".",
+    "sourceMap": true,
+    "declaration": false,
+    "moduleResolution": "bundler",
+    "emitDecoratorMetadata": true,
+    "experimentalDecorators": true,
+    "importHelpers": true,
+    "target": "es2015",
+    "module": "esnext",
+    "lib": ["es2020", "dom"],
+    "skipLibCheck": true,
+    "skipDefaultLibCheck": true,
+    "strict": true,
+    "ignoreDeprecations": "6.0",
+    "paths": {
+      "@ludo-game/shared-types": ["./packages/shared-types/src/index.ts"],
+      "@ludo-game/game-engine": ["./packages/game-engine/src/index.ts"]
+    }
+  },
+  "exclude": ["node_modules", "tmp"]
+}
