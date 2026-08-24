@@ -23,8 +23,8 @@ export class App {
     { initialValue: this.router.url }
   );
 
-  readonly showChrome = computed(() => {
+  readonly showNav = computed(() => {
     const url = this.url();
-    return !url.startsWith('/login') && !url.startsWith('/broadcast');
+    return !url.startsWith('/login') && !url.startsWith('/register') && !url.startsWith('/broadcast');
   });
 }

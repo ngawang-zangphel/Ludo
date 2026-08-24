@@ -53,9 +53,9 @@ export class ArenaApiService {
 
   createMatch(body: {
     tournamentId: string;
-    round: string;
-    roundNumber: number;
-    matchNumber: number;
+    round?: string;
+    roundNumber?: number;
+    matchNumber?: number;
     playerUserIds?: string[];
     random?: boolean;
   }): Promise<MatchDetailDto> {
@@ -90,6 +90,10 @@ export class ArenaApiService {
 
   cancel(matchId: string): Promise<MatchDetailDto> {
     return firstValueFrom(this.http.post<MatchDetailDto>(`/api/matches/${matchId}/cancel`, {}));
+  }
+
+  deleteMatch(matchId: string): Promise<{ ok: true }> {
+    return firstValueFrom(this.http.delete<{ ok: true }>(`/api/matches/${matchId}`));
   }
 
   broadcast(matchId: string): Promise<{ matchId: string | null }> {
@@ -142,7 +146,23 @@ export class ArenaApiService {
     return firstValueFrom(this.http.get<UserDto[]>('/api/users'));
   }
 
-  createUser(body: { email: string; name: string; password: string; role?: string }): Promise<UserDto> {
+  createUser(body: {
+    email: string;
+    name: string;
+    password: string;
+    role?: string;
+  }): Promise<UserDto> {
     return firstValueFrom(this.http.post<UserDto>('/api/users', body));
+  }
+
+  updateUser(
+    id: string,
+    body: { email?: string; name?: string; password?: string; role?: string }
+  ): Promise<UserDto> {
+    return firstValueFrom(this.http.patch<UserDto>(`/api/users/${id}`, body));
+  }
+
+  deleteUser(id: string): Promise<{ ok: true }> {
+    return firstValueFrom(this.http.delete<{ ok: true }>(`/api/users/${id}`));
   }
 }

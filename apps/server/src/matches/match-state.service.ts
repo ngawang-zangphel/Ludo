@@ -87,6 +87,13 @@ export class MatchStateService {
     this.cache.delete(matchId);
   }
 
+  async deletePersisted(matchId: string): Promise<void> {
+    const id = new Types.ObjectId(matchId);
+    await this.snapshots.deleteMany({ matchId: id }).exec();
+    await this.matches.deleteOne({ _id: id }).exec();
+    this.cache.delete(matchId);
+  }
+
   async listCached(): Promise<MatchDocument[]> {
     return [...this.cache.values()];
   }

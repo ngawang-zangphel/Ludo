@@ -9,10 +9,22 @@ export const appRoutes: Route[] = [
       import('./features/auth/pages/login.page').then((module) => module.LoginPage),
   },
   {
+    path: 'register',
+    canActivate: [guestGuard],
+    loadComponent: () =>
+      import('./features/auth/pages/register.page').then((module) => module.RegisterPage),
+  },
+  {
     path: '',
     canActivate: [authGuard],
     loadComponent: () =>
       import('./features/lobby/pages/lobby.page').then((module) => module.LobbyPage),
+  },
+  {
+    path: 'profile',
+    canActivate: [authGuard],
+    loadComponent: () =>
+      import('./features/profile/pages/profile.page').then((module) => module.ProfilePage),
   },
   {
     path: 'play/:matchId',
@@ -22,6 +34,7 @@ export const appRoutes: Route[] = [
   },
   {
     path: 'local',
+    canActivate: [adminGuard],
     loadComponent: () =>
       import('./features/game/pages/local-match/local-match.page').then(
         (module) => module.LocalMatchPage
@@ -34,6 +47,12 @@ export const appRoutes: Route[] = [
       import('./features/admin/pages/admin-dashboard.page').then(
         (module) => module.AdminDashboardPage
       ),
+  },
+  {
+    path: 'admin/users',
+    canActivate: [adminGuard],
+    loadComponent: () =>
+      import('./features/admin/pages/admin-users.page').then((module) => module.AdminUsersPage),
   },
   {
     path: 'admin/tournaments',
@@ -53,7 +72,7 @@ export const appRoutes: Route[] = [
   },
   {
     path: 'broadcast',
-    canActivate: [authGuard],
+    canActivate: [adminGuard],
     loadComponent: () =>
       import('./features/game/pages/broadcast/broadcast.page').then(
         (module) => module.BroadcastPage

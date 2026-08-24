@@ -8,7 +8,7 @@ import {
   signal,
 } from '@angular/core';
 import { RouterLink } from '@angular/router';
-import { MatchStatus } from '@ludo-game/shared-types';
+import { MatchStatus, MatchSummaryDto } from '@ludo-game/shared-types';
 import { ArenaApiService } from '../../../core/api/arena-api.service';
 import { AdminRealtimeService } from '../../../core/socket/admin-realtime.service';
 import { StatusBadgeComponent } from '../../../shared/ui/status-badge';
@@ -27,12 +27,20 @@ type Filter = 'ALL' | MatchStatus;
           <p class="text-xs uppercase tracking-[0.3em] text-arena-gold">Control room</p>
           <h1 class="mt-2 font-display text-3xl font-bold text-white">Admin dashboard</h1>
         </div>
-        <a
-          routerLink="/admin/tournaments"
-          class="rounded-full border border-arena-gold px-4 py-2 text-sm text-arena-gold"
-        >
-          Tournaments
-        </a>
+        <div class="flex flex-wrap gap-2">
+          <a
+            routerLink="/admin/users"
+            class="rounded-full border border-arena-gold px-4 py-2 text-sm text-arena-gold"
+          >
+            Users
+          </a>
+          <a
+            routerLink="/admin/tournaments"
+            class="rounded-full border border-arena-gold px-4 py-2 text-sm text-arena-gold"
+          >
+            Tournaments
+          </a>
+        </div>
       </div>
 
       <div class="mt-6 flex flex-wrap gap-2">
@@ -96,6 +104,7 @@ type Filter = 'ALL' | MatchStatus;
               @if (match.status !== MatchStatus.COMPLETED && match.status !== MatchStatus.CANCELLED) {
                 <button type="button" class="btn-danger" (click)="run(() => api.cancel(match.id))">Cancel</button>
               }
+              <button type="button" class="btn-danger" (click)="remove(match)">Delete</button>
             </div>
           </article>
         } @empty {
@@ -182,5 +191,18 @@ export class AdminDashboardPage implements OnInit, OnDestroy {
     } catch (error) {
       this.error.set(httpErrorMessage(error));
     }
+  }
+
+  async remove(match: MatchSummaryDto): Promise<void> {
+    if (!window.confirm(`Delete match ${match.matchNumber}? This cannot be undone.`)) {
+      return;
+    }
+    await this.run(async () => {
+      await this.api.deleteMatch(match.id);
+      this.realtime.matches.update((matches) => matches.filter((item) => item.id !== match.id));
+      if (this.realtime.broadcastMatchId() === match.id) {
+        this.realtime.broadcastMatchId.set(null);
+      }
+    });
   }
 }

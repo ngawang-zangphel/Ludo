@@ -93,6 +93,10 @@ export interface BroadcastMatchChangedPayload {
   matchId: string | null;
 }
 
+export interface PresenceUpdatedPayload {
+  onlineUserIds: string[];
+}
+
 export interface ClientToServerEvents {
   'join-match': (payload: JoinMatchPayload) => void;
   'leave-match': (payload: LeaveMatchPayload) => void;
@@ -126,6 +130,7 @@ export interface ServerToClientEvents {
   'match-error': (payload: MatchErrorPayload) => void;
   'broadcast-match-changed': (payload: BroadcastMatchChangedPayload) => void;
   'matches-updated': (payload: MatchListPayload) => void;
+  'presence-updated': (payload: PresenceUpdatedPayload) => void;
 }
 
 export type TypedClientSocket = {

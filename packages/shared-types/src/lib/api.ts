@@ -16,6 +16,7 @@ export interface UserDto {
   email: string;
   name: string;
   role: UserRole;
+  online?: boolean;
 }
 
 export interface AuthResponseDto {

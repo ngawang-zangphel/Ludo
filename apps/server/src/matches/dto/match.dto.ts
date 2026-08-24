@@ -4,16 +4,19 @@ export class CreateMatchDto {
   @IsMongoId()
   tournamentId!: string;
 
+  @IsOptional()
   @IsString()
-  round!: string;
+  round?: string;
 
+  @IsOptional()
   @IsInt()
   @Min(1)
-  roundNumber!: number;
+  roundNumber?: number;
 
+  @IsOptional()
   @IsInt()
   @Min(1)
-  matchNumber!: number;
+  matchNumber?: number;
 
   @IsOptional()
   @IsArray()

@@ -3,8 +3,9 @@
   "version": "0.0.0",
   "license": "MIT",
   "scripts": {
-    "start": "nx serve web",
+    "start": "nx run-many -t serve -p server,web --parallel=2",
     "start:server": "nx serve server",
+    "start:web": "nx serve web",
     "build": "nx build web",
     "test": "nx test game-engine",
     "test:engine": "nx test game-engine"
@@ -28,7 +29,6 @@
     "@nestjs/platform-express": "^11.0.0",
     "@nestjs/platform-socket.io": "^11.2.1",
     "@nestjs/websockets": "^11.2.1",
-    "@socket.io/redis-adapter": "^8.3.0",
     "bcrypt": "^6.0.0",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.15.1",
@@ -36,7 +36,6 @@
     "cookie-parser": "^1.4.7",
     "express": "^4.21.2",
     "helmet": "^8.3.0",
-    "ioredis": "^6.0.0",
     "mongoose": "^9.9.3",
     "reflect-metadata": "^0.2.0",
     "rxjs": "~7.8.0",

@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
 import {
   MatchDetailDto,
   MatchResultDto,
@@ -93,6 +93,12 @@ export class MatchesController {
   @Roles(UserRole.ADMIN)
   cancel(@Param('id') id: string): Promise<MatchDetailDto> {
     return this.matches.cancel(id);
+  }
+
+  @Delete(':id')
+  @Roles(UserRole.ADMIN)
+  remove(@Param('id') id: string): Promise<{ ok: true }> {
+    return this.matches.remove(id);
   }
 
   @Post(':id/broadcast')

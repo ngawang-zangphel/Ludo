@@ -6,18 +6,27 @@
 
 [Learn more about this workspace setup and its capabilities](https://nx.dev/getting-started/tutorials/angular-monorepo-tutorial?utm_source=nx_project&amp;utm_medium=readme&amp;utm_campaign=nx_projects) or run `npx nx graph` to visually explore what was created. Now, let's get you up to speed!
 
-## Run tasks
+## Run locally
 
-To run the dev server for your app, use:
+1. Copy `apps/server/.env.example` to `apps/server/.env` if you do not have one.
+2. Set `MONGODB_URI` to a MongoDB Atlas connection string (cloud). Local Docker / `mongod` is not required.
+3. Install and start:
 
 ```sh
-npx nx serve web
+npm install
+npm start
 ```
+
+- UI: http://localhost:4200
+- API: http://localhost:3000/api
+
+Seeded admin (first boot only): `admin@ludo.arena` / `Admin123!`
 
 To create a production bundle:
 
 ```sh
 npx nx build web
+npx nx build server
 ```
 
 To see all available targets to run for a project, run:

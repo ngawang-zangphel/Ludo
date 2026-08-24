@@ -24,6 +24,7 @@ import { AuthService } from '../auth/auth.service';
 import { MatchesService } from '../matches/matches.service';
 import { BroadcastService } from '../broadcast/broadcast.service';
 import { RealtimeService } from '../realtime/realtime.service';
+import { PresenceService } from '../users/presence.service';
 import { SessionUser } from '../common/types';
 import { ADMIN_ROOM, BROADCAST_ROOM, matchRoom } from '../common/rooms';
 import { GameEngineError } from '@ludo-game/shared-types';
@@ -43,7 +44,8 @@ export class GameGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
     private readonly auth: AuthService,
     private readonly matches: MatchesService,
     private readonly broadcast: BroadcastService,
-    private readonly realtime: RealtimeService
+    private readonly realtime: RealtimeService,
+    private readonly presence: PresenceService
   ) {}
 
   afterInit(server: Server<ClientToServerEvents, ServerToClientEvents>): void {
@@ -59,11 +61,17 @@ export class GameGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
       return;
     }
     client.data.user = user;
+    this.presence.add(user.id, client.id);
+    this.emitPresence();
   }
 
   async handleDisconnect(client: ArenaSocket): Promise<void> {
     const user = client.data.user;
     const matchId = client.data.matchId;
+    if (user) {
+      this.presence.remove(user.id, client.id);
+      this.emitPresence();
+    }
     if (user && matchId) {
       await this.matches.setConnected(matchId, user.id, false);
     }
@@ -148,6 +156,7 @@ export class GameGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
       matches,
       broadcastMatchId: this.broadcast.currentMatchId(),
     });
+    client.emit('presence-updated', { onlineUserIds: this.presence.ids() });
   }
 
   @SubscribeMessage('join-broadcast')
@@ -230,6 +239,10 @@ export class GameGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
       throw new Error('FORBIDDEN');
     }
     return user;
+  }
+
+  private emitPresence(): void {
+    this.realtime.emitToAdmin('presence-updated', { onlineUserIds: this.presence.ids() });
   }
 
   private emitError(client: ArenaSocket, matchId: string, error: unknown): void {

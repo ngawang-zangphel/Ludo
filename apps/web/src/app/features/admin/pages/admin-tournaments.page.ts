@@ -1,12 +1,21 @@
-import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  OnInit,
+  computed,
+  inject,
+  signal,
+} from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import {
+  MatchStatus,
   MatchSummaryDto,
   ParticipantDto,
   TournamentDto,
   TournamentStatus,
   UserDto,
+  UserRole,
 } from '@ludo-game/shared-types';
 import { ArenaApiService } from '../../../core/api/arena-api.service';
 import { StatusBadgeComponent } from '../../../shared/ui/status-badge';
@@ -94,7 +103,9 @@ import { httpErrorMessage, playerNames } from '../../../shared/format';
               <select class="field flex-1" name="registerUserId" [(ngModel)]="registerUserId">
                 <option value="">Register a player</option>
                 @for (user of users(); track user.id) {
-                  <option [value]="user.id">{{ user.name }}</option>
+                  @if (user.role === 'PLAYER') {
+                    <option [value]="user.id">{{ user.name }}</option>
+                  }
                 }
               </select>
               <button class="rounded-full bg-arena-gold px-4 py-2 text-sm font-semibold text-arena-ink" type="submit">
@@ -104,23 +115,77 @@ import { httpErrorMessage, playerNames } from '../../../shared/format';
           </div>
 
           <div class="rounded-3xl border border-arena-line bg-arena-navy/80 p-5">
-            <h2 class="font-display text-lg">Matches</h2>
-            <form class="mt-3 grid gap-2 sm:grid-cols-3" (ngSubmit)="createMatch()">
-              <input class="field" name="round" placeholder="ROUND_1" [(ngModel)]="round" required />
-              <input class="field" name="roundNumber" type="number" min="1" [(ngModel)]="roundNumber" />
-              <input class="field" name="matchNumber" type="number" min="1" [(ngModel)]="matchNumber" />
-              <button class="rounded-full border border-arena-line px-4 py-2 text-sm sm:col-span-2" type="submit">
-                Create empty match
+            <h2 class="font-display text-lg">Create a match</h2>
+            <p class="mt-1 text-sm text-arena-mist/70">
+              Pick 2–4 players. They will get an invitation to join.
+            </p>
+
+            @if (rounds().length) {
+              <label class="mt-4 block text-sm">
+                Round
+                <select
+                  class="field mt-1 w-full"
+                  name="roundNumber"
+                  [ngModel]="roundNumber"
+                  (ngModelChange)="onRoundChange($event)"
+                >
+                  @for (round of rounds(); track round.number) {
+                    <option [ngValue]="round.number">{{ roundLabel(round.name) }}</option>
+                  }
+                </select>
+              </label>
+            }
+
+            <p class="mt-4 text-xs uppercase tracking-wider text-arena-mist/50">
+              Players · {{ selectedPlayerIds().length }} / 4 selected
+            </p>
+            <div class="mt-2 grid max-h-64 gap-2 overflow-y-auto sm:grid-cols-2">
+              @for (user of playerAccounts(); track user.id) {
+                <label
+                  class="flex cursor-pointer items-center gap-2 rounded-xl border px-3 py-2 text-sm"
+                  [class.border-arena-gold]="isSelected(user.id)"
+                  [class.bg-arena-gold/10]="isSelected(user.id)"
+                  [class.border-arena-line]="!isSelected(user.id)"
+                >
+                  <input
+                    type="checkbox"
+                    class="accent-yellow-500"
+                    [checked]="isSelected(user.id)"
+                    (change)="togglePlayer(user.id)"
+                  />
+                  <span class="min-w-0 flex-1 truncate">{{ user.name }}</span>
+                  @if (busyPlayerIds().has(user.id)) {
+                    <span class="text-[10px] uppercase tracking-wider text-arena-mist/40">Busy</span>
+                  }
+                </label>
+              } @empty {
+                <p class="text-sm text-arena-mist/60">Create a player first, then invite them here.</p>
+              }
+            </div>
+
+            <div class="mt-4 flex flex-wrap gap-2">
+              <button
+                type="button"
+                class="rounded-full bg-arena-gold px-4 py-2 text-sm font-semibold text-arena-ink disabled:opacity-40"
+                [disabled]="selectedPlayerIds().length < 2 || selectedPlayerIds().length > 4"
+                (click)="createMatch()"
+              >
+                Create match & invite
               </button>
               <button
-                class="rounded-full border border-arena-gold px-4 py-2 text-sm text-arena-gold"
                 type="button"
-                (click)="advance()"
+                class="rounded-full border border-arena-gold px-4 py-2 text-sm text-arena-gold"
+                (click)="createRandomMatch()"
               >
-                Advance round {{ roundNumber }}
+                Pick 4 at random
               </button>
-            </form>
-            <div class="mt-4 space-y-3">
+            </div>
+            <p class="mt-2 text-xs text-arena-mist/50">Players will see this as an invitation to join.</p>
+            <button type="button" class="mt-3 text-xs text-arena-mist/60 hover:text-arena-gold" (click)="advance()">
+              Advance {{ roundLabel(round) }}
+            </button>
+
+            <div class="mt-5 space-y-3">
               @for (match of matches(); track match.id) {
                 <article class="rounded-2xl border border-arena-line p-3">
                   <div class="flex items-center justify-between gap-2">
@@ -128,10 +193,13 @@ import { httpErrorMessage, playerNames } from '../../../shared/format';
                     <ludo-status-badge [status]="match.status" />
                   </div>
                   <div class="mt-2 flex flex-wrap gap-2">
-                    <button type="button" class="text-xs text-arena-gold" (click)="assignRandom(match.id)">
-                      Random assign
-                    </button>
+                    @if (!match.players.length) {
+                      <button type="button" class="text-xs text-arena-gold" (click)="assignRandom(match.id)">
+                        Seat random players
+                      </button>
+                    }
                     <a class="text-xs text-arena-mist/80" [routerLink]="['/admin/matches', match.id]">Watch</a>
+                    <button type="button" class="text-xs text-piece-red" (click)="remove(match)">Delete</button>
                   </div>
                 </article>
               }
@@ -160,6 +228,26 @@ export class AdminTournamentsPage implements OnInit {
   readonly users = signal<UserDto[]>([]);
   readonly error = signal<string | null>(null);
   readonly playerNames = playerNames;
+  readonly selectedPlayerIds = signal<string[]>([]);
+
+  readonly playerAccounts = computed(() =>
+    this.users().filter((user) => user.role === UserRole.PLAYER)
+  );
+
+  readonly rounds = computed(() => this.selected()?.rounds ?? []);
+
+  readonly busyPlayerIds = computed(() => {
+    const ids = new Set<string>();
+    for (const match of this.matches()) {
+      if (match.status === MatchStatus.COMPLETED || match.status === MatchStatus.CANCELLED) {
+        continue;
+      }
+      for (const player of match.players) {
+        ids.add(player.userId);
+      }
+    }
+    return ids;
+  });
 
   tournamentName = '';
   playerName = '';
@@ -176,6 +264,7 @@ export class AdminTournamentsPage implements OnInit {
 
   async select(tournament: TournamentDto): Promise<void> {
     this.selected.set(tournament);
+    this.selectedPlayerIds.set([]);
     await this.refreshSelected();
   }
 
@@ -227,7 +316,12 @@ export class AdminTournamentsPage implements OnInit {
 
   async createMatch(): Promise<void> {
     const tournament = this.selected();
+    const playerUserIds = this.selectedPlayerIds();
     if (!tournament) {
+      return;
+    }
+    if (playerUserIds.length < 2 || playerUserIds.length > 4) {
+      this.error.set('Select 2 to 4 players to invite.');
       return;
     }
     await this.guard(async () => {
@@ -235,16 +329,64 @@ export class AdminTournamentsPage implements OnInit {
         tournamentId: tournament.id,
         round: this.round,
         roundNumber: this.roundNumber,
-        matchNumber: this.matchNumber,
+        playerUserIds,
       });
-      this.matchNumber += 1;
+      this.selectedPlayerIds.set([]);
       await this.refreshSelected();
     });
+  }
+
+  async createRandomMatch(): Promise<void> {
+    const free = this.playerAccounts().filter((user) => !this.busyPlayerIds().has(user.id));
+    const shuffled = [...free].sort(() => Math.random() - 0.5);
+    const picked = shuffled.slice(0, Math.min(4, shuffled.length));
+    if (picked.length < 2) {
+      this.error.set('Need at least 2 available players.');
+      return;
+    }
+    this.selectedPlayerIds.set(picked.map((user) => user.id));
+    await this.createMatch();
+  }
+
+  isSelected(userId: string): boolean {
+    return this.selectedPlayerIds().includes(userId);
+  }
+
+  togglePlayer(userId: string): void {
+    this.selectedPlayerIds.update((ids) => {
+      if (ids.includes(userId)) {
+        return ids.filter((id) => id !== userId);
+      }
+      if (ids.length >= 4) {
+        return ids;
+      }
+      return [...ids, userId];
+    });
+  }
+
+  onRoundChange(value: number): void {
+    this.roundNumber = Number(value);
+    const round = this.rounds().find((item) => item.number === this.roundNumber);
+    this.round = round?.name ?? `ROUND_${this.roundNumber}`;
+  }
+
+  roundLabel(name: string): string {
+    return name.replace(/_/g, ' ');
   }
 
   async assignRandom(matchId: string): Promise<void> {
     await this.guard(async () => {
       await this.api.assignRandom(matchId);
+      await this.refreshSelected();
+    });
+  }
+
+  async remove(match: MatchSummaryDto): Promise<void> {
+    if (!window.confirm(`Delete match ${match.matchNumber}? This cannot be undone.`)) {
+      return;
+    }
+    await this.guard(async () => {
+      await this.api.deleteMatch(match.id);
       await this.refreshSelected();
     });
   }

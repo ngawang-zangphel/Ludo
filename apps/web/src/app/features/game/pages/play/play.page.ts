@@ -24,7 +24,7 @@ import { httpErrorMessage } from '../../../../shared/format';
     <div class="px-4 py-6 lg:px-8">
       <div class="mx-auto mb-6 flex max-w-7xl flex-wrap items-center justify-between gap-4">
         <div>
-          <a routerLink="/" class="text-xs uppercase tracking-[0.3em] text-arena-gold hover:underline">Lobby</a>
+          <a routerLink="/" class="text-xs uppercase tracking-[0.3em] text-arena-gold hover:underline">Invitations</a>
           <h1 class="font-display text-3xl font-bold text-white">
             {{ detail()?.tournamentName || 'Match room' }}
           </h1>

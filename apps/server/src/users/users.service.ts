@@ -2,18 +2,30 @@ import {
   Injectable,
   ConflictException,
   NotFoundException,
+  BadRequestException,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { hash, compare } from 'bcrypt';
-import { UserDto, UserRole } from '@ludo-game/shared-types';
+import { MatchStatus, UserDto, UserRole } from '@ludo-game/shared-types';
 import { User, UserDocument } from './schemas/user.schema';
 import { CreateUserDto } from './dto/create-user.dto';
+import { UpdateUserDto } from './dto/update-user.dto';
 import { toObjectIdString } from '../common/types';
+import { Match, MatchDocument } from '../matches/schemas/match.schema';
+import {
+  TournamentParticipant,
+  TournamentParticipantDocument,
+} from '../tournaments/schemas/participant.schema';
 
 @Injectable()
 export class UsersService {
-  constructor(@InjectModel(User.name) private readonly users: Model<UserDocument>) {}
+  constructor(
+    @InjectModel(User.name) private readonly users: Model<UserDocument>,
+    @InjectModel(Match.name) private readonly matches: Model<MatchDocument>,
+    @InjectModel(TournamentParticipant.name)
+    private readonly participants: Model<TournamentParticipantDocument>
+  ) {}
 
   async create(dto: CreateUserDto): Promise<UserDto> {
     const existing = await this.users.findOne({ email: dto.email.toLowerCase() }).exec();
@@ -42,21 +54,76 @@ export class UsersService {
     return user;
   }
 
+  async listAll(): Promise<UserDto[]> {
+    const users = await this.users.find().sort({ name: 1 }).exec();
+    return users.map((user) => this.toDto(user));
+  }
+
   async listPlayers(): Promise<UserDto[]> {
     const users = await this.users.find({ role: UserRole.PLAYER }).sort({ name: 1 }).exec();
     return users.map((user) => this.toDto(user));
+  }
+
+  async update(id: string, dto: UpdateUserDto): Promise<UserDto> {
+    const user = await this.findById(id);
+    if (dto.email && dto.email.toLowerCase() !== user.email) {
+      const taken = await this.users.findOne({ email: dto.email.toLowerCase() }).exec();
+      if (taken) {
+        throw new ConflictException('Email already registered');
+      }
+      user.email = dto.email.toLowerCase();
+    }
+    if (dto.name) {
+      user.name = dto.name;
+    }
+    if (dto.role) {
+      if (user.role === UserRole.ADMIN && dto.role !== UserRole.ADMIN) {
+        const admins = await this.users.countDocuments({ role: UserRole.ADMIN });
+        if (admins <= 1) {
+          throw new BadRequestException('Cannot demote the last admin');
+        }
+      }
+      user.role = dto.role;
+    }
+    if (dto.password) {
+      user.passwordHash = await hash(dto.password, 12);
+    }
+    await user.save();
+    return this.toDto(user);
+  }
+
+  async remove(id: string): Promise<void> {
+    const user = await this.findById(id);
+    if (user.role === UserRole.ADMIN) {
+      const admins = await this.users.countDocuments({ role: UserRole.ADMIN });
+      if (admins <= 1) {
+        throw new BadRequestException('Cannot delete the last admin');
+      }
+    }
+    const live = await this.matches
+      .findOne({
+        'players.userId': user._id,
+        status: MatchStatus.LIVE,
+      })
+      .exec();
+    if (live) {
+      throw new BadRequestException('Cannot delete a player in a live match');
+    }
+    await this.participants.deleteMany({ userId: user._id }).exec();
+    await this.users.deleteOne({ _id: user._id }).exec();
   }
 
   async verifyPassword(user: UserDocument, password: string): Promise<boolean> {
     return compare(password, user.passwordHash);
   }
 
-  toDto(user: UserDocument): UserDto {
+  toDto(user: UserDocument, online = false): UserDto {
     return {
       id: toObjectIdString(user._id),
       email: user.email,
       name: user.name,
       role: user.role,
+      online,
     };
   }
 }

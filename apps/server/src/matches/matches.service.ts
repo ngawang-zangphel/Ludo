@@ -12,6 +12,7 @@ import {
   MatchResultDto,
   MatchStatus,
   MatchSummaryDto,
+  ParticipantStatus,
   PLAYER_COLOR_ORDER,
   ServerToClientEvents,
 } from '@ludo-game/shared-types';
@@ -57,25 +58,38 @@ export class MatchesService {
 
   async create(dto: CreateMatchDto): Promise<MatchDetailDto> {
     const tournament = await this.requireTournament(dto.tournamentId);
+    const previous = await this.matches
+      .findOne({ tournamentId: tournament._id })
+      .sort({ matchNumber: -1 })
+      .exec();
+    const roundNumber = dto.roundNumber ?? previous?.roundNumber ?? 1;
+    const matchNumber = dto.matchNumber ?? (previous ? previous.matchNumber + 1 : 1);
+    const round =
+      dto.round?.trim() ||
+      tournament.rounds.find((item) => item.number === roundNumber)?.name ||
+      `Round ${roundNumber}`;
+
     const match = await this.matches.create({
       tournamentId: tournament._id,
-      round: dto.round,
-      roundNumber: dto.roundNumber,
-      matchNumber: dto.matchNumber,
+      round,
+      roundNumber,
+      matchNumber,
       status: MatchStatus.WAITING,
       players: [],
     });
     logEvent('Match created', {
       matchId: toObjectIdString(match._id),
       tournamentId: dto.tournamentId,
-      matchNumber: dto.matchNumber,
+      matchNumber,
     });
 
-    if (dto.random) {
-      return this.assignRandom(toObjectIdString(match._id));
-    }
+    const matchId = toObjectIdString(match._id);
     if (dto.playerUserIds?.length) {
-      return this.assignPlayers(toObjectIdString(match._id), { playerUserIds: dto.playerUserIds });
+      await this.ensureParticipants(tournament._id, dto.playerUserIds);
+      return this.assignPlayers(matchId, { playerUserIds: dto.playerUserIds });
+    }
+    if (dto.random) {
+      return this.assignRandom(matchId);
     }
     return this.toDetailDto(match);
   }
@@ -240,6 +254,25 @@ export class MatchesService {
       });
       await this.publishAdmin();
       return this.toDetailDto(saved);
+    });
+  }
+
+  async remove(matchId: string): Promise<{ ok: true }> {
+    return this.enqueue(matchId, async () => {
+      const match = await this.state.loadMatch(matchId);
+      if (this.broadcast.currentMatchId() === matchId) {
+        await this.broadcast.setMatch(null);
+      }
+      this.emitLive(matchId, 'match-paused', {
+        matchId,
+        status: MatchStatus.CANCELLED,
+      });
+      await this.results.deleteMany({ matchId: match._id }).exec();
+      await this.events.deleteMany({ matchId: match._id }).exec();
+      await this.state.deletePersisted(matchId);
+      logEvent('Match deleted', { matchId, matchNumber: match.matchNumber });
+      await this.publishAdmin();
+      return { ok: true as const };
     });
   }
 
@@ -512,6 +545,25 @@ export class MatchesService {
       playerId: playerId ? new Types.ObjectId(playerId) : undefined,
       payload,
     });
+  }
+
+  private async ensureParticipants(tournamentId: Types.ObjectId, userIds: string[]): Promise<void> {
+    for (const userId of userIds) {
+      const user = await this.users.findById(userId);
+      const existing = await this.participants
+        .findOne({ tournamentId, userId: user._id })
+        .exec();
+      if (existing) {
+        continue;
+      }
+      const seed = (await this.participants.countDocuments({ tournamentId })) + 1;
+      await this.participants.create({
+        tournamentId,
+        userId: user._id,
+        seed,
+        status: ParticipantStatus.REGISTERED,
+      });
+    }
   }
 
   private async requireTournament(id: string): Promise<TournamentDocument> {

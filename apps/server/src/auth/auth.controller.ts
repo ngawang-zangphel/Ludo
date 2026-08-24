@@ -1,8 +1,10 @@
-import { Body, Controller, Get, Post, Res, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Patch, Post, Res, UseGuards } from '@nestjs/common';
 import { Response } from 'express';
 import { AuthResponseDto } from '@ludo-game/shared-types';
 import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
+import { RegisterDto } from './dto/register.dto';
+import { UpdateProfileDto } from './dto/update-profile.dto';
 import { AuthGuard } from '../common/auth.guard';
 import { CurrentUser } from '../common/current-user';
 import { SessionUser } from '../common/types';
@@ -24,6 +26,15 @@ export class AuthController {
     return { user };
   }
 
+  @Post('register')
+  async register(
+    @Body() dto: RegisterDto,
+    @Res({ passthrough: true }) response: Response
+  ): Promise<AuthResponseDto> {
+    const user = await this.auth.register(dto, response);
+    return { user };
+  }
+
   @Post('logout')
   logout(@Res({ passthrough: true }) response: Response): { ok: true } {
     this.auth.logout(response);
@@ -35,6 +46,23 @@ export class AuthController {
   async me(@CurrentUser() session: SessionUser): Promise<AuthResponseDto> {
     const user = await this.users.findById(session.id);
     return { user: this.users.toDto(user) };
+  }
+
+  @Patch('me')
+  @UseGuards(AuthGuard)
+  async updateMe(
+    @CurrentUser() session: SessionUser,
+    @Body() dto: UpdateProfileDto,
+    @Res({ passthrough: true }) response: Response
+  ): Promise<AuthResponseDto> {
+    const user = await this.users.update(session.id, dto);
+    this.auth.setSessionCookie(response, {
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      role: user.role,
+    });
+    return { user };
   }
 
   @Get('bootstrap-hint')

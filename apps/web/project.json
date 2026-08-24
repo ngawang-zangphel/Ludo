@@ -57,7 +57,12 @@
           "buildTarget": "web:build:development"
         }
       },
-      "dependsOn": ["server:serve"],
+      "dependsOn": [
+        {
+          "projects": ["server"],
+          "target": "serve"
+        }
+      ],
       "options": {
         "proxyConfig": "apps/web/proxy.conf.json"
       }

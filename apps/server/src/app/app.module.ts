@@ -20,9 +20,23 @@ import { AppService } from './app.service';
     }),
     MongooseModule.forRootAsync({
       inject: [ConfigService],
-      useFactory: (config: ConfigService) => ({
-        uri: config.get<string>('MONGODB_URI', 'mongodb://127.0.0.1:27017/ludo-arena'),
-      }),
+      useFactory: (config: ConfigService) => {
+        const uri = config.get<string>('MONGODB_URI', '');
+        if (
+          !uri ||
+          uri.includes('<db_username>') ||
+          uri.includes('<password>') ||
+          uri.includes('USER:PASSWORD')
+        ) {
+          throw new Error(
+            'MONGODB_URI is missing a real Atlas username. In apps/server/.env replace <db_username> with the Database User from Atlas → Security → Database Access (no angle brackets). Then restart npm start.'
+          );
+        }
+        return {
+          uri,
+          serverSelectionTimeoutMS: 10000,
+        };
+      },
     }),
     RealtimeModule,
     UsersModule,

@@ -29,11 +29,6 @@ async function bootstrap() {
   });
   app.useWebSocketAdapter(new IoAdapter(app));
 
-  const redisUrl = config.get<string>('REDIS_URL');
-  if (redisUrl) {
-    Logger.log(`Redis URL configured for optional Socket.IO scaling: ${redisUrl}`);
-  }
-
   await app.get(BroadcastService).restore();
 
   const port = config.get<number>('PORT', 3000);
