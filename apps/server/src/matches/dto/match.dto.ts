@@ -33,3 +33,17 @@ export class AssignPlayersDto {
   @IsMongoId({ each: true })
   playerUserIds!: string[];
 }
+
+export class CreateMatchGroupsDto {
+  @IsMongoId()
+  tournamentId!: string;
+
+  @IsOptional()
+  @IsString()
+  round?: string;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  roundNumber?: number;
+}

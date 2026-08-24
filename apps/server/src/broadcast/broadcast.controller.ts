@@ -1,8 +1,7 @@
-import { Controller, Get, UseGuards } from '@nestjs/common';
+import { Controller, Get } from '@nestjs/common';
 import { BroadcastStateDto } from '@ludo-game/shared-types';
 import { BroadcastService } from './broadcast.service';
 import { MatchesService } from '../matches/matches.service';
-import { AuthGuard } from '../common/auth.guard';
 
 @Controller('broadcast')
 export class BroadcastController {
@@ -12,7 +11,6 @@ export class BroadcastController {
   ) {}
 
   @Get()
-  @UseGuards(AuthGuard)
   async current(): Promise<BroadcastStateDto> {
     const matchId = this.broadcast.currentMatchId();
     if (!matchId) {

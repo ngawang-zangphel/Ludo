@@ -72,7 +72,6 @@ export const appRoutes: Route[] = [
   },
   {
     path: 'broadcast',
-    canActivate: [adminGuard],
     loadComponent: () =>
       import('./features/game/pages/broadcast/broadcast.page').then(
         (module) => module.BroadcastPage

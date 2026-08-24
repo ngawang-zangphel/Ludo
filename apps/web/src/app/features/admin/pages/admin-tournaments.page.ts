@@ -188,9 +188,9 @@ import { httpErrorMessage, playerNames } from '../../../shared/format';
           <div class="rounded-3xl border border-arena-line bg-arena-navy/80 p-5">
             <div class="flex items-start justify-between gap-3">
               <div>
-                <h2 class="font-display text-lg">Tables</h2>
+                <h2 class="font-display text-lg">Group tables</h2>
                 <p class="mt-1 text-sm text-arena-mist/70">
-                  Seat 2–4 free players. They get an invitation — no codes to type.
+                  One tournament can run many groups at once. Each group of 2–4 players gets its own table.
                 </p>
               </div>
               @if (rounds().length > 1) {
@@ -207,44 +207,53 @@ import { httpErrorMessage, playerNames } from '../../../shared/format';
               }
             </div>
 
-            <div class="mt-5 space-y-3">
-              @for (match of matches(); track match.id) {
-                <article class="rounded-2xl border border-arena-line p-4">
-                  <div class="flex items-start justify-between gap-2">
-                    <div>
-                      <p class="text-xs uppercase tracking-wider text-arena-mist/50">
-                        Table {{ match.matchNumber }} · {{ roundLabel(match.round) }}
-                      </p>
-                      <p class="mt-1 font-display text-white">{{ playerNames(match) }}</p>
-                      <p class="mt-1 text-xs text-arena-mist/60">Invitation sent — waiting for players to join.</p>
-                    </div>
-                    <ludo-status-badge [status]="match.status" />
+            <div class="mt-5 space-y-5">
+              @for (section of groupedTables(); track section.roundNumber) {
+                <div>
+                  <p class="text-xs uppercase tracking-[0.2em] text-arena-gold">
+                    {{ roundLabel(section.name) }}
+                  </p>
+                  <div class="mt-2 grid gap-3 sm:grid-cols-2">
+                    @for (match of section.tables; track match.id) {
+                      <article class="rounded-2xl border border-arena-line p-4">
+                        <div class="flex items-start justify-between gap-2">
+                          <div>
+                            <p class="text-xs uppercase tracking-wider text-arena-mist/50">
+                              Group {{ groupLetter(match) }}
+                            </p>
+                            <p class="mt-1 font-display text-white">{{ playerNames(match) }}</p>
+                            <p class="mt-1 text-xs text-arena-mist/60">Invitation sent — waiting for players to join.</p>
+                          </div>
+                          <ludo-status-badge [status]="match.status" />
+                        </div>
+                        <div class="mt-3 flex flex-wrap gap-2">
+                          <a
+                            class="rounded-full bg-arena-gold px-3 py-1.5 text-xs font-semibold text-arena-ink"
+                            [routerLink]="['/admin/matches', match.id]"
+                          >
+                            Open table
+                          </a>
+                          <button type="button" class="rounded-full border border-piece-red px-3 py-1.5 text-xs text-piece-red" (click)="remove(match)">
+                            Delete table
+                          </button>
+                        </div>
+                      </article>
+                    }
                   </div>
-                  <div class="mt-3 flex flex-wrap gap-2">
-                    <a
-                      class="rounded-full bg-arena-gold px-3 py-1.5 text-xs font-semibold text-arena-ink"
-                      [routerLink]="['/admin/matches', match.id]"
-                    >
-                      Open table
-                    </a>
-                    <button type="button" class="rounded-full border border-piece-red px-3 py-1.5 text-xs text-piece-red" (click)="remove(match)">
-                      Delete table
-                    </button>
-                  </div>
-                </article>
+                </div>
               } @empty {
                 <p class="rounded-2xl border border-dashed border-arena-line px-4 py-6 text-sm text-arena-mist/60">
-                  No tables yet. Seat players below to send invitations.
+                  No groups yet. Seat players below, or split everyone into groups.
                 </p>
               }
             </div>
 
             <div class="mt-6 border-t border-arena-line/80 pt-5">
-              <p class="text-sm font-medium text-white">Seat a new table</p>
+              <p class="text-sm font-medium text-white">Seat a new group</p>
 
               @if (freeParticipants().length >= 2) {
                 <p class="mt-1 text-sm text-arena-mist/70">
-                  {{ selectedPlayerIds().length }} selected · tap names, then invite.
+                  {{ selectedPlayerIds().length }} selected · tap 2–4 names for one group, or split everyone.
                 </p>
                 <div class="mt-3 flex flex-wrap gap-2">
                   @for (player of freeParticipants(); track player.userId) {
@@ -268,16 +277,21 @@ import { httpErrorMessage, playerNames } from '../../../shared/format';
                     [disabled]="!canCreate()"
                     (click)="createMatch()"
                   >
-                    Invite {{ selectedPlayerIds().length || '' }} to a table
+                    Invite {{ selectedPlayerIds().length || '' }} to a group
                   </button>
                   <button
                     type="button"
                     class="rounded-full border border-arena-gold px-4 py-2 text-sm text-arena-gold"
-                    (click)="createRandomMatch()"
+                    (click)="createGroups()"
                   >
-                    Seat everyone free
+                    Split everyone into groups
                   </button>
                 </div>
+                @if (leftoverCount() === 1) {
+                  <p class="mt-3 text-xs text-arena-mist/50">
+                    One player will wait — a group needs at least 2 people.
+                  </p>
+                }
               } @else if (seatedParticipants().length) {
                 <p class="mt-2 rounded-2xl bg-black/20 px-4 py-3 text-sm text-arena-mist/70">
                   {{ seatedSummary() }} Add another player, or delete a table to free seats.
@@ -336,6 +350,24 @@ export class AdminTournamentsPage implements OnInit {
   readonly seatedParticipants = computed(() =>
     this.participants().filter((player) => this.busyPlayerIds().has(player.userId))
   );
+
+  readonly leftoverCount = computed(() => (this.freeParticipants().length === 1 ? 1 : 0));
+
+  readonly groupedTables = computed(() => {
+    const matches = [...this.matches()].sort(
+      (left, right) => left.roundNumber - right.roundNumber || left.matchNumber - right.matchNumber
+    );
+    const sections: Array<{ roundNumber: number; name: string; tables: MatchSummaryDto[] }> = [];
+    for (const match of matches) {
+      const current = sections.at(-1);
+      if (!current || current.roundNumber !== match.roundNumber) {
+        sections.push({ roundNumber: match.roundNumber, name: match.round, tables: [match] });
+      } else {
+        current.tables.push(match);
+      }
+    }
+    return sections;
+  });
 
   readonly canCreate = computed(() => {
     const selected = this.selectedPlayerIds();
@@ -441,14 +473,33 @@ export class AdminTournamentsPage implements OnInit {
   }
 
   async createRandomMatch(): Promise<void> {
-    const free = this.freeParticipants();
-    const picked = free.slice(0, Math.min(4, free.length));
-    if (picked.length < 2) {
-      this.error.set('Need at least 2 free players to seat a table.');
+    const tournament = this.selected();
+    if (!tournament) {
       return;
     }
-    this.selectedPlayerIds.set(picked.map((player) => player.userId));
-    await this.createMatch();
+    if (this.freeParticipants().length < 2) {
+      this.error.set('Need at least 2 free players to form a group.');
+      return;
+    }
+    await this.guard(async () => {
+      await this.api.createMatchGroups({
+        tournamentId: tournament.id,
+        round: this.round,
+        roundNumber: this.roundNumber,
+      });
+      this.selectedPlayerIds.set([]);
+      await this.refreshSelected();
+    });
+  }
+
+  createGroups(): Promise<void> {
+    return this.createRandomMatch();
+  }
+
+  groupLetter(match: MatchSummaryDto): string {
+    const section = this.groupedTables().find((item) => item.roundNumber === match.roundNumber);
+    const index = section?.tables.findIndex((item) => item.id === match.id) ?? 0;
+    return String.fromCharCode(65 + Math.max(0, index));
   }
 
   isSelected(userId: string): boolean {

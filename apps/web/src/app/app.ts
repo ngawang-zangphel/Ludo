@@ -25,6 +25,6 @@ export class App {
 
   readonly showNav = computed(() => {
     const url = this.url();
-    return !url.startsWith('/login') && !url.startsWith('/register') && !url.startsWith('/broadcast');
+    return !url.startsWith('/broadcast');
   });
 }

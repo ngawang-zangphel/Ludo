@@ -7,7 +7,7 @@ import {
   UserRole,
 } from '@ludo-game/shared-types';
 import { MatchesService } from './matches.service';
-import { AssignPlayersDto, CreateMatchDto } from './dto/match.dto';
+import { AssignPlayersDto, CreateMatchDto, CreateMatchGroupsDto } from './dto/match.dto';
 import { AuthGuard } from '../common/auth.guard';
 import { RolesGuard } from '../common/roles.guard';
 import { Roles } from '../common/roles.decorator';
@@ -51,6 +51,12 @@ export class MatchesController {
   @Roles(UserRole.ADMIN)
   create(@Body() dto: CreateMatchDto): Promise<MatchDetailDto> {
     return this.matches.create(dto);
+  }
+
+  @Post('groups')
+  @Roles(UserRole.ADMIN)
+  createGroups(@Body() dto: CreateMatchGroupsDto): Promise<MatchDetailDto[]> {
+    return this.matches.createGroups(dto);
   }
 
   @Post(':id/assign')

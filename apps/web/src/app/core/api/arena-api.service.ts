@@ -62,6 +62,14 @@ export class ArenaApiService {
     return firstValueFrom(this.http.post<MatchDetailDto>('/api/matches', body));
   }
 
+  createMatchGroups(body: {
+    tournamentId: string;
+    round?: string;
+    roundNumber?: number;
+  }): Promise<MatchDetailDto[]> {
+    return firstValueFrom(this.http.post<MatchDetailDto[]>('/api/matches/groups', body));
+  }
+
   assignPlayers(matchId: string, playerUserIds: string[]): Promise<MatchDetailDto> {
     return firstValueFrom(
       this.http.post<MatchDetailDto>(`/api/matches/${matchId}/assign`, { playerUserIds })

@@ -29,7 +29,7 @@ import { UsersService } from '../users/users.service';
 import { MatchStateService } from './match-state.service';
 import { MatchCommandQueue } from './match-command-queue.service';
 import { toDetail, toSummary } from './match-mapper';
-import { AssignPlayersDto, CreateMatchDto } from './dto/match.dto';
+import { AssignPlayersDto, CreateMatchDto, CreateMatchGroupsDto } from './dto/match.dto';
 import { toObjectIdString } from '../common/types';
 import { logEvent } from '../common/logger';
 import { RealtimeService } from '../realtime/realtime.service';
@@ -92,6 +92,42 @@ export class MatchesService {
       return this.assignRandom(matchId);
     }
     return this.toDetailDto(match);
+  }
+
+  async createGroups(dto: CreateMatchGroupsDto): Promise<MatchDetailDto[]> {
+    const tournament = await this.requireTournament(dto.tournamentId);
+    const [participants, existing] = await Promise.all([
+      this.participants.find({ tournamentId: tournament._id }).exec(),
+      this.list({ tournamentId: dto.tournamentId }),
+    ]);
+    const busy = new Set<string>();
+    for (const match of existing) {
+      if (match.status === MatchStatus.COMPLETED || match.status === MatchStatus.CANCELLED) {
+        continue;
+      }
+      for (const player of match.players) {
+        busy.add(player.userId);
+      }
+    }
+    const freeIds = participants
+      .filter((participant) => !busy.has(toObjectIdString(participant.userId)))
+      .map((participant) => toObjectIdString(participant.userId));
+    const groups = splitIntoGroups(freeIds);
+    if (groups.length === 0) {
+      throw new BadRequestException('Need at least 2 free players to form a group.');
+    }
+    const created: MatchDetailDto[] = [];
+    for (const playerUserIds of groups) {
+      created.push(
+        await this.create({
+          tournamentId: dto.tournamentId,
+          round: dto.round,
+          roundNumber: dto.roundNumber,
+          playerUserIds,
+        })
+      );
+    }
+    return created;
   }
 
   async assignPlayers(matchId: string, dto: AssignPlayersDto): Promise<MatchDetailDto> {
@@ -611,6 +647,27 @@ export class MatchesService {
     const tournament = await this.requireTournament(toObjectIdString(match.tournamentId));
     return toDetail(match, tournament.name, gameState ?? match.gameState);
   }
+}
+
+function splitIntoGroups<T>(items: T[]): T[][] {
+  if (items.length < 2) {
+    return [];
+  }
+  const queue = [...items];
+  const groups: T[][] = [];
+  while (queue.length >= 4) {
+    groups.push(queue.splice(0, 4));
+  }
+  if (queue.length === 1 && groups.length > 0) {
+    const last = groups[groups.length - 1];
+    const extra = last.pop();
+    if (extra) {
+      groups.push([extra, queue.shift() as T]);
+    }
+  } else if (queue.length >= 2) {
+    groups.push(queue.splice(0, queue.length));
+  }
+  return groups;
 }
 
 function shuffle<T>(items: T[]): void {

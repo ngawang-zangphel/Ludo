@@ -97,6 +97,11 @@ import { httpErrorMessage } from '../../../shared/format';
           Already have an account?
           <a routerLink="/login" class="text-arena-gold hover:underline">Sign in</a>
         </p>
+        <p class="mt-3 text-center text-sm text-arena-mist/70">
+          Or
+          <a routerLink="/broadcast" class="text-arena-gold hover:underline">watch the live broadcast</a>
+          — no account needed.
+        </p>
       </div>
     </div>
   `,

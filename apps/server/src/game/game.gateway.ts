@@ -56,8 +56,6 @@ export class GameGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
     const cookies = parseCookies(client.handshake.headers.cookie);
     const user = this.auth.verifyToken(cookies[this.auth.cookieName]);
     if (!user) {
-      client.emit('match-error', { code: 'UNAUTHENTICATED', message: 'Authentication required' });
-      client.disconnect();
       return;
     }
     client.data.user = user;
@@ -161,7 +159,6 @@ export class GameGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
 
   @SubscribeMessage('join-broadcast')
   async joinBroadcast(@ConnectedSocket() client: ArenaSocket): Promise<void> {
-    this.requireUser(client);
     client.join(BROADCAST_ROOM);
     const matchId = this.broadcast.currentMatchId();
     client.emit('broadcast-match-changed', { matchId });
