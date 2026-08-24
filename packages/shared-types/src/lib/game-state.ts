@@ -168,4 +168,5 @@ export type GameEngineErrorCode =
   | 'DICE_NOT_ROLLED'
   | 'INVALID_PIECE'
   | 'ILLEGAL_MOVE'
-  | 'INVALID_PLAYER_SETUP';
+  | 'INVALID_PLAYER_SETUP'
+  | 'INVALID_BOARD_LAYOUT';

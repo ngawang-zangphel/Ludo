@@ -1,6 +1,13 @@
-import { ChangeDetectionStrategy, Component, computed, input } from '@angular/core';
-import { BoardCoordinate, SNAKES_BOARD_SIZE, SnakesGameState, SnakesPlayer } from '@ludo-game/shared-types';
-import { snakesSquareToCell, SNAKES_LADDERS, SNAKES_SNAKES } from '@ludo-game/game-engine';
+import { ChangeDetectionStrategy, Component, computed, input, output } from '@angular/core';
+import {
+  BoardCoordinate,
+  CLASSIC_SNAKES_LAYOUT,
+  SNAKES_BOARD_SIZE,
+  SnakesBoardLayout,
+  SnakesGameState,
+  SnakesPlayer,
+} from '@ludo-game/shared-types';
+import { snakesSquareToCell } from '@ludo-game/game-engine';
 import { LudoPieceComponent } from '../ludo-piece/ludo-piece';
 import { buildLadderGraphic, buildSnakeGraphic, buildSquares } from './snakes-board.graphics';
 
@@ -18,17 +25,21 @@ interface BoardToken {
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [LudoPieceComponent],
   template: `
-    <div class="snakes-board-frame">
+    <div class="snakes-board-frame" [class.is-compact]="compact()" [class.is-editable]="editable()">
       <div class="snakes-board-inner">
         <div class="snakes-board-grid">
-          @for (square of squares; track square.number) {
-            <div
+          @for (square of squares(); track square.number) {
+            <button
+              type="button"
               class="snakes-square"
               [class.is-dark]="square.checkerDark"
               [class.is-start]="square.kind === 'start'"
               [class.is-finish]="square.kind === 'finish'"
               [class.is-ladder]="square.kind === 'ladder'"
               [class.is-snake]="square.kind === 'snake'"
+              [class.is-pending]="pendingSquare() === square.number"
+              [disabled]="!editable()"
+              (click)="onSquareClick(square.number)"
             >
               <span class="snakes-square-number">{{ square.number }}</span>
               @if (square.number !== 100) {
@@ -49,7 +60,7 @@ interface BoardToken {
                   </svg>
                 </span>
               }
-            </div>
+            </button>
           }
         </div>
 
@@ -65,7 +76,7 @@ interface BoardToken {
             </linearGradient>
           </defs>
 
-          @for (ladder of ladders; track ladder.from) {
+          @for (ladder of ladders(); track ladder.from) {
             <g filter="url(#snakes-toy-shadow)">
               <line
                 [attr.x1]="ladder.backRail.x1"
@@ -102,7 +113,7 @@ interface BoardToken {
             </g>
           }
 
-          @for (snake of snakes; track snake.from) {
+          @for (snake of snakes(); track snake.from) {
             <g filter="url(#snakes-toy-shadow)">
               <path
                 [attr.d]="snake.outline"
@@ -167,21 +178,37 @@ interface BoardToken {
   `,
 })
 export class SnakesBoardComponent {
-  readonly state = input.required<SnakesGameState>();
+  readonly state = input<SnakesGameState | null>(null);
+  readonly layout = input<SnakesBoardLayout | null>(null);
   readonly displayCoords = input<Record<string, BoardCoordinate>>({});
   readonly movingPieceId = input<string | null>(null);
   readonly hopTick = input(0);
+  readonly editable = input(false);
+  readonly pendingSquare = input<number | null>(null);
+  readonly compact = input(false);
+  readonly squareSelect = output<number>();
 
-  readonly squares = buildSquares();
-  readonly ladders = SNAKES_LADDERS.map((ladder) => buildLadderGraphic(ladder.from, ladder.to));
-  readonly snakes = SNAKES_SNAKES.map((snake, index) => buildSnakeGraphic(snake.from, snake.to, index));
+  readonly resolvedLayout = computed(
+    () => this.layout() ?? this.state()?.rules.layout ?? CLASSIC_SNAKES_LAYOUT
+  );
+  readonly squares = computed(() => buildSquares(this.resolvedLayout()));
+  readonly ladders = computed(() =>
+    this.resolvedLayout().ladders.map((ladder) => buildLadderGraphic(ladder.from, ladder.to))
+  );
+  readonly snakes = computed(() =>
+    this.resolvedLayout().snakes.map((snake, index) => buildSnakeGraphic(snake.from, snake.to, index))
+  );
 
   readonly tokens = computed(() => {
+    const match = this.state();
+    if (!match) {
+      return [] as BoardToken[];
+    }
     const coords = this.displayCoords();
     const movingId = this.movingPieceId();
     const groups = new Map<string, Array<{ player: SnakesPlayer; coord: BoardCoordinate }>>();
 
-    for (const player of this.state().players) {
+    for (const player of match.players) {
       const coord = coords[player.tokenId] ?? snakesSquareToCell(player.position);
       const key = `${coord.row.toFixed(2)}:${coord.col.toFixed(2)}`;
       const group = groups.get(key) ?? [];
@@ -205,6 +232,12 @@ export class SnakesBoardComponent {
     }
     return tokens;
   });
+
+  onSquareClick(square: number): void {
+    if (this.editable()) {
+      this.squareSelect.emit(square);
+    }
+  }
 }
 
 function stackOffset(index: number, total: number): string {

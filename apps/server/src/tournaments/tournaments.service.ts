@@ -4,12 +4,14 @@ import { Model, Types } from 'mongoose';
 import {
   DEFAULT_DISCONNECT_RULES,
   DEFAULT_LUDO_RULES,
-  DEFAULT_SNAKES_RULES,
   GameType,
+  isSnakesRules,
   ParticipantDto,
   ParticipantStatus,
+  resolveSnakesRules,
   TournamentDto,
   TournamentStatus,
+  validateSnakesLayout,
 } from '@ludo-game/shared-types';
 import { Tournament, TournamentDocument } from './schemas/tournament.schema';
 import {
@@ -34,11 +36,24 @@ export class TournamentsService {
 
   async create(dto: CreateTournamentDto): Promise<TournamentDto> {
     const gameType = dto.gameType === GameType.SNAKES ? GameType.SNAKES : GameType.LUDO;
+    const rules =
+      gameType === GameType.SNAKES
+        ? resolveSnakesRules({
+            levelId: dto.snakesLevelId,
+            layout: dto.snakesLayout,
+          })
+        : DEFAULT_LUDO_RULES;
+    if (gameType === GameType.SNAKES && isSnakesRules(rules)) {
+      const layoutError = validateSnakesLayout(rules.layout);
+      if (layoutError) {
+        throw new BadRequestException(layoutError);
+      }
+    }
     const tournament = await this.tournaments.create({
       name: dto.name,
       status: TournamentStatus.REGISTRATION,
       gameType,
-      rules: gameType === GameType.SNAKES ? DEFAULT_SNAKES_RULES : DEFAULT_LUDO_RULES,
+      rules,
       disconnectRules: DEFAULT_DISCONNECT_RULES,
       rounds: dto.rounds ?? [
         { name: 'ROUND_1', number: 1 },

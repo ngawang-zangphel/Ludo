@@ -102,6 +102,9 @@ import { SnakesPlayerPanelComponent } from '../snakes-player-panel/snakes-player
             [displayCoords]="displayCoords()"
             [movingPieceId]="movingPieceId()"
             [hopTick]="hopTick()"
+            [editable]="editable()"
+            [pendingSquare]="pendingSquare()"
+            (squareSelect)="squareSelect.emit($event)"
           />
         </div>
         <div class="space-y-4">
@@ -151,6 +154,9 @@ export class GameTableComponent {
   readonly errorMessage = input<string | null>(null);
   readonly pieceSelect = output<string>();
   readonly roll = output<void>();
+  readonly squareSelect = output<number>();
+  readonly editable = input(false);
+  readonly pendingSquare = input<number | null>(null);
 
   readonly ludo = computed<LudoGameState | null>(() => {
     const state = this.state();

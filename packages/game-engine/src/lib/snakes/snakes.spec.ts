@@ -1,4 +1,4 @@
-import { GameEventType, PlayerColor, SNAKES_FINISH_SQUARE, SnakesGameState, TurnPhase } from '@ludo-game/shared-types';
+import { applySnakesBoardClick, emptySnakesLayout, GameEventType, PlayerColor, SNAKES_FINISH_SQUARE, SnakesGameState, SnakesLevelId, TurnPhase } from '@ludo-game/shared-types';
 import { applySnakesDiceRoll } from './apply-dice-roll';
 import { applySnakesMove } from './apply-move';
 import { createSnakesMatchState } from './create-match';
@@ -60,6 +60,39 @@ describe('snakes and ladders', () => {
     expect(result.events.some((event) => event.type === GameEventType.LANDED_ON_SNAKE)).toBe(true);
   });
 
+  it('uses a custom snake layout instead of the classic board', () => {
+    const match = createSnakesMatchState({
+      matchId: 'custom-board',
+      now: '2026-01-01T00:00:00.000Z',
+      rules: {
+        levelId: SnakesLevelId.CUSTOM,
+        layout: { snakes: [{ from: 10, to: 3 }], ladders: [{ from: 4, to: 18 }] },
+      },
+      players: [
+        { id: 'red', userId: 'u-red', name: 'Red', color: PlayerColor.RED },
+        { id: 'green', userId: 'u-green', name: 'Green', color: PlayerColor.GREEN },
+      ],
+    });
+    const snake = rollAndMove(place(match, 'red', 9), 'red', 1);
+    expect(snake.state.players.find((player) => player.id === 'red')?.position).toBe(3);
+    const ladder = rollAndMove(place(match, 'red', 3), 'red', 1);
+    expect(ladder.state.players.find((player) => player.id === 'red')?.position).toBe(18);
+  });
+
+  it('skips the long classic snake on the easy board', () => {
+    const match = createSnakesMatchState({
+      matchId: 'easy-board',
+      now: '2026-01-01T00:00:00.000Z',
+      rules: { levelId: SnakesLevelId.EASY },
+      players: [
+        { id: 'red', userId: 'u-red', name: 'Red', color: PlayerColor.RED },
+        { id: 'green', userId: 'u-green', name: 'Green', color: PlayerColor.GREEN },
+      ],
+    });
+    const result = rollAndMove(place(match, 'red', 54), 'red', 1);
+    expect(result.state.players.find((player) => player.id === 'red')?.position).toBe(55);
+  });
+
   it('stays put when an exact finish is required and the roll overshoots', () => {
     const afterRoll = applySnakesDiceRoll(
       place(makeSnakesMatch(), 'red', 98),
@@ -94,5 +127,21 @@ describe('snakes and ladders', () => {
     expect(result.state.currentPlayerId).toBe('red');
     expect(result.state.turnPhase).toBe(TurnPhase.MATCH_OVER);
     expect(result.events.some((event) => event.type === GameEventType.EXTRA_TURN)).toBe(false);
+  });
+});
+
+describe('snakes board editor clicks', () => {
+  it('places a snake from head to tail', () => {
+    const first = applySnakesBoardClick(emptySnakesLayout(), 26, 'snake', null);
+    const second = applySnakesBoardClick(first.layout, 10, 'snake', first.pendingFrom);
+    expect(second.layout.snakes).toEqual([{ from: 26, to: 10 }]);
+    expect(second.error).toBeNull();
+  });
+
+  it('rejects a snake that would go up', () => {
+    const first = applySnakesBoardClick(emptySnakesLayout(), 10, 'snake', null);
+    const second = applySnakesBoardClick(first.layout, 26, 'snake', first.pendingFrom);
+    expect(second.layout.snakes).toEqual([]);
+    expect(second.error).toMatch(/lower number/i);
   });
 });

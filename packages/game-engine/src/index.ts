@@ -56,6 +56,8 @@ export { applySnakesMove } from './lib/snakes/apply-move';
 export {
   getSnakesSquareCoordinate,
   snakesSquareToCell,
+  layoutForRules,
+  teleportFrom,
   SNAKES_TELEPORTS,
   SNAKES_LADDERS,
   SNAKES_SNAKES,

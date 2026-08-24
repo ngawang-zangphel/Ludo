@@ -10,7 +10,7 @@ import {
   TurnPhase,
 } from '@ludo-game/shared-types';
 import { withUpdatedTimestamp } from '../queries';
-import { getSnakesSquareCoordinate, isLadder, teleportFrom } from './board';
+import { getSnakesSquareCoordinate, isLadder, layoutForRules, teleportFrom } from './board';
 import { extraOrPass } from './apply-dice-roll';
 import { isSnakesPlayerFinished, requireSnakesCurrentPlayer } from './queries';
 
@@ -38,7 +38,8 @@ export function applySnakesMove(
   }
 
   const events: GameEvent[] = [];
-  const teleportedTo = teleportFrom(landing);
+  const layout = layoutForRules(state.rules);
+  const teleportedTo = teleportFrom(landing, layout);
   const destination = teleportedTo ?? landing;
   const animation = buildSnakesAnimation(player.tokenId, from, landing, destination);
 

@@ -1,40 +1,19 @@
-import { BoardCoordinate, SNAKES_BOARD_SIZE, SNAKES_FINISH_SQUARE } from '@ludo-game/shared-types';
+import {
+  BoardCoordinate,
+  CLASSIC_SNAKES_LAYOUT,
+  CLASSIC_SNAKES_TELEPORTS,
+  DEFAULT_SNAKES_RULES,
+  resolveSnakesRules,
+  SNAKES_BOARD_SIZE,
+  SNAKES_FINISH_SQUARE,
+  SnakesBoardLayout,
+  SnakesRules,
+  teleportsFromLayout,
+} from '@ludo-game/shared-types';
 
-/**
- * Cartoon-board teleports. Key is the landing square; value is the destination.
- * Ladders go up (to > from). Snakes go down (to < from).
- */
-export const SNAKES_TELEPORTS: Readonly<Record<number, number>> = {
-  8: 30,
-  15: 44,
-  21: 50,
-  26: 10,
-  36: 62,
-  46: 18,
-  49: 72,
-  55: 2,
-  60: 23,
-  65: 47,
-  66: 93,
-  77: 96,
-  82: 61,
-  83: 98,
-  88: 67,
-  92: 51,
-  99: 70,
-};
-
-export const SNAKES_LADDERS: ReadonlyArray<{ from: number; to: number }> = Object.entries(
-  SNAKES_TELEPORTS
-)
-  .map(([from, to]) => ({ from: Number(from), to }))
-  .filter((item) => item.to > item.from);
-
-export const SNAKES_SNAKES: ReadonlyArray<{ from: number; to: number }> = Object.entries(
-  SNAKES_TELEPORTS
-)
-  .map(([from, to]) => ({ from: Number(from), to }))
-  .filter((item) => item.to < item.from);
+export const SNAKES_TELEPORTS = CLASSIC_SNAKES_TELEPORTS;
+export const SNAKES_LADDERS = CLASSIC_SNAKES_LAYOUT.ladders;
+export const SNAKES_SNAKES = CLASSIC_SNAKES_LAYOUT.snakes;
 
 /**
  * Square 1 is bottom-left. Rows zigzag: even rows from the bottom go left→right.
@@ -57,8 +36,15 @@ export function getSnakesSquareCoordinate(square: number): BoardCoordinate {
   return snakesSquareToCell(square);
 }
 
-export function teleportFrom(square: number): number | undefined {
-  return SNAKES_TELEPORTS[square];
+export function layoutForRules(rules?: Partial<SnakesRules> | null): SnakesBoardLayout {
+  return resolveSnakesRules(rules).layout;
+}
+
+export function teleportFrom(
+  square: number,
+  layout: SnakesBoardLayout = DEFAULT_SNAKES_RULES.layout
+): number | undefined {
+  return teleportsFromLayout(layout)[square];
 }
 
 export function isLadder(from: number, to: number): boolean {

@@ -1,5 +1,5 @@
-import { SNAKES_BOARD_SIZE } from '@ludo-game/shared-types';
-import { SNAKES_LADDERS, SNAKES_SNAKES, snakesSquareToCell } from '@ludo-game/game-engine';
+import { SNAKES_BOARD_SIZE, SnakesBoardLayout } from '@ludo-game/shared-types';
+import { snakesSquareToCell } from '@ludo-game/game-engine';
 
 export interface Point {
   x: number;
@@ -44,9 +44,6 @@ export interface BoardSquare {
   kind: SquareKind;
 }
 
-const LADDER_SQUARES = new Set(SNAKES_LADDERS.flatMap((item) => [item.from, item.to]));
-const SNAKE_SQUARES = new Set(SNAKES_SNAKES.flatMap((item) => [item.from, item.to]));
-
 export function cellCenter(square: number): Point {
   const cell = snakesSquareToCell(square);
   return {
@@ -55,7 +52,9 @@ export function cellCenter(square: number): Point {
   };
 }
 
-export function buildSquares(): BoardSquare[] {
+export function buildSquares(layout: SnakesBoardLayout): BoardSquare[] {
+  const ladderSquares = new Set(layout.ladders.flatMap((item) => [item.from, item.to]));
+  const snakeSquares = new Set(layout.snakes.flatMap((item) => [item.from, item.to]));
   const squares: BoardSquare[] = [];
   for (let number = 1; number <= 100; number += 1) {
     const cell = snakesSquareToCell(number);
@@ -65,17 +64,17 @@ export function buildSquares(): BoardSquare[] {
       col: cell.col,
       dir: travelDir(number),
       checkerDark: (Math.round(cell.row) + Math.round(cell.col)) % 2 === 1,
-      kind: squareKind(number),
+      kind: squareKind(number, ladderSquares, snakeSquares),
     });
   }
   return squares.sort((left, right) => left.row - right.row || left.col - right.col);
 }
 
-function squareKind(number: number): SquareKind {
+function squareKind(number: number, ladderSquares: Set<number>, snakeSquares: Set<number>): SquareKind {
   if (number === 1) return 'start';
   if (number === 100) return 'finish';
-  if (LADDER_SQUARES.has(number)) return 'ladder';
-  if (SNAKE_SQUARES.has(number)) return 'snake';
+  if (ladderSquares.has(number)) return 'ladder';
+  if (snakeSquares.has(number)) return 'snake';
   return 'normal';
 }
 

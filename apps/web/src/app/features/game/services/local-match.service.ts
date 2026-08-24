@@ -1,10 +1,14 @@
 import { Injectable, computed, signal } from '@angular/core';
 import {
   BoardCoordinate,
+  cloneSnakesLayout,
   GameEngineError,
   GameState,
   GameType,
   isSnakesState,
+  resolveSnakesRules,
+  SnakesBoardLayout,
+  SnakesLevelId,
   TurnPhase,
 } from '@ludo-game/shared-types';
 import {
@@ -23,6 +27,8 @@ import { PIECE_STEP_MS } from '../models/motion';
 @Injectable()
 export class LocalMatchService {
   readonly gameType = signal<GameType>(GameType.LUDO);
+  readonly snakesLevelId = signal<SnakesLevelId>(SnakesLevelId.CLASSIC);
+  readonly customLayout = signal<SnakesBoardLayout>(cloneSnakesLayout(resolveSnakesRules().layout));
   readonly state = signal<GameState>(createLocalDemoMatch());
   readonly diceUi = signal<DiceUiState>('WAITING');
   readonly animating = signal(false);
@@ -65,9 +71,37 @@ export class LocalMatchService {
     this.newMatch();
   }
 
+  setSnakesLevel(levelId: SnakesLevelId): void {
+    this.snakesLevelId.set(levelId);
+    if (levelId !== SnakesLevelId.CUSTOM) {
+      this.customLayout.set(cloneSnakesLayout(resolveSnakesRules({ levelId }).layout));
+    }
+    this.newMatch();
+  }
+
+  setCustomLayout(layout: SnakesBoardLayout): void {
+    this.customLayout.set(cloneSnakesLayout(layout));
+    const current = this.state();
+    if (isSnakesState(current)) {
+      const next = {
+        ...current,
+        rules: resolveSnakesRules({
+          ...current.rules,
+          levelId: SnakesLevelId.CUSTOM,
+          layout,
+        }),
+      };
+      this.state.set(next);
+    } else {
+      this.newMatch();
+    }
+  }
+
   newMatch(): void {
     const next =
-      this.gameType() === GameType.SNAKES ? createLocalSnakesDemoMatch() : createLocalDemoMatch();
+      this.gameType() === GameType.SNAKES
+        ? createLocalSnakesDemoMatch(undefined, this.snakesRules())
+        : createLocalDemoMatch();
     this.state.set(next);
     this.diceUi.set('WAITING');
     this.animating.set(false);
@@ -166,6 +200,14 @@ export class LocalMatchService {
       }
     }
     this.displayCoords.set(coords);
+  }
+
+  private snakesRules() {
+    const levelId = this.snakesLevelId();
+    if (levelId === SnakesLevelId.CUSTOM) {
+      return { levelId, layout: this.customLayout() };
+    }
+    return { levelId };
   }
 }
 

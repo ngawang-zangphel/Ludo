@@ -1,15 +1,16 @@
 import {
   CreateSnakesMatchInput,
-  DEFAULT_SNAKES_RULES,
   GameEngineError,
   GameType,
   MatchStatus,
   PLAYER_COLOR_ORDER,
   PlayerColor,
+  resolveSnakesRules,
   SnakesGameState,
   SnakesPlayer,
   SnakesRules,
   TurnPhase,
+  validateSnakesLayout,
 } from '@ludo-game/shared-types';
 import { isoNow } from '../queries';
 
@@ -43,7 +44,11 @@ export function createSnakesMatchState(input: CreateSnakesMatchInput): SnakesGam
   );
 
   const now = isoNow(input.now);
-  const rules: SnakesRules = { ...DEFAULT_SNAKES_RULES, ...input.rules };
+  const rules: SnakesRules = resolveSnakesRules(input.rules);
+  const layoutError = validateSnakesLayout(rules.layout);
+  if (layoutError) {
+    throw new GameEngineError('INVALID_BOARD_LAYOUT', layoutError);
+  }
   const players: SnakesPlayer[] = sortedPlayers.map((player) => ({
     id: player.id,
     userId: player.userId,
@@ -77,10 +82,14 @@ export function createSnakesMatchState(input: CreateSnakesMatchInput): SnakesGam
   };
 }
 
-export function createLocalSnakesDemoMatch(now?: string): SnakesGameState {
+export function createLocalSnakesDemoMatch(
+  now?: string,
+  rules?: Partial<SnakesRules>
+): SnakesGameState {
   return createSnakesMatchState({
     matchId: 'local-snakes-demo',
     now,
+    rules,
     players: [
       { id: 'player-red', userId: 'user-red', name: 'Karma', color: PlayerColor.RED },
       { id: 'player-green', userId: 'user-green', name: 'Pema', color: PlayerColor.GREEN },
