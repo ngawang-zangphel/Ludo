@@ -4,6 +4,7 @@ import {
   BroadcastMatchChangedPayload,
   DiceRolledPayload,
   GameState,
+  isSnakesState,
   MatchErrorPayload,
   MatchFinishedPayload,
   MatchStatePayload,
@@ -13,7 +14,7 @@ import {
   PieceMoveAnimation,
   TurnPhase,
 } from '@ludo-game/shared-types';
-import { getPieceCoordinate } from '@ludo-game/game-engine';
+import { getPieceCoordinate, getSnakesSquareCoordinate } from '@ludo-game/game-engine';
 import { SocketService } from '../../../core/socket/socket.service';
 import { AuthService } from '../../../core/auth/auth.service';
 import { DiceUiState } from '../models/dice';
@@ -229,9 +230,15 @@ export class GameSocketService {
 
   private syncDisplay(state: GameState): void {
     const coords: Record<string, BoardCoordinate> = {};
-    for (const player of state.players) {
-      for (const piece of player.pieces) {
-        coords[piece.id] = getPieceCoordinate(player.color, piece.state, piece.position);
+    if (isSnakesState(state)) {
+      for (const player of state.players) {
+        coords[player.tokenId] = getSnakesSquareCoordinate(player.position);
+      }
+    } else {
+      for (const player of state.players) {
+        for (const piece of player.pieces) {
+          coords[piece.id] = getPieceCoordinate(player.color, piece.state, piece.position);
+        }
       }
     }
     this.displayCoords.set(coords);

@@ -9,6 +9,8 @@ export interface BoardCoordinate {
 }
 
 export const BOARD_SIZE = 15;
+export const SNAKES_BOARD_SIZE = 10;
+export const SNAKES_FINISH_SQUARE = 100;
 export const LOOP_SIZE = 52;
 /** Relative positions 0–50 are on the shared 52-square loop. */
 export const TRACK_MAX_RELATIVE = 50;

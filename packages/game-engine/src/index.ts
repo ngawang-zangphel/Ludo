@@ -49,3 +49,16 @@ export {
 
 export { applyDiceRoll } from './lib/apply-dice-roll';
 export { applyMove, movePiece } from './lib/apply-move';
+
+export { createSnakesMatchState, createLocalSnakesDemoMatch, snakesTokenId } from './lib/snakes/create-match';
+export { applySnakesDiceRoll } from './lib/snakes/apply-dice-roll';
+export { applySnakesMove } from './lib/snakes/apply-move';
+export {
+  getSnakesSquareCoordinate,
+  snakesSquareToCell,
+  layoutForRules,
+  teleportFrom,
+  SNAKES_TELEPORTS,
+  SNAKES_LADDERS,
+  SNAKES_SNAKES,
+} from './lib/snakes/board';

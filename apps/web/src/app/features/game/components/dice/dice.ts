@@ -6,17 +6,23 @@ import { DiceUiState } from '../../models/dice';
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="flex flex-col items-center gap-3">
-      <div
-        class="dice-face grid grid-cols-3 grid-rows-3 place-items-center p-3"
-        [class.is-rolling]="state() === 'ROLLING'"
-      >
-        @for (pip of pips(); track $index) {
-          <span
-            class="h-2.5 w-2.5 rounded-full"
-            [class.bg-arena-ink]="pip"
-            [class.bg-transparent]="!pip"
-          ></span>
-        }
+      <div class="dice-scene">
+        <div class="dice-shadow" [class.is-rolling]="state() === 'ROLLING'"></div>
+        <div class="dice-rig">
+          <div
+            class="dice-cube"
+            [class.is-rolling]="state() === 'ROLLING'"
+            [attr.data-face]="settledFace()"
+          >
+            @for (face of faces; track face.value) {
+              <div class="dice-face" [attr.data-face]="face.value">
+                @for (pip of face.pips; track $index) {
+                  <span class="dice-pip" [class.is-on]="pip"></span>
+                }
+              </div>
+            }
+          </div>
+        </div>
       </div>
       <button
         type="button"
@@ -34,6 +40,15 @@ export class DiceComponent {
   readonly state = input<DiceUiState>('WAITING');
   readonly canRoll = input(false);
   readonly roll = output<void>();
+  readonly faces = DICE_FACES;
+
+  readonly settledFace = computed(() => {
+    const value = this.value();
+    if (this.state() === 'ROLLING' || value == null || value < 1 || value > 6) {
+      return 1;
+    }
+    return value;
+  });
 
   readonly label = computed(() => {
     if (this.state() === 'ROLLING') {
@@ -43,11 +58,6 @@ export class DiceComponent {
       return `Rolled ${this.value()}`;
     }
     return 'Roll dice';
-  });
-
-  readonly pips = computed(() => {
-    const display = this.state() === 'ROLLING' ? 5 : this.value() ?? 1;
-    return PIP_MAP[display] ?? PIP_MAP[1];
   });
 }
 
@@ -59,3 +69,8 @@ const PIP_MAP: Record<number, boolean[]> = {
   5: [true, false, true, false, true, false, true, false, true],
   6: [true, false, true, true, false, true, true, false, true],
 };
+
+const DICE_FACES = [1, 2, 3, 4, 5, 6].map((value) => ({
+  value,
+  pips: PIP_MAP[value] ?? PIP_MAP[1],
+}));

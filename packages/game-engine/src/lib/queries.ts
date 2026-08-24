@@ -1,6 +1,6 @@
 import {
   GameEngineError,
-  GameState,
+  LudoGameState,
   LudoPiece,
   LudoPlayer,
   MatchStatus,
@@ -8,7 +8,7 @@ import {
   TurnPhase,
 } from '@ludo-game/shared-types';
 
-export function requireLiveMatch(state: GameState): void {
+export function requireLiveMatch(state: { status: MatchStatus; matchId: string }): void {
   if (state.status !== MatchStatus.LIVE) {
     throw new GameEngineError(
       'MATCH_NOT_LIVE',
@@ -17,7 +17,7 @@ export function requireLiveMatch(state: GameState): void {
   }
 }
 
-export function findPlayer(state: GameState, playerId: string): LudoPlayer {
+export function findPlayer(state: LudoGameState, playerId: string): LudoPlayer {
   const player = state.players.find((entry) => entry.id === playerId);
   if (!player) {
     throw new GameEngineError('UNKNOWN_PLAYER', `Player ${playerId} is not in this match`);
@@ -25,7 +25,7 @@ export function findPlayer(state: GameState, playerId: string): LudoPlayer {
   return player;
 }
 
-export function requireCurrentPlayer(state: GameState, playerId: string): LudoPlayer {
+export function requireCurrentPlayer(state: LudoGameState, playerId: string): LudoPlayer {
   requireLiveMatch(state);
   const player = findPlayer(state, playerId);
   if (state.currentPlayerId !== playerId) {
@@ -53,16 +53,16 @@ export function checkPlayerFinished(player: LudoPlayer): boolean {
   return isPlayerFinished(player);
 }
 
-export function checkMatchFinished(state: GameState): boolean {
+export function checkMatchFinished(state: LudoGameState): boolean {
   const unfinished = state.players.filter((player) => !isPlayerFinished(player));
   return unfinished.length <= 1 || state.rankings.length >= state.players.length - 1;
 }
 
-export function getActivePlayers(state: GameState): LudoPlayer[] {
+export function getActivePlayers(state: LudoGameState): LudoPlayer[] {
   return state.players.filter((player) => !isPlayerFinished(player));
 }
 
-export function getNextPlayer(state: GameState, fromPlayerId = state.currentPlayerId): LudoPlayer {
+export function getNextPlayer(state: LudoGameState, fromPlayerId = state.currentPlayerId): LudoPlayer {
   const currentIndex = state.players.findIndex((player) => player.id === fromPlayerId);
   if (currentIndex < 0) {
     throw new GameEngineError('UNKNOWN_PLAYER', `Player ${fromPlayerId} is not in this match`);
@@ -82,7 +82,10 @@ export function isoNow(now?: string): string {
   return now ?? new Date().toISOString();
 }
 
-export function withUpdatedTimestamp(state: GameState, now?: string): GameState {
+export function withUpdatedTimestamp<T extends { version: number; updatedAt: string }>(
+  state: T,
+  now?: string
+): T {
   return {
     ...state,
     version: state.version + 1,

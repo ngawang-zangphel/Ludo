@@ -6,10 +6,11 @@ import {
   IsMongoId,
   IsOptional,
   IsString,
+  Max,
   Min,
   ValidateNested,
 } from 'class-validator';
-import { TournamentStatus } from '@ludo-game/shared-types';
+import { GameType, SnakesLevelId, TournamentStatus } from '@ludo-game/shared-types';
 
 export class RoundDto {
   @IsString()
@@ -20,9 +21,46 @@ export class RoundDto {
   number!: number;
 }
 
+export class SnakesTeleportDto {
+  @IsInt()
+  @Min(1)
+  @Max(100)
+  from!: number;
+
+  @IsInt()
+  @Min(1)
+  @Max(100)
+  to!: number;
+}
+
+export class SnakesBoardLayoutDto {
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => SnakesTeleportDto)
+  snakes!: SnakesTeleportDto[];
+
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => SnakesTeleportDto)
+  ladders!: SnakesTeleportDto[];
+}
+
 export class CreateTournamentDto {
   @IsString()
   name!: string;
+
+  @IsOptional()
+  @IsEnum(GameType)
+  gameType?: GameType;
+
+  @IsOptional()
+  @IsEnum(SnakesLevelId)
+  snakesLevelId?: SnakesLevelId;
+
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => SnakesBoardLayoutDto)
+  snakesLayout?: SnakesBoardLayoutDto;
 
   @IsOptional()
   @IsArray()

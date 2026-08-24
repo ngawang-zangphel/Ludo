@@ -14,7 +14,7 @@ import { AuthService } from '../../../../core/auth/auth.service';
   template: `
     <div class="min-h-screen px-6 py-8">
       <div class="mx-auto mb-6 max-w-7xl text-center">
-        <p class="text-xs uppercase tracking-[0.4em] text-arena-gold">Ludo Arena · Live broadcast</p>
+        <p class="text-xs uppercase tracking-[0.4em] text-arena-gold">Arena · Live broadcast</p>
         <h1 class="mt-2 font-display text-4xl font-bold text-white md:text-5xl">Projector</h1>
       </div>
 

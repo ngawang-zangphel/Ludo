@@ -12,7 +12,7 @@ import { MatchStatus, MatchSummaryDto } from '@ludo-game/shared-types';
 import { ArenaApiService } from '../../../core/api/arena-api.service';
 import { AuthService } from '../../../core/auth/auth.service';
 import { StatusBadgeComponent } from '../../../shared/ui/status-badge';
-import { formatDuration, httpErrorMessage, playerNames } from '../../../shared/format';
+import { formatDuration, gameTypeLabel, httpErrorMessage, playerNames } from '../../../shared/format';
 
 @Component({
   selector: 'ludo-lobby-page',
@@ -36,7 +36,7 @@ import { formatDuration, httpErrorMessage, playerNames } from '../../../shared/f
             <div class="flex flex-wrap items-start justify-between gap-3">
               <div>
                 <p class="text-xs uppercase tracking-wider text-arena-mist/50">
-                  {{ match.tournamentName }} · {{ roundLabel(match.round) }}
+                  {{ match.tournamentName }} · {{ roundLabel(match.round) }} · {{ gameTypeLabel(match.gameType) }}
                 </p>
                 <h2 class="mt-1 font-display text-xl text-white">{{ playerNames(match) }}</h2>
                 <p class="mt-1 text-sm text-arena-mist/70">
@@ -78,6 +78,7 @@ export class LobbyPage implements OnInit, OnDestroy {
   readonly error = signal<string | null>(null);
   readonly formatDuration = formatDuration;
   readonly playerNames = playerNames;
+  readonly gameTypeLabel = gameTypeLabel;
   readonly MatchStatus = MatchStatus;
   private poll: ReturnType<typeof setInterval> | undefined;
 

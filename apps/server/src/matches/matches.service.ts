@@ -8,6 +8,9 @@ import { Connection, Model, Types } from 'mongoose';
 import {
   GameEventType,
   GameState,
+  GameType,
+  isLudoState,
+  isSnakesState,
   MatchDetailDto,
   MatchResultDto,
   MatchStatus,
@@ -15,8 +18,16 @@ import {
   ParticipantStatus,
   PLAYER_COLOR_ORDER,
   ServerToClientEvents,
+  SnakesGameState,
 } from '@ludo-game/shared-types';
-import { applyDiceRoll, applyMove, createMatchState } from '@ludo-game/game-engine';
+import {
+  applyDiceRoll,
+  applyMove,
+  applySnakesDiceRoll,
+  applySnakesMove,
+  createMatchState,
+  createSnakesMatchState,
+} from '@ludo-game/game-engine';
 import { Match, MatchDocument } from './schemas/match.schema';
 import { MatchResult, MatchResultDocument } from './schemas/match-result.schema';
 import { MatchEvent, MatchEventDocument } from './schemas/match-event.schema';
@@ -71,6 +82,7 @@ export class MatchesService {
 
     const match = await this.matches.create({
       tournamentId: tournament._id,
+      gameType: tournament.gameType ?? GameType.LUDO,
       round,
       roundNumber,
       matchNumber,
@@ -212,17 +224,27 @@ export class MatchesService {
         throw new BadRequestException('Match is already live');
       }
       const tournament = await this.requireTournament(toObjectIdString(match.tournamentId));
-      const gameState = createMatchState({
-        matchId,
-        initialConnected: false,
-        rules: tournament.rules,
-        players: match.players.map((player) => ({
-          id: toObjectIdString(player.userId),
-          userId: toObjectIdString(player.userId),
-          name: player.name,
-          color: player.color,
-        })),
-      });
+      const gameType = match.gameType ?? tournament.gameType ?? GameType.LUDO;
+      const players = match.players.map((player) => ({
+        id: toObjectIdString(player.userId),
+        userId: toObjectIdString(player.userId),
+        name: player.name,
+        color: player.color,
+      }));
+      const gameState =
+        gameType === GameType.SNAKES
+          ? createSnakesMatchState({
+              matchId,
+              initialConnected: false,
+              rules: tournament.rules as Partial<import('@ludo-game/shared-types').SnakesRules>,
+              players,
+            })
+          : createMatchState({
+              matchId,
+              initialConnected: false,
+              rules: tournament.rules as Partial<import('@ludo-game/shared-types').LudoRules>,
+              players,
+            });
       const saved = await this.state.updateMatchState(matchId, gameState, {
         status: MatchStatus.LIVE,
         startedAt: new Date(),
@@ -329,6 +351,12 @@ export class MatchesService {
       if (!match.gameState || match.status !== MatchStatus.LIVE) {
         throw new BadRequestException('Match is not live');
       }
+      if (isSnakesState(match.gameState)) {
+        return this.rollSnakesUnlocked(matchId, userId, match.gameState);
+      }
+      if (!isLudoState(match.gameState)) {
+        throw new BadRequestException('Unknown game type');
+      }
       const result = applyDiceRoll(match.gameState, userId);
       const saved = await this.state.updateMatchState(matchId, result.state);
       await this.recordEngineEvents(saved, result.events, userId);
@@ -353,7 +381,9 @@ export class MatchesService {
       if (!match.gameState || match.status !== MatchStatus.LIVE) {
         throw new BadRequestException('Match is not live');
       }
-      const result = applyMove(match.gameState, { playerId: userId, pieceId });
+      const result = isSnakesState(match.gameState)
+        ? applySnakesMove(match.gameState, { playerId: userId, pieceId })
+        : applyMove(match.gameState, { playerId: userId, pieceId });
       const extra: Partial<Match> = {};
       if (result.state.status === MatchStatus.COMPLETED) {
         extra.finishedAt = new Date();
@@ -402,7 +432,7 @@ export class MatchesService {
           player.id === userId ? { ...player, connected } : player
         ),
         version: match.gameState.version + 1,
-      };
+      } as GameState;
       await this.state.updateMatchState(matchId, gameState);
       this.emitLive(matchId, connected ? 'player-connected' : 'player-disconnected', {
         matchId,
@@ -586,6 +616,8 @@ export class MatchesService {
       GameEventType.PLAYER_FINISHED,
       GameEventType.TURN_CHANGED,
       GameEventType.MATCH_FINISHED,
+      GameEventType.LANDED_ON_SNAKE,
+      GameEventType.LANDED_ON_LADDER,
     ]);
     for (const event of events) {
       if (persistable.has(event.type)) {
@@ -635,6 +667,63 @@ export class MatchesService {
       throw new NotFoundException('Tournament not found');
     }
     return tournament;
+  }
+
+  private async rollSnakesUnlocked(
+    matchId: string,
+    userId: string,
+    current: SnakesGameState
+  ) {
+    const rolled = applySnakesDiceRoll(current, userId);
+    let saved = await this.state.updateMatchState(matchId, rolled.state);
+    await this.recordEngineEvents(saved, rolled.events, userId);
+    logEvent('Dice rolled', { matchId, userId, value: rolled.state.dice.value ?? 0 });
+    this.emitLive(matchId, 'dice-rolled', {
+      matchId,
+      playerId: userId,
+      value: rolled.state.dice.value ?? 0,
+      validPieceIds: rolled.validPieceIds,
+      state: rolled.state,
+    });
+    this.emitLive(matchId, 'match-state-updated', { matchId, state: rolled.state });
+
+    const tokenId = rolled.validPieceIds[0];
+    if (!tokenId) {
+      await this.publishAdmin();
+      return rolled;
+    }
+
+    const moved = applySnakesMove(rolled.state, { playerId: userId, pieceId: tokenId });
+    const extra: Partial<Match> = {};
+    if (moved.state.status === MatchStatus.COMPLETED) {
+      extra.finishedAt = new Date();
+      extra.winnerIds = moved.state.rankings.map((id) => new Types.ObjectId(id));
+    }
+    saved = await this.state.updateMatchState(matchId, moved.state, extra);
+    await this.recordEngineEvents(saved, moved.events, userId);
+    if (moved.state.status === MatchStatus.COMPLETED) {
+      await this.completeMatch(saved, moved.state);
+    }
+    logEvent('Piece moved', { matchId, userId, pieceId: tokenId });
+    this.emitLive(matchId, 'piece-moved', {
+      matchId,
+      playerId: userId,
+      pieceId: tokenId,
+      state: moved.state,
+      events: moved.events,
+      animation: moved.animation,
+    });
+    this.emitLive(matchId, 'match-state-updated', { matchId, state: moved.state });
+    if (moved.state.status === MatchStatus.COMPLETED) {
+      this.emitLive(matchId, 'match-finished', {
+        matchId,
+        rankings: moved.state.rankings,
+        state: moved.state,
+      });
+      logEvent('Match completed', { matchId, winnerId: moved.state.rankings[0] ?? '' });
+    }
+    await this.publishAdmin();
+    return moved;
   }
 
   private async tournamentNames(ids: Types.ObjectId[]): Promise<Map<string, string>> {

@@ -1,9 +1,10 @@
 import {
   DisconnectRules,
-  LudoRules,
+  GameRules,
 } from './rules';
 import { GameState } from './game-state';
 import {
+  GameType,
   MatchStatus,
   ParticipantStatus,
   PlayerColor,
@@ -32,7 +33,8 @@ export interface TournamentDto {
   id: string;
   name: string;
   status: TournamentStatus;
-  rules: LudoRules;
+  gameType: GameType;
+  rules: GameRules;
   disconnectRules: DisconnectRules;
   rounds: TournamentRoundDto[];
   playerCount: number;
@@ -62,6 +64,7 @@ export interface MatchSummaryDto {
   id: string;
   tournamentId: string;
   tournamentName: string;
+  gameType: GameType;
   round: string;
   roundNumber: number;
   matchNumber: number;

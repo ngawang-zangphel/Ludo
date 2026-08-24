@@ -3,7 +3,7 @@ import {
   GameEngineError,
   GameEvent,
   GameEventType,
-  GameState,
+  LudoGameState,
   TurnPhase,
 } from '@ludo-game/shared-types';
 import { getValidMoves } from './valid-moves';
@@ -11,7 +11,7 @@ import { getNextPlayer, requireCurrentPlayer, withUpdatedTimestamp } from './que
 import { DiceRng, rollDice } from './rng';
 
 export function applyDiceRoll(
-  state: GameState,
+  state: LudoGameState,
   playerId: string,
   rng: DiceRng = Math.random,
   now?: string
@@ -39,7 +39,7 @@ export function applyDiceRoll(
   const forfeited =
     value === 6 && consecutiveSixes >= state.rules.maxConsecutiveSixes;
 
-  let next: GameState = {
+  let next: LudoGameState = {
     ...state,
     dice: { value, rolled: true },
     consecutiveSixes,
@@ -81,7 +81,7 @@ export function applyDiceRoll(
   return { state: next, events, validPieceIds };
 }
 
-function passTurn(state: GameState, fromPlayerId: string, events: GameEvent[]): GameState {
+function passTurn(state: LudoGameState, fromPlayerId: string, events: GameEvent[]): LudoGameState {
   const nextPlayer = getNextPlayer(state, fromPlayerId);
   events.push({
     type: GameEventType.TURN_CHANGED,
@@ -100,7 +100,7 @@ function passTurn(state: GameState, fromPlayerId: string, events: GameEvent[]): 
   };
 }
 
-function grantExtraTurn(state: GameState, playerId: string, events: GameEvent[]): GameState {
+function grantExtraTurn(state: LudoGameState, playerId: string, events: GameEvent[]): LudoGameState {
   events.push({ type: GameEventType.EXTRA_TURN, playerId });
   return {
     ...state,

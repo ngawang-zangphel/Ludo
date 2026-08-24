@@ -16,6 +16,10 @@ export function playerNames(match: MatchSummaryDto): string {
   return match.players.map((player) => player.name).join(' · ');
 }
 
+export function gameTypeLabel(type: MatchSummaryDto['gameType']): string {
+  return type === 'SNAKES' ? 'Snakes & Ladders' : 'Ludo';
+}
+
 export function httpErrorMessage(error: unknown): string {
   if (typeof error === 'object' && error && 'error' in error) {
     const body = (error as { error?: { message?: string | string[] } }).error;

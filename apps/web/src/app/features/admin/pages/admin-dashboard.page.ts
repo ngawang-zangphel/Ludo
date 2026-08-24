@@ -12,7 +12,7 @@ import { MatchStatus, MatchSummaryDto } from '@ludo-game/shared-types';
 import { ArenaApiService } from '../../../core/api/arena-api.service';
 import { AdminRealtimeService } from '../../../core/socket/admin-realtime.service';
 import { StatusBadgeComponent } from '../../../shared/ui/status-badge';
-import { formatDuration, httpErrorMessage, playerNames } from '../../../shared/format';
+import { formatDuration, gameTypeLabel, httpErrorMessage, playerNames } from '../../../shared/format';
 
 type Filter = 'ALL' | MatchStatus;
 
@@ -69,7 +69,7 @@ type Filter = 'ALL' | MatchStatus;
             <div class="flex flex-wrap items-start justify-between gap-3">
               <div>
                 <p class="text-xs uppercase tracking-wider text-arena-mist/50">
-                  {{ match.tournamentName }} · {{ match.round }} · Match {{ match.matchNumber }}
+                  {{ match.tournamentName }} · {{ gameTypeLabel(match.gameType) }} · {{ match.round }} · Match {{ match.matchNumber }}
                 </p>
                 <h2 class="mt-1 font-display text-xl text-white">{{ playerNames(match) }}</h2>
                 <p class="mt-1 text-sm text-arena-mist/70">
@@ -155,6 +155,7 @@ export class AdminDashboardPage implements OnInit, OnDestroy {
   readonly error = signal<string | null>(null);
   readonly formatDuration = formatDuration;
   readonly playerNames = playerNames;
+  readonly gameTypeLabel = gameTypeLabel;
 
   readonly visible = computed(() => {
     const filter = this.filter();

@@ -5,6 +5,16 @@ export enum PlayerColor {
   BLUE = 'BLUE',
 }
 
+export enum GameType {
+  LUDO = 'LUDO',
+  SNAKES = 'SNAKES',
+}
+
+export const GAME_TYPE_LABEL: Record<GameType, string> = {
+  [GameType.LUDO]: 'Ludo',
+  [GameType.SNAKES]: 'Snakes & Ladders',
+};
+
 export enum MatchStatus {
   WAITING = 'WAITING',
   READY = 'READY',
@@ -63,6 +73,8 @@ export enum GameEventType {
   MATCH_PAUSED = 'MATCH_PAUSED',
   MATCH_RESUMED = 'MATCH_RESUMED',
   MATCH_FINISHED = 'MATCH_FINISHED',
+  LANDED_ON_SNAKE = 'LANDED_ON_SNAKE',
+  LANDED_ON_LADDER = 'LANDED_ON_LADDER',
 }
 
 /** Clockwise order around the board, starting from RED (bottom-left). */
