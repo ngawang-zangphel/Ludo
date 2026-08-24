@@ -78,11 +78,6 @@ import { httpErrorMessage } from '../../../shared/format';
           <a routerLink="/broadcast" class="text-arena-gold hover:underline">watch the live broadcast</a>
           — no account needed.
         </p>
-
-        <div class="mt-6 rounded-2xl border border-arena-line/80 bg-black/20 p-4 text-xs text-arena-mist/70">
-          <p>Admin: <code>admin@ludo.arena</code> / <code>Admin123!</code></p>
-          <p class="mt-1">Players: <code>karma@ludo.arena</code> … <code>kinley@ludo.arena</code> / <code>Player123!</code></p>
-        </div>
       </div>
     </div>
   `,
@@ -91,8 +86,8 @@ export class LoginPage {
   private readonly auth = inject(AuthService);
   private readonly router = inject(Router);
 
-  email = 'karma@ludo.arena';
-  password = 'Player123!';
+  email = '';
+  password = '';
   readonly showPassword = signal(false);
   readonly busy = signal(false);
   readonly error = signal<string | null>(null);
