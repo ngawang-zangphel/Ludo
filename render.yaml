@@ -1,0 +1,25 @@
+services:
+  - type: web
+    name: ludo-arena
+    runtime: node
+    plan: free
+    buildCommand: npm install --include=dev && npx nx build server && npx nx build web
+    startCommand: node dist/apps/server/main.js
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: NODE_ENV
+        value: production
+      - key: COOKIE_SECURE
+        value: "true"
+      - key: COOKIE_NAME
+        value: ludo_session
+      - key: SEED_ON_BOOT
+        value: "true"
+      - key: MONGODB_URI
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      - key: CLIENT_ORIGIN
+        sync: false

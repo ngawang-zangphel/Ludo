@@ -95,7 +95,11 @@ export class AuthService {
       name: user.name,
       role: user.role,
     } satisfies JwtPayload);
-    const secure = this.config.get<string>('COOKIE_SECURE', 'false') === 'true';
+    const configured = this.config.get<string>('COOKIE_SECURE');
+    const secure =
+      configured !== undefined && configured !== ''
+        ? configured === 'true'
+        : process.env.NODE_ENV === 'production';
     response.cookie(this.cookieName, token, {
       httpOnly: true,
       secure,

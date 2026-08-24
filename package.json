@@ -6,11 +6,16 @@
     "start": "nx run-many -t serve -p server,web --parallel=2",
     "start:server": "nx serve server",
     "start:web": "nx serve web",
+    "start:prod": "node dist/apps/server/main.js",
     "build": "nx build web",
+    "build:prod": "nx build server && nx build web",
     "test": "nx test game-engine",
     "test:engine": "nx test game-engine"
   },
   "private": true,
+  "engines": {
+    "node": "22.x"
+  },
   "dependencies": {
     "@angular-devkit/build-angular": "~22.0.4",
     "@angular/common": "~22.0.4",

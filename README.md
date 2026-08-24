@@ -25,9 +25,35 @@ Seeded admin (first boot only): `admin@ludo.arena` / `Admin123!`
 To create a production bundle:
 
 ```sh
-npx nx build web
-npx nx build server
+npm run build:prod
 ```
+
+## Deploy on Render
+
+This app is meant to run as **one Web Service**. Nest serves `/api` and Socket.IO, and also the Angular files from `dist/apps/web/browser`.
+
+1. Push the repo to GitHub.
+2. In MongoDB Atlas → Network Access, allow `0.0.0.0/0`.
+3. In Render, create a **Web Service** from the repo (or use the included `render.yaml` Blueprint).
+4. Settings:
+   - **Build:** `npm install --include=dev && npx nx build server && npx nx build web`
+   - **Start:** `node dist/apps/server/main.js`
+   - **Health check:** `/api/health`
+   - **Node:** 22
+5. Environment variables:
+
+| Key | Value |
+|---|---|
+| `MONGODB_URI` | Atlas connection string |
+| `JWT_SECRET` | a long random secret |
+| `COOKIE_SECURE` | `true` |
+| `CLIENT_ORIGIN` | `https://YOUR-SERVICE.onrender.com` |
+| `SEED_ON_BOOT` | `true` on first boot, then `false` |
+| `NODE_ENV` | `production` |
+
+Do not set `PORT`; Render provides it. `--include=dev` is required because Nx and the Angular compiler are in `devDependencies`. If you omit `CLIENT_ORIGIN`, the server uses Render’s public URL for CORS.
+
+After deploy, open the Render URL and sign in as `admin@ludo.arena` / `Admin123!`. Change that password. The free instance sleeps when idle, which drops live sockets until it wakes.
 
 To see all available targets to run for a project, run:
 
