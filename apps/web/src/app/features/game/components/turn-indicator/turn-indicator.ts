@@ -1,5 +1,5 @@
 import { ChangeDetectionStrategy, Component, input } from '@angular/core';
-import { LudoPlayer, TurnPhase } from '@ludo-game/shared-types';
+import { PlayerColor, TurnPhase } from '@ludo-game/shared-types';
 import { PLAYER_SWATCH } from '../../models/theme';
 
 @Component({
@@ -15,7 +15,7 @@ import { PLAYER_SWATCH } from '../../models/theme';
           {{ current.name }}
         </p>
         <p class="mt-1 text-sm text-arena-mist/70">
-          {{ phase() === 'WAITING_FOR_ROLL' ? 'Roll the dice' : 'Choose a highlighted piece' }}
+          {{ phase() === 'WAITING_FOR_ROLL' ? 'Roll the dice' : hint() }}
         </p>
       }
     </div>
@@ -23,6 +23,7 @@ import { PLAYER_SWATCH } from '../../models/theme';
 })
 export class TurnIndicatorComponent {
   readonly PLAYER_SWATCH = PLAYER_SWATCH;
-  readonly player = input<LudoPlayer | null>(null);
+  readonly player = input<{ name: string; color: PlayerColor } | null>(null);
   readonly phase = input<TurnPhase>(TurnPhase.WAITING_FOR_ROLL);
+  readonly hint = input('Choose a highlighted piece');
 }

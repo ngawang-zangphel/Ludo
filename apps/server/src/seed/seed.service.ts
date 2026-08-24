@@ -1,6 +1,6 @@
 import { Injectable, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { UserRole } from '@ludo-game/shared-types';
+import { GameType, UserRole } from '@ludo-game/shared-types';
 import { UsersService } from '../users/users.service';
 import { TournamentsService } from '../tournaments/tournaments.service';
 import { MatchesService } from '../matches/matches.service';
@@ -82,6 +82,27 @@ export class SeedService implements OnModuleInit {
       playerUserIds: players.slice(4, 8).map((player) => player.id),
     });
 
+    const snakes = await this.tournaments.create({
+      name: 'SELISE Snakes & Ladders 2026',
+      gameType: GameType.SNAKES,
+      rounds: [
+        { name: 'ROUND_1', number: 1 },
+        { name: 'SEMI_FINAL', number: 2 },
+        { name: 'FINAL', number: 3 },
+      ],
+    });
+    for (const player of players.slice(0, 4)) {
+      await this.tournaments.register(snakes.id, { userId: player.id });
+    }
+    await this.matches.create({
+      tournamentId: snakes.id,
+      round: 'ROUND_1',
+      roundNumber: 1,
+      matchNumber: 1,
+      playerUserIds: players.slice(0, 4).map((player) => player.id),
+    });
+
     logEvent('Tournament created', { tournamentId: tournament.id, seeded: true });
+    logEvent('Tournament created', { tournamentId: snakes.id, seeded: true, gameType: GameType.SNAKES });
   }
 }

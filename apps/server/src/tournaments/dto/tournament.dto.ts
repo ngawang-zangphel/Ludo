@@ -9,7 +9,7 @@ import {
   Min,
   ValidateNested,
 } from 'class-validator';
-import { TournamentStatus } from '@ludo-game/shared-types';
+import { GameType, TournamentStatus } from '@ludo-game/shared-types';
 
 export class RoundDto {
   @IsString()
@@ -23,6 +23,10 @@ export class RoundDto {
 export class CreateTournamentDto {
   @IsString()
   name!: string;
+
+  @IsOptional()
+  @IsEnum(GameType)
+  gameType?: GameType;
 
   @IsOptional()
   @IsArray()

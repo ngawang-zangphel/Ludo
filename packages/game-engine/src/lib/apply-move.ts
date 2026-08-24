@@ -3,7 +3,7 @@ import {
   GameEngineError,
   GameEvent,
   GameEventType,
-  GameState,
+  LudoGameState,
   LudoPiece,
   LudoPlayer,
   MatchStatus,
@@ -27,7 +27,7 @@ import {
 import { getValidMoves } from './valid-moves';
 
 export function applyMove(
-  state: GameState,
+  state: LudoGameState,
   input: { playerId: string; pieceId: string },
   now?: string
 ): EngineResult {
@@ -94,7 +94,7 @@ export function applyMove(
 }
 
 export function movePiece(
-  state: GameState,
+  state: LudoGameState,
   input: { playerId: string; pieceId: string },
   now?: string
 ): EngineResult {
@@ -102,11 +102,11 @@ export function movePiece(
 }
 
 function applyPieceRelocation(
-  state: GameState,
+  state: LudoGameState,
   playerId: string,
   move: ValidMove,
   events: GameEvent[]
-): GameState {
+): LudoGameState {
   const players = state.players.map((player) => {
     if (player.id === playerId) {
       return {
@@ -188,13 +188,13 @@ function yardSlotFromPieceId(pieceId: string): number {
   return Number.isInteger(slot) ? slot : 0;
 }
 
-function shouldGrantExtraTurn(state: GameState, move: ValidMove): boolean {
+function shouldGrantExtraTurn(state: LudoGameState, move: ValidMove): boolean {
   const rolledSix = state.dice.value === 6 && state.rules.extraTurnOnSix;
   const captured = move.captures.length > 0 && state.rules.extraTurnOnCapture;
   return rolledSix || captured;
 }
 
-function passTurn(state: GameState, fromPlayerId: string, events: GameEvent[]): GameState {
+function passTurn(state: LudoGameState, fromPlayerId: string, events: GameEvent[]): LudoGameState {
   if (state.status === MatchStatus.COMPLETED) {
     return state;
   }
@@ -215,7 +215,7 @@ function passTurn(state: GameState, fromPlayerId: string, events: GameEvent[]): 
   };
 }
 
-function grantExtraTurn(state: GameState, playerId: string, events: GameEvent[]): GameState {
+function grantExtraTurn(state: LudoGameState, playerId: string, events: GameEvent[]): LudoGameState {
   events.push({ type: GameEventType.EXTRA_TURN, playerId });
   return {
     ...state,
@@ -226,7 +226,7 @@ function grantExtraTurn(state: GameState, playerId: string, events: GameEvent[])
   };
 }
 
-function completeMatch(state: GameState, events: GameEvent[]): GameState {
+function completeMatch(state: LudoGameState, events: GameEvent[]): LudoGameState {
   const remaining = state.players.filter((player) => player.finishedPosition === undefined);
   let rankings = [...state.rankings];
   let players = state.players;

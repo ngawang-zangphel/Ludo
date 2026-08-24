@@ -1,5 +1,6 @@
 import {
   GameState,
+  GameType,
   MatchDetailDto,
   MatchStatus,
   MatchSummaryDto,
@@ -28,6 +29,7 @@ export function toSummary(
     id: toObjectIdString(match._id),
     tournamentId: toObjectIdString(match.tournamentId),
     tournamentName,
+    gameType: match.gameType ?? GameType.LUDO,
     round: match.round,
     roundNumber: match.roundNumber,
     matchNumber: match.matchNumber,

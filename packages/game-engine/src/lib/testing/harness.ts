@@ -1,5 +1,5 @@
 import {
-  GameState,
+  LudoGameState,
   LudoPiece,
   PieceState,
   PlayerColor,
@@ -10,7 +10,7 @@ import { applyDiceRoll } from '../apply-dice-roll';
 import { applyMove } from '../apply-move';
 import { createDiceSequence } from '../rng';
 
-export function makeMatch(now = '2026-01-01T00:00:00.000Z'): GameState {
+export function makeMatch(now = '2026-01-01T00:00:00.000Z'): LudoGameState {
   return createMatchState({
     matchId: 'test-match',
     now,
@@ -24,11 +24,11 @@ export function makeMatch(now = '2026-01-01T00:00:00.000Z'): GameState {
 }
 
 export function placePiece(
-  state: GameState,
+  state: LudoGameState,
   playerId: string,
   pieceId: string,
   patch: Partial<LudoPiece>
-): GameState {
+): LudoGameState {
   return {
     ...state,
     players: state.players.map((player) =>
@@ -45,11 +45,11 @@ export function placePiece(
 }
 
 export function putOnBoard(
-  state: GameState,
+  state: LudoGameState,
   playerId: string,
   pieceId: string,
   relative: number
-): GameState {
+): LudoGameState {
   const nextState =
     relative >= 51 && relative < 56
       ? PieceState.HOME_PATH
@@ -59,21 +59,21 @@ export function putOnBoard(
   return placePiece(state, playerId, pieceId, { state: nextState, position: relative });
 }
 
-export function roll(state: GameState, playerId: string, face: number): GameState {
+export function roll(state: LudoGameState, playerId: string, face: number): LudoGameState {
   return applyDiceRoll(state, playerId, createDiceSequence([face])).state;
 }
 
 export function rollAndMove(
-  state: GameState,
+  state: LudoGameState,
   playerId: string,
   face: number,
   pieceId: string
-): GameState {
+): LudoGameState {
   const afterRoll = applyDiceRoll(state, playerId, createDiceSequence([face])).state;
   return applyMove(afterRoll, { playerId, pieceId }).state;
 }
 
-export function waitingForMove(state: GameState, playerId: string, face: number): GameState {
+export function waitingForMove(state: LudoGameState, playerId: string, face: number): LudoGameState {
   const next = roll(state, playerId, face);
   if (next.turnPhase !== TurnPhase.WAITING_FOR_MOVE) {
     throw new Error(`Expected WAITING_FOR_MOVE, got ${next.turnPhase} after rolling ${face}`);

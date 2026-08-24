@@ -1,21 +1,23 @@
 import {
-  CreateMatchInput,
-  DEFAULT_LUDO_RULES,
+  CreateSnakesMatchInput,
+  DEFAULT_SNAKES_RULES,
   GameEngineError,
   GameType,
-  LudoGameState,
-  LudoPlayer,
-  LudoRules,
   MatchStatus,
-  PIECES_PER_PLAYER,
-  PieceState,
   PLAYER_COLOR_ORDER,
   PlayerColor,
+  SnakesGameState,
+  SnakesPlayer,
+  SnakesRules,
   TurnPhase,
 } from '@ludo-game/shared-types';
-import { isoNow } from './queries';
+import { isoNow } from '../queries';
 
-export function createMatchState(input: CreateMatchInput): LudoGameState {
+export function snakesTokenId(color: PlayerColor): string {
+  return `${color.toLowerCase()}-token`;
+}
+
+export function createSnakesMatchState(input: CreateSnakesMatchInput): SnakesGameState {
   if (input.players.length < 2 || input.players.length > 4) {
     throw new GameEngineError(
       'INVALID_PLAYER_SETUP',
@@ -41,18 +43,15 @@ export function createMatchState(input: CreateMatchInput): LudoGameState {
   );
 
   const now = isoNow(input.now);
-  const rules: LudoRules = { ...DEFAULT_LUDO_RULES, ...input.rules };
-  const players: LudoPlayer[] = sortedPlayers.map((player) => ({
+  const rules: SnakesRules = { ...DEFAULT_SNAKES_RULES, ...input.rules };
+  const players: SnakesPlayer[] = sortedPlayers.map((player) => ({
     id: player.id,
     userId: player.userId,
     name: player.name,
     color: player.color,
+    tokenId: snakesTokenId(player.color),
+    position: 0,
     connected: input.initialConnected ?? true,
-    pieces: Array.from({ length: PIECES_PER_PLAYER }, (_, index) => ({
-      id: `${player.color.toLowerCase()}-${index}`,
-      state: PieceState.YARD,
-      position: index,
-    })),
   }));
 
   const first = players[0];
@@ -62,14 +61,13 @@ export function createMatchState(input: CreateMatchInput): LudoGameState {
 
   return {
     matchId: input.matchId,
-    gameType: GameType.LUDO,
+    gameType: GameType.SNAKES,
     status: MatchStatus.LIVE,
     currentPlayerId: first.id,
     turnPhase: TurnPhase.WAITING_FOR_ROLL,
     dice: { value: null, rolled: false },
     players,
     turnNumber: 1,
-    consecutiveSixes: 0,
     validPieceIds: [],
     rankings: [],
     rules,
@@ -79,9 +77,9 @@ export function createMatchState(input: CreateMatchInput): LudoGameState {
   };
 }
 
-export function createLocalDemoMatch(now?: string): LudoGameState {
-  return createMatchState({
-    matchId: 'local-demo',
+export function createLocalSnakesDemoMatch(now?: string): SnakesGameState {
+  return createSnakesMatchState({
+    matchId: 'local-snakes-demo',
     now,
     players: [
       { id: 'player-red', userId: 'user-red', name: 'Karma', color: PlayerColor.RED },

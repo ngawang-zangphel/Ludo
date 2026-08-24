@@ -1,6 +1,6 @@
 import {
   CapturedPieceRef,
-  GameState,
+  LudoGameState,
   HOME_POSITION,
   LudoPiece,
   LudoPlayer,
@@ -12,7 +12,7 @@ import { isSafeSquare, pieceStateForRelative, relativeToGlobal } from './board/c
 import { findPlayer } from './queries';
 
 export function getCapturedPieces(
-  state: GameState,
+  state: LudoGameState,
   actingPlayerId: string,
   globalIndex: number
 ): CapturedPieceRef[] {
@@ -38,7 +38,7 @@ export function getCapturedPieces(
 }
 
 export function checkCapture(
-  state: GameState,
+  state: LudoGameState,
   actingPlayerId: string,
   globalIndex: number
 ): boolean {
@@ -62,7 +62,7 @@ export function destinationFor(piece: LudoPiece, dice: number, exactHome: boolea
 }
 
 export function buildMove(
-  state: GameState,
+  state: LudoGameState,
   player: LudoPlayer,
   piece: LudoPiece,
   dice: number
@@ -92,11 +92,11 @@ export function buildMove(
   };
 }
 
-function playerFinishedExact(state: GameState): boolean {
+function playerFinishedExact(state: LudoGameState): boolean {
   return state.rules.exactRollRequiredForHome;
 }
 
-export function getValidMoves(state: GameState, playerId: string): ValidMove[] {
+export function getValidMoves(state: LudoGameState, playerId: string): ValidMove[] {
   const player = findPlayer(state, playerId);
   const dice = state.dice.value;
   if (!state.dice.rolled || dice === null) {
@@ -108,6 +108,6 @@ export function getValidMoves(state: GameState, playerId: string): ValidMove[] {
     .filter((move): move is ValidMove => move !== null);
 }
 
-export function canMovePiece(state: GameState, playerId: string, pieceId: string): boolean {
+export function canMovePiece(state: LudoGameState, playerId: string, pieceId: string): boolean {
   return getValidMoves(state, playerId).some((move) => move.pieceId === pieceId);
 }

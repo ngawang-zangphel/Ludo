@@ -4,6 +4,8 @@ import { Model, Types } from 'mongoose';
 import {
   DEFAULT_DISCONNECT_RULES,
   DEFAULT_LUDO_RULES,
+  DEFAULT_SNAKES_RULES,
+  GameType,
   ParticipantDto,
   ParticipantStatus,
   TournamentDto,
@@ -31,10 +33,12 @@ export class TournamentsService {
   ) {}
 
   async create(dto: CreateTournamentDto): Promise<TournamentDto> {
+    const gameType = dto.gameType === GameType.SNAKES ? GameType.SNAKES : GameType.LUDO;
     const tournament = await this.tournaments.create({
       name: dto.name,
       status: TournamentStatus.REGISTRATION,
-      rules: DEFAULT_LUDO_RULES,
+      gameType,
+      rules: gameType === GameType.SNAKES ? DEFAULT_SNAKES_RULES : DEFAULT_LUDO_RULES,
       disconnectRules: DEFAULT_DISCONNECT_RULES,
       rounds: dto.rounds ?? [
         { name: 'ROUND_1', number: 1 },
@@ -212,6 +216,7 @@ export class TournamentsService {
       id: toObjectIdString(tournament._id),
       name: tournament.name,
       status: tournament.status,
+      gameType: tournament.gameType ?? GameType.LUDO,
       rules: tournament.rules,
       disconnectRules: tournament.disconnectRules,
       rounds: tournament.rounds,

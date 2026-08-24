@@ -3,19 +3,26 @@ import {
   BoardCoordinate,
   GameEngineError,
   GameState,
+  GameType,
+  isSnakesState,
   TurnPhase,
 } from '@ludo-game/shared-types';
 import {
   applyDiceRoll,
   applyMove,
+  applySnakesDiceRoll,
+  applySnakesMove,
   createLocalDemoMatch,
+  createLocalSnakesDemoMatch,
   getPieceCoordinate,
+  getSnakesSquareCoordinate,
 } from '@ludo-game/game-engine';
 import { DiceUiState } from '../models/dice';
 import { PIECE_STEP_MS } from '../models/motion';
 
 @Injectable()
 export class LocalMatchService {
+  readonly gameType = signal<GameType>(GameType.LUDO);
   readonly state = signal<GameState>(createLocalDemoMatch());
   readonly diceUi = signal<DiceUiState>('WAITING');
   readonly animating = signal(false);
@@ -53,8 +60,14 @@ export class LocalMatchService {
     this.syncDisplay(this.state());
   }
 
+  setGameType(type: GameType): void {
+    this.gameType.set(type);
+    this.newMatch();
+  }
+
   newMatch(): void {
-    const next = createLocalDemoMatch();
+    const next =
+      this.gameType() === GameType.SNAKES ? createLocalSnakesDemoMatch() : createLocalDemoMatch();
     this.state.set(next);
     this.diceUi.set('WAITING');
     this.animating.set(false);
@@ -75,12 +88,19 @@ export class LocalMatchService {
     const startedAt = Date.now();
 
     try {
-      const result = applyDiceRoll(this.state(), this.state().currentPlayerId);
+      const current = this.state();
+      const result = isSnakesState(current)
+        ? applySnakesDiceRoll(current, current.currentPlayerId)
+        : applyDiceRoll(current, current.currentPlayerId);
       const wait = Math.max(0, 650 - (Date.now() - startedAt));
       await delay(wait);
       this.state.set(result.state);
       this.diceUi.set('RESULT');
       this.lastEvent.set(summarize(result.events.map((event) => event.type)));
+      const tokenId = result.validPieceIds[0];
+      if (isSnakesState(result.state) && tokenId) {
+        await this.move(tokenId);
+      }
     } catch (error) {
       this.diceUi.set('WAITING');
       this.errorMessage.set(toMessage(error));
@@ -94,10 +114,16 @@ export class LocalMatchService {
 
     this.errorMessage.set(null);
     try {
-      const result = applyMove(this.state(), {
-        playerId: this.state().currentPlayerId,
-        pieceId,
-      });
+      const current = this.state();
+      const result = isSnakesState(current)
+        ? applySnakesMove(current, {
+            playerId: current.currentPlayerId,
+            pieceId,
+          })
+        : applyMove(current, {
+            playerId: current.currentPlayerId,
+            pieceId,
+          });
 
       if (result.animation && result.animation.steps.length > 0) {
         this.animating.set(true);
@@ -128,9 +154,15 @@ export class LocalMatchService {
 
   private syncDisplay(state: GameState): void {
     const coords: Record<string, BoardCoordinate> = {};
-    for (const player of state.players) {
-      for (const piece of player.pieces) {
-        coords[piece.id] = getPieceCoordinate(player.color, piece.state, piece.position);
+    if (isSnakesState(state)) {
+      for (const player of state.players) {
+        coords[player.tokenId] = getSnakesSquareCoordinate(player.position);
+      }
+    } else {
+      for (const player of state.players) {
+        for (const piece of player.pieces) {
+          coords[piece.id] = getPieceCoordinate(player.color, piece.state, piece.position);
+        }
       }
     }
     this.displayCoords.set(coords);

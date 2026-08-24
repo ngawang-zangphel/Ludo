@@ -9,6 +9,8 @@ import {
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import {
+  GAME_TYPE_LABEL,
+  GameType,
   MatchStatus,
   MatchSummaryDto,
   ParticipantDto,
@@ -43,6 +45,30 @@ import { httpErrorMessage, playerNames } from '../../../shared/format';
             [(ngModel)]="tournamentName"
             required
           />
+          <div class="mt-3 flex gap-2">
+            <button
+              type="button"
+              class="rounded-full px-3 py-1.5 text-sm"
+              [class.bg-arena-gold]="tournamentGameType === GameType.LUDO"
+              [class.text-arena-ink]="tournamentGameType === GameType.LUDO"
+              [class.border]="tournamentGameType !== GameType.LUDO"
+              [class.border-arena-line]="tournamentGameType !== GameType.LUDO"
+              (click)="tournamentGameType = GameType.LUDO"
+            >
+              Ludo
+            </button>
+            <button
+              type="button"
+              class="rounded-full px-3 py-1.5 text-sm"
+              [class.bg-arena-gold]="tournamentGameType === GameType.SNAKES"
+              [class.text-arena-ink]="tournamentGameType === GameType.SNAKES"
+              [class.border]="tournamentGameType !== GameType.SNAKES"
+              [class.border-arena-line]="tournamentGameType !== GameType.SNAKES"
+              (click)="tournamentGameType = GameType.SNAKES"
+            >
+              Snakes & Ladders
+            </button>
+          </div>
           <button class="mt-3 rounded-full bg-arena-gold px-4 py-2 text-sm font-semibold text-arena-ink" type="submit">
             Create
           </button>
@@ -96,6 +122,7 @@ import { httpErrorMessage, playerNames } from '../../../shared/format';
                   <ludo-status-badge [status]="tournament.status" />
                 </div>
                 <h3 class="mt-4 font-display text-lg leading-snug text-white">{{ tournament.name }}</h3>
+                <p class="mt-1 text-xs text-arena-gold/80">{{ GAME_TYPE_LABEL[tournament.gameType] || 'Ludo' }}</p>
                 <p class="mt-1 text-xs text-arena-mist/50">Created {{ formatDate(tournament.createdAt) }}</p>
                 <div class="mt-3 flex flex-wrap gap-1.5">
                   @for (round of tournament.rounds.slice(0, 3); track round.number) {
@@ -327,6 +354,8 @@ export class AdminTournamentsPage implements OnInit {
   readonly error = signal<string | null>(null);
   readonly playerNames = playerNames;
   readonly selectedPlayerIds = signal<string[]>([]);
+  readonly GAME_TYPE_LABEL = GAME_TYPE_LABEL;
+  readonly GameType = GameType;
 
   readonly rounds = computed(() => this.selected()?.rounds ?? []);
 
@@ -386,6 +415,7 @@ export class AdminTournamentsPage implements OnInit {
   }
 
   tournamentName = '';
+  tournamentGameType = GameType.LUDO;
   playerName = '';
   playerEmail = '';
   playerPassword = 'Player123!';
@@ -406,8 +436,9 @@ export class AdminTournamentsPage implements OnInit {
 
   async createTournament(): Promise<void> {
     await this.guard(async () => {
-      const created = await this.api.createTournament(this.tournamentName);
+      const created = await this.api.createTournament(this.tournamentName, undefined, this.tournamentGameType);
       this.tournamentName = '';
+      this.tournamentGameType = GameType.LUDO;
       await this.refresh();
       await this.select(created);
     });

@@ -122,8 +122,12 @@ export class ArenaApiService {
     return firstValueFrom(this.http.get<TournamentDto>(`/api/tournaments/${id}`));
   }
 
-  createTournament(name: string, rounds?: Array<{ name: string; number: number }>): Promise<TournamentDto> {
-    return firstValueFrom(this.http.post<TournamentDto>('/api/tournaments', { name, rounds }));
+  createTournament(
+    name: string,
+    rounds?: Array<{ name: string; number: number }>,
+    gameType?: string
+  ): Promise<TournamentDto> {
+    return firstValueFrom(this.http.post<TournamentDto>('/api/tournaments', { name, rounds, gameType }));
   }
 
   setTournamentStatus(id: string, status: TournamentStatus): Promise<TournamentDto> {

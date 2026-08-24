@@ -1,5 +1,5 @@
 import { ChangeDetectionStrategy, Component, computed, input, output } from '@angular/core';
-import { BOARD_SIZE, BoardCoordinate, GameState, LudoPiece, LudoPlayer } from '@ludo-game/shared-types';
+import { BOARD_SIZE, BoardCoordinate, LudoGameState, LudoPiece, LudoPlayer } from '@ludo-game/shared-types';
 import { getBoardLayout } from '@ludo-game/game-engine';
 import { LudoCellComponent } from '../ludo-cell/ludo-cell';
 import { LudoPieceComponent } from '../ludo-piece/ludo-piece';
@@ -60,7 +60,7 @@ interface BoardToken {
   `,
 })
 export class LudoBoardComponent {
-  readonly state = input.required<GameState>();
+  readonly state = input.required<LudoGameState>();
   readonly displayCoords = input<Record<string, BoardCoordinate>>({});
   readonly interactive = input(true);
   readonly highlightValid = input(true);

@@ -1,5 +1,6 @@
 import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
 import { RouterLink } from '@angular/router';
+import { GameType } from '@ludo-game/shared-types';
 import { LocalMatchService } from '../../services/local-match.service';
 import { GameTableComponent } from '../../components/game-table/game-table';
 
@@ -13,9 +14,31 @@ import { GameTableComponent } from '../../components/game-table/game-table';
       <header class="mx-auto mb-6 flex max-w-7xl flex-wrap items-center justify-between gap-4">
         <div>
           <p class="text-xs uppercase tracking-[0.3em] text-arena-gold">Hot-seat · offline engine</p>
-          <h1 class="font-display text-3xl font-bold text-white md:text-4xl">Ludo Arena</h1>
+          <h1 class="font-display text-3xl font-bold text-white md:text-4xl">Hot-seat arena</h1>
         </div>
-        <div class="flex gap-2">
+        <div class="flex flex-wrap gap-2">
+          <button
+            type="button"
+            class="rounded-full px-4 py-2 text-sm"
+            [class.bg-arena-gold]="match.gameType() === GameType.LUDO"
+            [class.text-arena-ink]="match.gameType() === GameType.LUDO"
+            [class.border]="match.gameType() !== GameType.LUDO"
+            [class.border-arena-line]="match.gameType() !== GameType.LUDO"
+            (click)="match.setGameType(GameType.LUDO)"
+          >
+            Ludo
+          </button>
+          <button
+            type="button"
+            class="rounded-full px-4 py-2 text-sm"
+            [class.bg-arena-gold]="match.gameType() === GameType.SNAKES"
+            [class.text-arena-ink]="match.gameType() === GameType.SNAKES"
+            [class.border]="match.gameType() !== GameType.SNAKES"
+            [class.border-arena-line]="match.gameType() !== GameType.SNAKES"
+            (click)="match.setGameType(GameType.SNAKES)"
+          >
+            Snakes & Ladders
+          </button>
           <a routerLink="/" class="rounded-full border border-arena-line px-4 py-2 text-sm text-arena-mist">
             Lobby
           </a>
@@ -56,4 +79,5 @@ import { GameTableComponent } from '../../components/game-table/game-table';
 })
 export class LocalMatchPage {
   readonly match = inject(LocalMatchService);
+  readonly GameType = GameType;
 }

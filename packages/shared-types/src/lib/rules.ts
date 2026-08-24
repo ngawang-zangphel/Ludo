@@ -23,3 +23,15 @@ export const DEFAULT_DISCONNECT_RULES: DisconnectRules = {
   autoRollAfterTimeout: false,
   autoMoveAfterTimeout: false,
 };
+
+export interface SnakesRules {
+  extraTurnOnSix: boolean;
+  exactRollRequiredForFinish: boolean;
+}
+
+export const DEFAULT_SNAKES_RULES: SnakesRules = {
+  extraTurnOnSix: true,
+  exactRollRequiredForFinish: true,
+};
+
+export type GameRules = LudoRules | SnakesRules;
