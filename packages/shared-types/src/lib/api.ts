@@ -35,6 +35,8 @@ export interface TournamentDto {
   rules: LudoRules;
   disconnectRules: DisconnectRules;
   rounds: TournamentRoundDto[];
+  playerCount: number;
+  tableCount: number;
   createdAt: string;
   updatedAt: string;
 }

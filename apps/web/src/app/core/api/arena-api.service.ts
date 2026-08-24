@@ -124,6 +124,10 @@ export class ArenaApiService {
     );
   }
 
+  deleteTournament(id: string): Promise<{ ok: true }> {
+    return firstValueFrom(this.http.delete<{ ok: true }>(`/api/tournaments/${id}`));
+  }
+
   participants(tournamentId: string): Promise<ParticipantDto[]> {
     return firstValueFrom(
       this.http.get<ParticipantDto[]>(`/api/tournaments/${tournamentId}/participants`)

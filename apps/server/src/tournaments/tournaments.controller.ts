@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
 import { ParticipantDto, TournamentDto, UserRole } from '@ludo-game/shared-types';
 import { TournamentsService } from './tournaments.service';
 import {
@@ -35,6 +35,12 @@ export class TournamentsController {
   @Roles(UserRole.ADMIN)
   setStatus(@Param('id') id: string, @Body() dto: UpdateTournamentStatusDto): Promise<TournamentDto> {
     return this.tournaments.setStatus(id, dto.status);
+  }
+
+  @Delete(':id')
+  @Roles(UserRole.ADMIN)
+  remove(@Param('id') id: string): Promise<{ ok: true }> {
+    return this.tournaments.remove(id);
   }
 
   @Get(':id/participants')

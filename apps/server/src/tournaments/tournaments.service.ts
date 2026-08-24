@@ -43,23 +43,42 @@ export class TournamentsService {
       ],
     });
     logEvent('Tournament created', { tournamentId: toObjectIdString(tournament._id), name: dto.name });
-    return this.toDto(tournament);
+    return this.toDto(tournament, { playerCount: 0, tableCount: 0 });
   }
 
   async list(): Promise<TournamentDto[]> {
     const rows = await this.tournaments.find().sort({ createdAt: -1 }).exec();
-    return rows.map((row) => this.toDto(row));
+    const ids = rows.map((row) => row._id);
+    const [playerRows, tableCounts] = await Promise.all([
+      this.participants
+        .aggregate<{ _id: Types.ObjectId; count: number }>([
+          { $match: { tournamentId: { $in: ids } } },
+          { $group: { _id: '$tournamentId', count: { $sum: 1 } } },
+        ])
+        .exec(),
+      this.matches.countByTournamentIds(ids.map((id) => toObjectIdString(id))),
+    ]);
+    const playerCounts = new Map(
+      playerRows.map((row) => [toObjectIdString(row._id), row.count] as const)
+    );
+    return rows.map((row) => {
+      const id = toObjectIdString(row._id);
+      return this.toDto(row, {
+        playerCount: playerCounts.get(id) ?? 0,
+        tableCount: tableCounts.get(id) ?? 0,
+      });
+    });
   }
 
   async get(id: string): Promise<TournamentDto> {
-    return this.toDto(await this.require(id));
+    return this.withCounts(await this.require(id));
   }
 
   async setStatus(id: string, status: TournamentStatus): Promise<TournamentDto> {
     const tournament = await this.require(id);
     tournament.status = status;
     await tournament.save();
-    return this.toDto(tournament);
+    return this.withCounts(tournament);
   }
 
   async register(tournamentId: string, dto: RegisterParticipantDto): Promise<ParticipantDto> {
@@ -156,6 +175,15 @@ export class TournamentsService {
     await tournament.save();
   }
 
+  async remove(id: string): Promise<{ ok: true }> {
+    const tournament = await this.require(id);
+    await this.matches.removeByTournamentId(id);
+    await this.participants.deleteMany({ tournamentId: tournament._id }).exec();
+    await this.tournaments.deleteOne({ _id: tournament._id }).exec();
+    logEvent('Tournament deleted', { tournamentId: id, name: tournament.name });
+    return { ok: true };
+  }
+
   private async require(id: string): Promise<TournamentDocument> {
     const tournament = await this.tournaments.findById(id).exec();
     if (!tournament) {
@@ -164,7 +192,22 @@ export class TournamentsService {
     return tournament;
   }
 
-  private toDto(tournament: TournamentDocument): TournamentDto {
+  private async withCounts(tournament: TournamentDocument): Promise<TournamentDto> {
+    const id = toObjectIdString(tournament._id);
+    const [playerCount, tableCounts] = await Promise.all([
+      this.participants.countDocuments({ tournamentId: tournament._id }),
+      this.matches.countByTournamentIds([id]),
+    ]);
+    return this.toDto(tournament, {
+      playerCount,
+      tableCount: tableCounts.get(id) ?? 0,
+    });
+  }
+
+  private toDto(
+    tournament: TournamentDocument,
+    counts: { playerCount: number; tableCount: number }
+  ): TournamentDto {
     return {
       id: toObjectIdString(tournament._id),
       name: tournament.name,
@@ -172,6 +215,8 @@ export class TournamentsService {
       rules: tournament.rules,
       disconnectRules: tournament.disconnectRules,
       rounds: tournament.rounds,
+      playerCount: counts.playerCount,
+      tableCount: counts.tableCount,
       createdAt: tournament.createdAt?.toISOString() ?? new Date().toISOString(),
       updatedAt: tournament.updatedAt?.toISOString() ?? new Date().toISOString(),
     };

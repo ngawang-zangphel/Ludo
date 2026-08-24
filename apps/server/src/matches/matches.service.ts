@@ -276,6 +276,16 @@ export class MatchesService {
     });
   }
 
+  async removeByTournamentId(tournamentId: string): Promise<void> {
+    const rows = await this.matches
+      .find({ tournamentId: new Types.ObjectId(tournamentId) })
+      .select('_id')
+      .exec();
+    for (const row of rows) {
+      await this.remove(toObjectIdString(row._id));
+    }
+  }
+
   async rollDice(matchId: string, userId: string) {
     return this.enqueue(matchId, async () => {
       const match = await this.state.loadMatch(matchId);
@@ -365,6 +375,23 @@ export class MatchesService {
       this.emitLive(matchId, 'match-state-updated', { matchId, state: gameState });
       logEvent(connected ? 'Player connected' : 'Player disconnected', { matchId, userId });
     });
+  }
+
+  async countByTournamentIds(ids: string[]): Promise<Map<string, number>> {
+    const counts = new Map<string, number>();
+    if (ids.length === 0) {
+      return counts;
+    }
+    const rows = await this.matches
+      .aggregate<{ _id: Types.ObjectId; count: number }>([
+        { $match: { tournamentId: { $in: ids.map((id) => new Types.ObjectId(id)) } } },
+        { $group: { _id: '$tournamentId', count: { $sum: 1 } } },
+      ])
+      .exec();
+    for (const row of rows) {
+      counts.set(toObjectIdString(row._id), row.count);
+    }
+    return counts;
   }
 
   async list(filters: { tournamentId?: string; status?: MatchStatus }): Promise<MatchSummaryDto[]> {

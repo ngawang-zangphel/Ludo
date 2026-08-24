@@ -15,7 +15,6 @@ import {
   TournamentDto,
   TournamentStatus,
   UserDto,
-  UserRole,
 } from '@ludo-game/shared-types';
 import { ArenaApiService } from '../../../core/api/arena-api.service';
 import { StatusBadgeComponent } from '../../../shared/ui/status-badge';
@@ -61,21 +60,93 @@ import { httpErrorMessage, playerNames } from '../../../shared/format';
         </form>
       </section>
 
-      <section class="mt-8 grid gap-3">
-        @for (tournament of tournaments(); track tournament.id) {
-          <button
-            type="button"
-            class="rounded-2xl border px-4 py-3 text-left"
-            [class.border-arena-gold]="selected()?.id === tournament.id"
-            [class.border-arena-line]="selected()?.id !== tournament.id"
-            (click)="select(tournament)"
-          >
-            <div class="flex items-center justify-between gap-3">
-              <span class="font-display text-lg">{{ tournament.name }}</span>
-              <ludo-status-badge [status]="tournament.status" />
-            </div>
-          </button>
-        }
+      <section class="mt-8">
+        <div class="flex items-end justify-between gap-3">
+          <div>
+            <p class="text-xs uppercase tracking-[0.25em] text-arena-gold">Bracket</p>
+            <h2 class="mt-1 font-display text-xl text-white">Your tournaments</h2>
+          </div>
+          <p class="text-sm text-arena-mist/50">{{ tournaments().length }} total</p>
+        </div>
+
+        <div class="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          @for (tournament of tournaments(); track tournament.id) {
+            <article
+              class="group flex h-full cursor-pointer flex-col overflow-hidden rounded-3xl border bg-arena-navy/80 text-left transition duration-200 hover:-translate-y-1 hover:border-arena-gold/70"
+              [class.border-arena-gold]="selected()?.id === tournament.id"
+              [class.shadow-[0_16px_40px_rgba(228,193,106,0.16)]]="selected()?.id === tournament.id"
+              [class.border-arena-line]="selected()?.id !== tournament.id"
+              (click)="select(tournament)"
+            >
+              <div [class]="'h-1.5 w-full ' + accentBar(tournament.status)"></div>
+              <div class="flex flex-1 flex-col p-5">
+                <div class="flex items-start justify-between gap-3">
+                  <div
+                    class="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-arena-gold/10 text-arena-gold"
+                    aria-hidden="true"
+                  >
+                    <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        d="M8 4h8v2a4 4 0 0 1-4 4 4 4 0 0 1-4-4V4Zm0 0H5a2 2 0 0 0 2 4m9-4h3a2 2 0 0 1-2 4M12 10v3m-4 7h8m-6-4h4"
+                      />
+                    </svg>
+                  </div>
+                  <ludo-status-badge [status]="tournament.status" />
+                </div>
+                <h3 class="mt-4 font-display text-lg leading-snug text-white">{{ tournament.name }}</h3>
+                <p class="mt-1 text-xs text-arena-mist/50">Created {{ formatDate(tournament.createdAt) }}</p>
+                <div class="mt-3 flex flex-wrap gap-1.5">
+                  @for (round of tournament.rounds.slice(0, 3); track round.number) {
+                    <span class="rounded-full bg-white/5 px-2 py-0.5 text-[10px] uppercase tracking-wider text-arena-mist/60">
+                      {{ roundLabel(round.name) }}
+                    </span>
+                  }
+                  @if (tournament.rounds.length > 3) {
+                    <span class="rounded-full bg-white/5 px-2 py-0.5 text-[10px] text-arena-mist/50">
+                      +{{ tournament.rounds.length - 3 }}
+                    </span>
+                  }
+                </div>
+                <div class="mt-4 grid grid-cols-3 gap-2">
+                  <div class="rounded-2xl bg-black/25 px-3 py-2">
+                    <p class="text-[10px] uppercase tracking-wider text-arena-mist/40">Players</p>
+                    <p class="mt-0.5 font-display text-lg text-white">{{ tournament.playerCount }}</p>
+                  </div>
+                  <div class="rounded-2xl bg-black/25 px-3 py-2">
+                    <p class="text-[10px] uppercase tracking-wider text-arena-mist/40">Tables</p>
+                    <p class="mt-0.5 font-display text-lg text-white">{{ tournament.tableCount }}</p>
+                  </div>
+                  <div class="rounded-2xl bg-black/25 px-3 py-2">
+                    <p class="text-[10px] uppercase tracking-wider text-arena-mist/40">Rounds</p>
+                    <p class="mt-0.5 font-display text-lg text-white">{{ tournament.rounds.length }}</p>
+                  </div>
+                </div>
+                <div class="mt-auto pt-4">
+                  <div class="flex items-center justify-between gap-3 border-t border-arena-line/60 pt-3 text-xs">
+                    @if (selected()?.id === tournament.id) {
+                      <span class="font-medium text-arena-gold">Managing this tournament</span>
+                    } @else {
+                      <span class="text-arena-mist/40 transition group-hover:text-arena-mist/80">Open to manage</span>
+                    }
+                    <button
+                      type="button"
+                      class="rounded-full border border-piece-red px-3 py-1.5 text-xs text-piece-red hover:bg-piece-red/10"
+                      (click)="removeTournament(tournament, $event)"
+                    >
+                      Delete
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </article>
+          } @empty {
+            <p class="col-span-full rounded-3xl border border-dashed border-arena-line px-4 py-10 text-center text-sm text-arena-mist/60">
+              No tournaments yet. Create one above to get started.
+            </p>
+          }
+        </div>
       </section>
 
       @if (selected(); as tournament) {
@@ -115,16 +186,16 @@ import { httpErrorMessage, playerNames } from '../../../shared/format';
           </div>
 
           <div class="rounded-3xl border border-arena-line bg-arena-navy/80 p-5">
-            <h2 class="font-display text-lg">Create a match</h2>
-            <p class="mt-1 text-sm text-arena-mist/70">
-              Pick 2–4 players. They will get an invitation to join.
-            </p>
-
-            @if (rounds().length) {
-              <label class="mt-4 block text-sm">
-                Round
+            <div class="flex items-start justify-between gap-3">
+              <div>
+                <h2 class="font-display text-lg">Tables</h2>
+                <p class="mt-1 text-sm text-arena-mist/70">
+                  Seat 2–4 free players. They get an invitation — no codes to type.
+                </p>
+              </div>
+              @if (rounds().length > 1) {
                 <select
-                  class="field mt-1 w-full"
+                  class="field max-w-[9rem] text-sm"
                   name="roundNumber"
                   [ngModel]="roundNumber"
                   (ngModelChange)="onRoundChange($event)"
@@ -133,75 +204,88 @@ import { httpErrorMessage, playerNames } from '../../../shared/format';
                     <option [ngValue]="round.number">{{ roundLabel(round.name) }}</option>
                   }
                 </select>
-              </label>
-            }
-
-            <p class="mt-4 text-xs uppercase tracking-wider text-arena-mist/50">
-              Players · {{ selectedPlayerIds().length }} / 4 selected
-            </p>
-            <div class="mt-2 grid max-h-64 gap-2 overflow-y-auto sm:grid-cols-2">
-              @for (user of playerAccounts(); track user.id) {
-                <label
-                  class="flex cursor-pointer items-center gap-2 rounded-xl border px-3 py-2 text-sm"
-                  [class.border-arena-gold]="isSelected(user.id)"
-                  [class.bg-arena-gold/10]="isSelected(user.id)"
-                  [class.border-arena-line]="!isSelected(user.id)"
-                >
-                  <input
-                    type="checkbox"
-                    class="accent-yellow-500"
-                    [checked]="isSelected(user.id)"
-                    (change)="togglePlayer(user.id)"
-                  />
-                  <span class="min-w-0 flex-1 truncate">{{ user.name }}</span>
-                  @if (busyPlayerIds().has(user.id)) {
-                    <span class="text-[10px] uppercase tracking-wider text-arena-mist/40">Busy</span>
-                  }
-                </label>
-              } @empty {
-                <p class="text-sm text-arena-mist/60">Create a player first, then invite them here.</p>
               }
             </div>
 
-            <div class="mt-4 flex flex-wrap gap-2">
-              <button
-                type="button"
-                class="rounded-full bg-arena-gold px-4 py-2 text-sm font-semibold text-arena-ink disabled:opacity-40"
-                [disabled]="selectedPlayerIds().length < 2 || selectedPlayerIds().length > 4"
-                (click)="createMatch()"
-              >
-                Create match & invite
-              </button>
-              <button
-                type="button"
-                class="rounded-full border border-arena-gold px-4 py-2 text-sm text-arena-gold"
-                (click)="createRandomMatch()"
-              >
-                Pick 4 at random
-              </button>
-            </div>
-            <p class="mt-2 text-xs text-arena-mist/50">Players will see this as an invitation to join.</p>
-            <button type="button" class="mt-3 text-xs text-arena-mist/60 hover:text-arena-gold" (click)="advance()">
-              Advance {{ roundLabel(round) }}
-            </button>
-
             <div class="mt-5 space-y-3">
               @for (match of matches(); track match.id) {
-                <article class="rounded-2xl border border-arena-line p-3">
-                  <div class="flex items-center justify-between gap-2">
-                    <p class="text-sm">Match {{ match.matchNumber }} · {{ playerNames(match) }}</p>
+                <article class="rounded-2xl border border-arena-line p-4">
+                  <div class="flex items-start justify-between gap-2">
+                    <div>
+                      <p class="text-xs uppercase tracking-wider text-arena-mist/50">
+                        Table {{ match.matchNumber }} · {{ roundLabel(match.round) }}
+                      </p>
+                      <p class="mt-1 font-display text-white">{{ playerNames(match) }}</p>
+                      <p class="mt-1 text-xs text-arena-mist/60">Invitation sent — waiting for players to join.</p>
+                    </div>
                     <ludo-status-badge [status]="match.status" />
                   </div>
-                  <div class="mt-2 flex flex-wrap gap-2">
-                    @if (!match.players.length) {
-                      <button type="button" class="text-xs text-arena-gold" (click)="assignRandom(match.id)">
-                        Seat random players
-                      </button>
-                    }
-                    <a class="text-xs text-arena-mist/80" [routerLink]="['/admin/matches', match.id]">Watch</a>
-                    <button type="button" class="text-xs text-piece-red" (click)="remove(match)">Delete</button>
+                  <div class="mt-3 flex flex-wrap gap-2">
+                    <a
+                      class="rounded-full bg-arena-gold px-3 py-1.5 text-xs font-semibold text-arena-ink"
+                      [routerLink]="['/admin/matches', match.id]"
+                    >
+                      Open table
+                    </a>
+                    <button type="button" class="rounded-full border border-piece-red px-3 py-1.5 text-xs text-piece-red" (click)="remove(match)">
+                      Delete table
+                    </button>
                   </div>
                 </article>
+              } @empty {
+                <p class="rounded-2xl border border-dashed border-arena-line px-4 py-6 text-sm text-arena-mist/60">
+                  No tables yet. Seat players below to send invitations.
+                </p>
+              }
+            </div>
+
+            <div class="mt-6 border-t border-arena-line/80 pt-5">
+              <p class="text-sm font-medium text-white">Seat a new table</p>
+
+              @if (freeParticipants().length >= 2) {
+                <p class="mt-1 text-sm text-arena-mist/70">
+                  {{ selectedPlayerIds().length }} selected · tap names, then invite.
+                </p>
+                <div class="mt-3 flex flex-wrap gap-2">
+                  @for (player of freeParticipants(); track player.userId) {
+                    <button
+                      type="button"
+                      class="rounded-full border px-3 py-1.5 text-sm"
+                      [class.border-arena-gold]="isSelected(player.userId)"
+                      [class.bg-arena-gold]="isSelected(player.userId)"
+                      [class.text-arena-ink]="isSelected(player.userId)"
+                      [class.border-arena-line]="!isSelected(player.userId)"
+                      (click)="togglePlayer(player.userId)"
+                    >
+                      {{ player.name }}
+                    </button>
+                  }
+                </div>
+                <div class="mt-4 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    class="rounded-full bg-arena-gold px-4 py-2 text-sm font-semibold text-arena-ink disabled:opacity-40"
+                    [disabled]="!canCreate()"
+                    (click)="createMatch()"
+                  >
+                    Invite {{ selectedPlayerIds().length || '' }} to a table
+                  </button>
+                  <button
+                    type="button"
+                    class="rounded-full border border-arena-gold px-4 py-2 text-sm text-arena-gold"
+                    (click)="createRandomMatch()"
+                  >
+                    Seat everyone free
+                  </button>
+                </div>
+              } @else if (seatedParticipants().length) {
+                <p class="mt-2 rounded-2xl bg-black/20 px-4 py-3 text-sm text-arena-mist/70">
+                  {{ seatedSummary() }} Add another player, or delete a table to free seats.
+                </p>
+              } @else {
+                <p class="mt-2 text-sm text-arena-mist/60">
+                  Add at least 2 participants on the left, then you can seat a table.
+                </p>
               }
             </div>
           </div>
@@ -230,10 +314,6 @@ export class AdminTournamentsPage implements OnInit {
   readonly playerNames = playerNames;
   readonly selectedPlayerIds = signal<string[]>([]);
 
-  readonly playerAccounts = computed(() =>
-    this.users().filter((user) => user.role === UserRole.PLAYER)
-  );
-
   readonly rounds = computed(() => this.selected()?.rounds ?? []);
 
   readonly busyPlayerIds = computed(() => {
@@ -248,6 +328,30 @@ export class AdminTournamentsPage implements OnInit {
     }
     return ids;
   });
+
+  readonly freeParticipants = computed(() =>
+    this.participants().filter((player) => !this.busyPlayerIds().has(player.userId))
+  );
+
+  readonly seatedParticipants = computed(() =>
+    this.participants().filter((player) => this.busyPlayerIds().has(player.userId))
+  );
+
+  readonly canCreate = computed(() => {
+    const selected = this.selectedPlayerIds();
+    return selected.length >= 2 && selected.length <= 4;
+  });
+
+  seatedSummary(): string {
+    const names = this.seatedParticipants().map((player) => player.name);
+    if (names.length === 1) {
+      return `${names[0]} is already at a table.`;
+    }
+    if (names.length === 2) {
+      return `${names[0]} and ${names[1]} are already at a table.`;
+    }
+    return `${names.slice(0, -1).join(', ')} and ${names.at(-1)} are already at a table.`;
+  }
 
   tournamentName = '';
   playerName = '';
@@ -337,14 +441,13 @@ export class AdminTournamentsPage implements OnInit {
   }
 
   async createRandomMatch(): Promise<void> {
-    const free = this.playerAccounts().filter((user) => !this.busyPlayerIds().has(user.id));
-    const shuffled = [...free].sort(() => Math.random() - 0.5);
-    const picked = shuffled.slice(0, Math.min(4, shuffled.length));
+    const free = this.freeParticipants();
+    const picked = free.slice(0, Math.min(4, free.length));
     if (picked.length < 2) {
-      this.error.set('Need at least 2 available players.');
+      this.error.set('Need at least 2 free players to seat a table.');
       return;
     }
-    this.selectedPlayerIds.set(picked.map((user) => user.id));
+    this.selectedPlayerIds.set(picked.map((player) => player.userId));
     await this.createMatch();
   }
 
@@ -374,6 +477,29 @@ export class AdminTournamentsPage implements OnInit {
     return name.replace(/_/g, ' ');
   }
 
+  formatDate(value: string): string {
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) {
+      return '—';
+    }
+    return new Intl.DateTimeFormat(undefined, { day: 'numeric', month: 'short' }).format(date);
+  }
+
+  accentBar(status: TournamentStatus): string {
+    switch (status) {
+      case TournamentStatus.LIVE:
+        return 'bg-piece-green';
+      case TournamentStatus.REGISTRATION:
+        return 'bg-piece-blue';
+      case TournamentStatus.COMPLETED:
+        return 'bg-arena-gold';
+      case TournamentStatus.CANCELLED:
+        return 'bg-piece-red';
+      default:
+        return 'bg-arena-line';
+    }
+  }
+
   async assignRandom(matchId: string): Promise<void> {
     await this.guard(async () => {
       await this.api.assignRandom(matchId);
@@ -388,6 +514,29 @@ export class AdminTournamentsPage implements OnInit {
     await this.guard(async () => {
       await this.api.deleteMatch(match.id);
       await this.refreshSelected();
+    });
+  }
+
+  async removeTournament(tournament: TournamentDto, event: Event): Promise<void> {
+    event.preventDefault();
+    event.stopPropagation();
+    if (!window.confirm(`Delete ${tournament.name}? This also removes its tables and cannot be undone.`)) {
+      return;
+    }
+    await this.guard(async () => {
+      await this.api.deleteTournament(tournament.id);
+      if (this.selected()?.id === tournament.id) {
+        this.selected.set(null);
+        this.participants.set([]);
+        this.matches.set([]);
+        this.selectedPlayerIds.set([]);
+      }
+      const [tournaments, users] = await Promise.all([this.api.tournaments(), this.api.users()]);
+      this.tournaments.set(tournaments);
+      this.users.set(users);
+      if (!this.selected() && tournaments[0]) {
+        await this.select(tournaments[0]);
+      }
     });
   }
 
@@ -424,11 +573,30 @@ export class AdminTournamentsPage implements OnInit {
     ]);
     this.participants.set(participants);
     this.matches.set(matches);
+    this.tournaments.update((rows) =>
+      rows.map((row) =>
+        row.id === tournament.id
+          ? { ...row, playerCount: participants.length, tableCount: matches.length }
+          : row
+      )
+    );
+    this.selected.update((current) =>
+      current?.id === tournament.id
+        ? { ...current, playerCount: participants.length, tableCount: matches.length }
+        : current
+    );
     const last = matches.at(-1);
     if (last) {
       this.matchNumber = last.matchNumber + 1;
       this.roundNumber = last.roundNumber;
       this.round = last.round;
+    }
+    const freeIds = participants
+      .filter((player) => !this.busyPlayerIds().has(player.userId))
+      .slice(0, 4)
+      .map((player) => player.userId);
+    if (freeIds.length >= 2 && this.selectedPlayerIds().length === 0) {
+      this.selectedPlayerIds.set(freeIds);
     }
   }
 
