@@ -37,6 +37,7 @@ import { HomePathComponent } from '../home-path/home-path';
         <ludo-player-yard
           [player]="player()"
           [validPieceIds]="validPieceIds()"
+          [hiddenPieceId]="hiddenPieceId()"
           (pieceSelect)="pieceSelect.emit($event)"
         />
       </div>
@@ -48,6 +49,7 @@ export class PlayerPanelComponent {
   readonly player = input.required<LudoPlayer>();
   readonly active = input(false);
   readonly validPieceIds = input<string[]>([]);
+  readonly hiddenPieceId = input<string | null>(null);
   readonly pieceSelect = output<string>();
 
   readonly ordinal = computed(() => {

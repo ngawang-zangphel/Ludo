@@ -45,8 +45,10 @@ import { httpErrorMessage } from '../../../../shared/format';
         <ludo-game-table
           [state]="state"
           [displayCoords]="game.displayCoords()"
-          [interactive]="canPlay()"
+          [interactive]="canPlay() && !game.animating()"
           [highlightValid]="canPlay()"
+          [movingPieceId]="game.movingPieceId()"
+          [hopTick]="game.hopTick()"
           [diceUi]="game.diceUi()"
           [canRoll]="game.canRoll()"
           [lastEvent]="game.lastEvent()"

@@ -18,6 +18,7 @@ import { TurnIndicatorComponent } from '../turn-indicator/turn-indicator';
             [player]="green"
             [active]="isActive(green.id)"
             [validPieceIds]="validFor(green.id)"
+            [hiddenPieceId]="movingPieceId()"
             (pieceSelect)="pieceSelect.emit($event)"
           />
         }
@@ -26,6 +27,7 @@ import { TurnIndicatorComponent } from '../turn-indicator/turn-indicator';
             [player]="red"
             [active]="isActive(red.id)"
             [validPieceIds]="validFor(red.id)"
+            [hiddenPieceId]="movingPieceId()"
             (pieceSelect)="pieceSelect.emit($event)"
           />
         }
@@ -35,8 +37,10 @@ import { TurnIndicatorComponent } from '../turn-indicator/turn-indicator';
         <ludo-board
           [state]="state()"
           [displayCoords]="displayCoords()"
-          [interactive]="interactive()"
+          [interactive]="interactive() && !movingPieceId()"
           [highlightValid]="highlightValid()"
+          [movingPieceId]="movingPieceId()"
+          [hopTick]="hopTick()"
           (pieceSelect)="pieceSelect.emit($event)"
         />
       </div>
@@ -47,6 +51,7 @@ import { TurnIndicatorComponent } from '../turn-indicator/turn-indicator';
             [player]="yellow"
             [active]="isActive(yellow.id)"
             [validPieceIds]="validFor(yellow.id)"
+            [hiddenPieceId]="movingPieceId()"
             (pieceSelect)="pieceSelect.emit($event)"
           />
         }
@@ -55,6 +60,7 @@ import { TurnIndicatorComponent } from '../turn-indicator/turn-indicator';
             [player]="blue"
             [active]="isActive(blue.id)"
             [validPieceIds]="validFor(blue.id)"
+            [hiddenPieceId]="movingPieceId()"
             (pieceSelect)="pieceSelect.emit($event)"
           />
         }
@@ -85,6 +91,8 @@ export class GameTableComponent {
   readonly displayCoords = input<Record<string, BoardCoordinate>>({});
   readonly interactive = input(false);
   readonly highlightValid = input(true);
+  readonly movingPieceId = input<string | null>(null);
+  readonly hopTick = input(0);
   readonly diceUi = input<DiceUiState>('WAITING');
   readonly canRoll = input(false);
   readonly lastEvent = input<string | null>(null);

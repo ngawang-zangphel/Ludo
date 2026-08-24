@@ -24,6 +24,8 @@ import { AuthService } from '../../../../core/auth/auth.service';
           [displayCoords]="game.displayCoords()"
           [interactive]="false"
           [highlightValid]="true"
+          [movingPieceId]="game.movingPieceId()"
+          [hopTick]="game.hopTick()"
           [diceUi]="game.diceUi()"
           [canRoll]="false"
           [lastEvent]="game.lastEvent()"

@@ -12,12 +12,15 @@ import {
   getPieceCoordinate,
 } from '@ludo-game/game-engine';
 import { DiceUiState } from '../models/dice';
+import { PIECE_STEP_MS } from '../models/motion';
 
 @Injectable()
 export class LocalMatchService {
   readonly state = signal<GameState>(createLocalDemoMatch());
   readonly diceUi = signal<DiceUiState>('WAITING');
   readonly animating = signal(false);
+  readonly movingPieceId = signal<string | null>(null);
+  readonly hopTick = signal(0);
   readonly displayCoords = signal<Record<string, BoardCoordinate>>({});
   readonly errorMessage = signal<string | null>(null);
   readonly lastEvent = signal<string | null>(null);
@@ -55,6 +58,8 @@ export class LocalMatchService {
     this.state.set(next);
     this.diceUi.set('WAITING');
     this.animating.set(false);
+    this.movingPieceId.set(null);
+    this.hopTick.set(0);
     this.errorMessage.set(null);
     this.lastEvent.set('New hot-seat match started.');
     this.syncDisplay(next);
@@ -102,18 +107,22 @@ export class LocalMatchService {
       this.state.set(result.state);
       this.syncDisplay(result.state);
       this.animating.set(false);
+      this.movingPieceId.set(null);
       this.diceUi.set('WAITING');
       this.lastEvent.set(summarize(result.events.map((event) => event.type)));
     } catch (error) {
       this.animating.set(false);
+      this.movingPieceId.set(null);
       this.errorMessage.set(toMessage(error));
     }
   }
 
   private async playAnimation(pieceId: string, steps: BoardCoordinate[]): Promise<void> {
+    this.movingPieceId.set(pieceId);
     for (const step of steps) {
+      this.hopTick.update((tick) => tick + 1);
       this.displayCoords.update((current) => ({ ...current, [pieceId]: step }));
-      await delay(170);
+      await delay(PIECE_STEP_MS);
     }
   }
 

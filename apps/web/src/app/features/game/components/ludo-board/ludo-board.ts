@@ -1,23 +1,61 @@
 import { ChangeDetectionStrategy, Component, computed, input, output } from '@angular/core';
-import { BoardCoordinate, GameState, LudoPiece, LudoPlayer } from '@ludo-game/shared-types';
+import { BOARD_SIZE, BoardCoordinate, GameState, LudoPiece, LudoPlayer } from '@ludo-game/shared-types';
 import { getBoardLayout } from '@ludo-game/game-engine';
-import { CellPieceView, LudoCellComponent } from '../ludo-cell/ludo-cell';
+import { LudoCellComponent } from '../ludo-cell/ludo-cell';
+import { LudoPieceComponent } from '../ludo-piece/ludo-piece';
+
+interface BoardToken {
+  piece: LudoPiece;
+  player: LudoPlayer;
+  left: number;
+  top: number;
+  stackTransform: string;
+  zIndex: number;
+  highlighted: boolean;
+  selectable: boolean;
+  moving: boolean;
+}
 
 @Component({
   selector: 'ludo-board',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [LudoCellComponent],
+  imports: [LudoCellComponent, LudoPieceComponent],
   template: `
-    <div class="ludo-board-grid relative">
-      @for (row of layout; track $index; let r = $index) {
-        @for (cell of row; track cell.row + '-' + cell.col) {
-          <ludo-cell
-            [cell]="cell"
-            [pieces]="piecesAt(cell.row, cell.col)"
-            (pieceSelect)="pieceSelect.emit($event)"
-          />
+    <div class="ludo-board-frame">
+      <div class="ludo-board-grid">
+        @for (row of layout; track $index) {
+          @for (cell of row; track cell.row + '-' + cell.col) {
+            <ludo-cell [cell]="cell" />
+          }
         }
-      }
+      </div>
+      <div class="pointer-events-none absolute inset-0">
+        @for (token of tokens(); track token.piece.id) {
+          <div
+            class="piece-float"
+            [class.is-moving]="token.moving"
+            [class.is-hop-a]="token.moving && hopTick() % 2 === 1"
+            [class.is-hop-b]="token.moving && hopTick() > 0 && hopTick() % 2 === 0"
+            [style.left.%]="token.left"
+            [style.top.%]="token.top"
+            [style.z-index]="token.zIndex"
+          >
+            <div
+              class="absolute inset-x-[8%] bottom-[4%] top-[6%] flex items-end justify-center"
+              [style.transform]="token.stackTransform"
+            >
+              <ludo-piece
+                [pieceId]="token.piece.id"
+                [color]="token.player.color"
+                [highlighted]="token.highlighted"
+                [selectable]="token.selectable"
+                [label]="token.player.name + ' piece'"
+                (pieceSelect)="pieceSelect.emit($event)"
+              />
+            </div>
+          </div>
+        }
+      </div>
     </div>
   `,
 })
@@ -26,40 +64,56 @@ export class LudoBoardComponent {
   readonly displayCoords = input<Record<string, BoardCoordinate>>({});
   readonly interactive = input(true);
   readonly highlightValid = input(true);
+  readonly movingPieceId = input<string | null>(null);
+  readonly hopTick = input(0);
   readonly pieceSelect = output<string>();
 
   readonly layout = getBoardLayout();
 
-  private readonly pieceIndex = computed(() => {
-    const items: Array<{
-      piece: LudoPiece;
-      player: LudoPlayer;
-      coord: BoardCoordinate;
-    }> = [];
+  readonly tokens = computed(() => {
     const coords = this.displayCoords();
-    for (const player of this.state().players) {
-      for (const piece of player.pieces) {
-        items.push({
-          piece,
-          player,
-          coord: coords[piece.id] ?? { row: 0, col: 0 },
-        });
-      }
-    }
-    return items;
-  });
-
-  piecesAt(row: number, col: number): CellPieceView[] {
     const valid = new Set(this.state().validPieceIds);
     const interactive = this.interactive();
     const highlightValid = this.highlightValid();
-    return this.pieceIndex()
-      .filter((item) => item.coord.row === row && item.coord.col === col)
-      .map((item) => ({
-        piece: item.piece,
-        player: item.player,
-        highlighted: highlightValid && valid.has(item.piece.id),
-        selectable: interactive && valid.has(item.piece.id),
-      }));
+    const movingId = this.movingPieceId();
+    const groups = new Map<string, Array<{ piece: LudoPiece; player: LudoPlayer; coord: BoardCoordinate }>>();
+
+    for (const player of this.state().players) {
+      for (const piece of player.pieces) {
+        const coord = coords[piece.id] ?? { row: 0, col: 0 };
+        const key = `${coord.row}:${coord.col}`;
+        const group = groups.get(key) ?? [];
+        group.push({ piece, player, coord });
+        groups.set(key, group);
+      }
+    }
+
+    const tokens: BoardToken[] = [];
+    for (const group of groups.values()) {
+      group.forEach((item, index) => {
+        const moving = item.piece.id === movingId;
+        tokens.push({
+          piece: item.piece,
+          player: item.player,
+          left: (item.coord.col / BOARD_SIZE) * 100,
+          top: (item.coord.row / BOARD_SIZE) * 100,
+          stackTransform: stackOffset(index, group.length),
+          zIndex: moving ? 40 : 5 + index,
+          highlighted: !moving && highlightValid && valid.has(item.piece.id),
+          selectable: !moving && interactive && valid.has(item.piece.id),
+          moving,
+        });
+      });
+    }
+    return tokens;
+  });
+}
+
+function stackOffset(index: number, total: number): string {
+  if (total <= 1) {
+    return 'translate(0, 0)';
   }
+  const angle = (Math.PI * 2 * index) / total;
+  const radius = 18;
+  return `translate(${Math.cos(angle) * radius}%, ${Math.sin(angle) * radius}%)`;
 }

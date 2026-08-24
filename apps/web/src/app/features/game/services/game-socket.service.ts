@@ -17,6 +17,7 @@ import { getPieceCoordinate } from '@ludo-game/game-engine';
 import { SocketService } from '../../../core/socket/socket.service';
 import { AuthService } from '../../../core/auth/auth.service';
 import { DiceUiState } from '../models/dice';
+import { PIECE_STEP_MS } from '../models/motion';
 
 export type GameAttachMode = 'player' | 'spectator' | 'broadcast';
 
@@ -31,6 +32,8 @@ export class GameSocketService {
   readonly state = signal<GameState | null>(null);
   readonly diceUi = signal<DiceUiState>('WAITING');
   readonly animating = signal(false);
+  readonly movingPieceId = signal<string | null>(null);
+  readonly hopTick = signal(0);
   readonly displayCoords = signal<Record<string, BoardCoordinate>>({});
   readonly errorMessage = signal<string | null>(null);
   readonly lastEvent = signal<string | null>(null);
@@ -158,6 +161,9 @@ export class GameSocketService {
     this.matchId.set(null);
     this.state.set(null);
     this.errorMessage.set(null);
+    this.animating.set(false);
+    this.movingPieceId.set(null);
+    this.hopTick.set(0);
   }
 
   roll(): void {
@@ -173,7 +179,7 @@ export class GameSocketService {
   move(pieceId: string): void {
     const matchId = this.matchId();
     const match = this.state();
-    if (!matchId || !match || !this.isMyTurn() || !match.validPieceIds.includes(pieceId)) {
+    if (!matchId || !match || this.animating() || !this.isMyTurn() || !match.validPieceIds.includes(pieceId)) {
       return;
     }
     this.sockets.client.emit('move-piece', { matchId, pieceId });
@@ -201,16 +207,24 @@ export class GameSocketService {
   private applyState(state: GameState): void {
     this.state.set(state);
     this.status.set(state.status);
-    this.syncDisplay(state);
+    if (!this.animating()) {
+      this.syncDisplay(state);
+    }
   }
 
   private async playAnimation(animation: PieceMoveAnimation): Promise<void> {
     this.animating.set(true);
-    for (const step of animation.steps) {
-      this.displayCoords.update((current) => ({ ...current, [animation.pieceId]: step }));
-      await delay(160);
+    this.movingPieceId.set(animation.pieceId);
+    try {
+      for (const step of animation.steps) {
+        this.hopTick.update((tick) => tick + 1);
+        this.displayCoords.update((current) => ({ ...current, [animation.pieceId]: step }));
+        await delay(PIECE_STEP_MS);
+      }
+    } finally {
+      this.movingPieceId.set(null);
+      this.animating.set(false);
     }
-    this.animating.set(false);
   }
 
   private syncDisplay(state: GameState): void {

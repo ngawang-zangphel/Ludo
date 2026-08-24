@@ -32,8 +32,10 @@ import { GameTableComponent } from '../../components/game-table/game-table';
       <ludo-game-table
         [state]="match.state()"
         [displayCoords]="match.displayCoords()"
-        [interactive]="true"
+        [interactive]="!match.animating()"
         [highlightValid]="true"
+        [movingPieceId]="match.movingPieceId()"
+        [hopTick]="match.hopTick()"
         [diceUi]="match.diceUi()"
         [canRoll]="match.canRoll()"
         [lastEvent]="match.lastEvent()"
