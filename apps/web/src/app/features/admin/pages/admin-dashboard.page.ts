@@ -121,9 +121,15 @@ type Filter = 'ALL' | MatchStatus;
             }
             <div class="mt-4 flex flex-wrap gap-2">
               <a class="btn-ghost" [routerLink]="['/admin/matches', match.id]">Watch</a>
-              <button type="button" class="btn-ghost" (click)="run(() => api.broadcast(match.id))">
-                Broadcast
-              </button>
+              @if (realtime.broadcastMatchId() === match.id) {
+                <button type="button" class="btn-danger" (click)="stopBroadcast()">
+                  Stop broadcast
+                </button>
+              } @else {
+                <button type="button" class="btn-ghost" (click)="run(() => api.broadcast(match.id))">
+                  Broadcast
+                </button>
+              }
               @if (match.status === MatchStatus.READY || match.status === MatchStatus.WAITING) {
                 <button
                   type="button"
@@ -252,6 +258,13 @@ export class AdminDashboardPage implements OnInit, OnDestroy {
     } catch (error) {
       this.error.set(httpErrorMessage(error));
     }
+  }
+
+  async stopBroadcast(): Promise<void> {
+    await this.run(async () => {
+      await this.api.stopBroadcast();
+      this.realtime.broadcastMatchId.set(null);
+    });
   }
 
   async remove(match: MatchSummaryDto): Promise<void> {

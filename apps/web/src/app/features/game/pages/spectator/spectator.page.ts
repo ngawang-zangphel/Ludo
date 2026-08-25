@@ -10,6 +10,7 @@ import {
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { MatchDetailDto, MatchStatus } from '@ludo-game/shared-types';
 import { ArenaApiService, MatchNeighbors } from '../../../../core/api/arena-api.service';
+import { AdminRealtimeService } from '../../../../core/socket/admin-realtime.service';
 import { GameSocketService } from '../../services/game-socket.service';
 import { GameTableComponent } from '../../components/game-table/game-table';
 import { StatusBadgeComponent } from '../../../../shared/ui/status-badge';
@@ -31,18 +32,31 @@ import { httpErrorMessage } from '../../../../shared/format';
             @if (neighbors(); as nav) {
               · Live {{ nav.index }} / {{ nav.total }}
             }
+            @if (onBroadcast()) {
+              · <span class="text-arena-gold">On broadcast</span>
+            }
           </p>
         </div>
         <div class="flex flex-wrap items-center gap-2">
           @if (detail(); as match) {
             <ludo-status-badge [status]="match.status" />
-            <button
-              type="button"
-              class="rounded-full border border-arena-gold px-4 py-2 text-sm text-arena-gold"
-              (click)="broadcast(match.id)"
-            >
-              Broadcast this match
-            </button>
+            @if (onBroadcast()) {
+              <button
+                type="button"
+                class="rounded-full border border-piece-red px-4 py-2 text-sm text-piece-red"
+                (click)="stopBroadcast()"
+              >
+                Stop broadcast
+              </button>
+            } @else {
+              <button
+                type="button"
+                class="rounded-full border border-arena-gold px-4 py-2 text-sm text-arena-gold"
+                (click)="broadcast(match.id)"
+              >
+                Broadcast this match
+              </button>
+            }
           }
           <button
             type="button"
@@ -119,10 +133,15 @@ export class SpectatorPage implements OnInit, OnDestroy {
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
   private readonly api = inject(ArenaApiService);
+  private readonly adminRt = inject(AdminRealtimeService);
   readonly game = inject(GameSocketService);
   readonly detail = signal<MatchDetailDto | null>(null);
   readonly neighbors = signal<MatchNeighbors | null>(null);
   readonly error = signal<string | null>(null);
+
+  readonly onBroadcast = computed(
+    () => !!this.detail() && this.adminRt.broadcastMatchId() === this.detail()?.id
+  );
 
   readonly seats = computed(() => {
     const roster = this.game.roster();
@@ -142,6 +161,7 @@ export class SpectatorPage implements OnInit, OnDestroy {
   });
 
   ngOnInit(): void {
+    this.adminRt.subscribe();
     this.route.paramMap.subscribe((params) => {
       const matchId = params.get('matchId');
       if (matchId) {
@@ -156,7 +176,17 @@ export class SpectatorPage implements OnInit, OnDestroy {
 
   async broadcast(matchId: string): Promise<void> {
     try {
-      await this.api.broadcast(matchId);
+      const result = await this.api.broadcast(matchId);
+      this.adminRt.broadcastMatchId.set(result.matchId);
+    } catch (error) {
+      this.error.set(httpErrorMessage(error));
+    }
+  }
+
+  async stopBroadcast(): Promise<void> {
+    try {
+      await this.api.stopBroadcast();
+      this.adminRt.broadcastMatchId.set(null);
     } catch (error) {
       this.error.set(httpErrorMessage(error));
     }
@@ -194,9 +224,14 @@ export class SpectatorPage implements OnInit, OnDestroy {
   private async load(matchId: string): Promise<void> {
     this.error.set(null);
     try {
-      const [detail, neighbors] = await Promise.all([this.api.match(matchId), this.api.neighbors(matchId)]);
+      const [detail, neighbors, broadcast] = await Promise.all([
+        this.api.match(matchId),
+        this.api.neighbors(matchId),
+        this.api.currentBroadcast(),
+      ]);
       this.detail.set(detail);
       this.neighbors.set(neighbors);
+      this.adminRt.broadcastMatchId.set(broadcast.matchId);
       this.game.attach(matchId, 'spectator');
       this.game.seed(detail.gameState);
       this.game.seedRoster(detail.players);

@@ -28,7 +28,7 @@ export interface AdminMatchPayload {
 }
 
 export interface AdminSetBroadcastPayload {
-  matchId: string;
+  matchId: string | null;
 }
 
 export interface MatchStatePayload {

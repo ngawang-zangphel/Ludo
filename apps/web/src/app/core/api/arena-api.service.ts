@@ -114,6 +114,10 @@ export class ArenaApiService {
     );
   }
 
+  stopBroadcast(): Promise<{ matchId: null }> {
+    return firstValueFrom(this.http.delete<{ matchId: null }>('/api/broadcast'));
+  }
+
   currentBroadcast(): Promise<BroadcastStateDto> {
     return firstValueFrom(this.http.get<BroadcastStateDto>('/api/broadcast'));
   }

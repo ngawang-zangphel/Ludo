@@ -213,6 +213,9 @@ export class GameGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
     this.requireAdmin(client);
     await this.broadcast.setMatch(payload.matchId);
     await this.matches.publishAdmin();
+    if (!payload.matchId) {
+      return;
+    }
     const detail = await this.matches.getDetail(payload.matchId);
     if (detail.gameState) {
       this.realtime.emitToBroadcast('match-state', {

@@ -623,6 +623,12 @@ export class MatchesService {
     return { matchId };
   }
 
+  async clearBroadcast(): Promise<{ matchId: null }> {
+    await this.broadcast.setMatch(null);
+    await this.publishAdmin();
+    return { matchId: null };
+  }
+
   private emitLive(
     matchId: string,
     event: keyof ServerToClientEvents,
