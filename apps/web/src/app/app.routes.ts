@@ -34,7 +34,6 @@ export const appRoutes: Route[] = [
   },
   {
     path: 'local',
-    canActivate: [adminGuard],
     loadComponent: () =>
       import('./features/game/pages/local-match/local-match.page').then(
         (module) => module.LocalMatchPage

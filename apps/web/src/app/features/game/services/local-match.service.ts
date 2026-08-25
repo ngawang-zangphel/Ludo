@@ -2,10 +2,13 @@ import { Injectable, computed, signal } from '@angular/core';
 import {
   BoardCoordinate,
   cloneSnakesLayout,
+  CreateMatchPlayer,
   GameEngineError,
   GameState,
   GameType,
   isSnakesState,
+  PLAYER_COLOR_ORDER,
+  PlayerColor,
   resolveSnakesRules,
   SnakesBoardLayout,
   SnakesLevelId,
@@ -16,20 +19,28 @@ import {
   applyMove,
   applySnakesDiceRoll,
   applySnakesMove,
-  createLocalDemoMatch,
-  createLocalSnakesDemoMatch,
+  createMatchState,
+  createSnakesMatchState,
   getPieceCoordinate,
   getSnakesSquareCoordinate,
 } from '@ludo-game/game-engine';
 import { DiceUiState } from '../models/dice';
 import { PIECE_STEP_MS } from '../models/motion';
 
+export interface HotSeatPlayerSlot {
+  name: string;
+  color: PlayerColor;
+}
+
 @Injectable()
 export class LocalMatchService {
+  readonly phase = signal<'setup' | 'playing'>('setup');
   readonly gameType = signal<GameType>(GameType.LUDO);
   readonly snakesLevelId = signal<SnakesLevelId>(SnakesLevelId.CLASSIC);
   readonly customLayout = signal<SnakesBoardLayout>(cloneSnakesLayout(resolveSnakesRules().layout));
-  readonly state = signal<GameState>(createLocalDemoMatch());
+  readonly playerCount = signal(4);
+  readonly playerSlots = signal<HotSeatPlayerSlot[]>(defaultSlots(4));
+  readonly state = signal<GameState | null>(null);
   readonly diceUi = signal<DiceUiState>('WAITING');
   readonly animating = signal(false);
   readonly movingPieceId = signal<string | null>(null);
@@ -40,12 +51,17 @@ export class LocalMatchService {
 
   readonly currentPlayer = computed(() => {
     const match = this.state();
+    if (!match) {
+      return null;
+    }
     return match.players.find((player) => player.id === match.currentPlayerId) ?? null;
   });
 
   readonly canRoll = computed(() => {
     const match = this.state();
     return (
+      this.phase() === 'playing' &&
+      !!match &&
       match.turnPhase === TurnPhase.WAITING_FOR_ROLL &&
       !this.animating() &&
       this.diceUi() !== 'ROLLING'
@@ -53,22 +69,33 @@ export class LocalMatchService {
   });
 
   readonly canMove = computed(() => {
-    return this.state().turnPhase === TurnPhase.WAITING_FOR_MOVE && !this.animating();
+    return (
+      this.phase() === 'playing' &&
+      !!this.state() &&
+      this.state()!.turnPhase === TurnPhase.WAITING_FOR_MOVE &&
+      !this.animating()
+    );
   });
 
   readonly winner = computed(() => {
     const match = this.state();
+    if (!match) {
+      return null;
+    }
     const winnerId = match.rankings[0];
     return match.players.find((player) => player.id === winnerId) ?? null;
   });
 
-  constructor() {
-    this.syncDisplay(this.state());
-  }
+  readonly colors = PLAYER_COLOR_ORDER;
+  readonly setupReady = computed(() =>
+    this.playerSlots().every((slot) => slot.name.trim().length > 0)
+  );
 
   setGameType(type: GameType): void {
     this.gameType.set(type);
-    this.newMatch();
+    if (this.phase() === 'playing') {
+      this.backToSetup();
+    }
   }
 
   setSnakesLevel(levelId: SnakesLevelId): void {
@@ -76,40 +103,111 @@ export class LocalMatchService {
     if (levelId !== SnakesLevelId.CUSTOM) {
       this.customLayout.set(cloneSnakesLayout(resolveSnakesRules({ levelId }).layout));
     }
-    this.newMatch();
+    if (this.phase() === 'playing') {
+      this.backToSetup();
+    }
   }
 
   setCustomLayout(layout: SnakesBoardLayout): void {
     this.customLayout.set(cloneSnakesLayout(layout));
+    if (this.phase() !== 'playing') {
+      return;
+    }
     const current = this.state();
-    if (isSnakesState(current)) {
-      const next = {
+    if (current && isSnakesState(current)) {
+      this.state.set({
         ...current,
         rules: resolveSnakesRules({
           ...current.rules,
           levelId: SnakesLevelId.CUSTOM,
           layout,
         }),
-      };
-      this.state.set(next);
-    } else {
-      this.newMatch();
+      });
     }
   }
 
-  newMatch(): void {
-    const next =
-      this.gameType() === GameType.SNAKES
-        ? createLocalSnakesDemoMatch(undefined, this.snakesRules())
-        : createLocalDemoMatch();
-    this.state.set(next);
+  setPlayerCount(count: number): void {
+    const next = Math.min(4, Math.max(2, Math.floor(count)));
+    const slots = [...this.playerSlots()];
+    if (next < slots.length) {
+      slots.length = next;
+    } else {
+      while (slots.length < next) {
+        const used = new Set(slots.map((slot) => slot.color));
+        const color = PLAYER_COLOR_ORDER.find((item) => !used.has(item)) ?? PlayerColor.RED;
+        slots.push({
+          name: '',
+          color,
+        });
+      }
+    }
+    this.playerCount.set(next);
+    this.playerSlots.set(slots);
+    if (this.phase() === 'playing') {
+      this.backToSetup();
+    }
+  }
+
+  setPlayerName(index: number, name: string): void {
+    this.playerSlots.update((slots) =>
+      slots.map((slot, i) => (i === index ? { ...slot, name } : slot))
+    );
+  }
+
+  setPlayerColor(index: number, color: PlayerColor): void {
+    this.playerSlots.update((slots) => {
+      const next = slots.map((slot) => ({ ...slot }));
+      const current = next[index];
+      if (!current || current.color === color) {
+        return slots;
+      }
+      const taken = next.findIndex((slot, i) => i !== index && slot.color === color);
+      if (taken >= 0 && next[taken]) {
+        next[taken] = { ...next[taken], color: current.color };
+      }
+      next[index] = { ...current, color };
+      return next;
+    });
+    if (this.phase() === 'playing') {
+      this.backToSetup();
+    }
+  }
+
+  startMatch(): void {
+    if (!this.setupReady()) {
+      this.errorMessage.set('Enter a name for every player.');
+      return;
+    }
+    try {
+      const next = this.buildMatch();
+      this.state.set(next);
+      this.phase.set('playing');
+      this.diceUi.set('WAITING');
+      this.animating.set(false);
+      this.movingPieceId.set(null);
+      this.hopTick.set(0);
+      this.errorMessage.set(null);
+      this.lastEvent.set('Hot-seat match started. Pass the device each turn.');
+      this.syncDisplay(next);
+    } catch (error) {
+      this.errorMessage.set(toMessage(error));
+    }
+  }
+
+  backToSetup(): void {
+    this.phase.set('setup');
+    this.state.set(null);
     this.diceUi.set('WAITING');
     this.animating.set(false);
     this.movingPieceId.set(null);
     this.hopTick.set(0);
+    this.displayCoords.set({});
     this.errorMessage.set(null);
-    this.lastEvent.set('New hot-seat match started.');
-    this.syncDisplay(next);
+    this.lastEvent.set(null);
+  }
+
+  newMatch(): void {
+    this.backToSetup();
   }
 
   async roll(): Promise<void> {
@@ -123,6 +221,9 @@ export class LocalMatchService {
 
     try {
       const current = this.state();
+      if (!current) {
+        return;
+      }
       const result = isSnakesState(current)
         ? applySnakesDiceRoll(current, current.currentPlayerId)
         : applyDiceRoll(current, current.currentPlayerId);
@@ -142,13 +243,13 @@ export class LocalMatchService {
   }
 
   async move(pieceId: string): Promise<void> {
-    if (!this.canMove() || !this.state().validPieceIds.includes(pieceId)) {
+    const current = this.state();
+    if (!this.canMove() || !current || !current.validPieceIds.includes(pieceId)) {
       return;
     }
 
     this.errorMessage.set(null);
     try {
-      const current = this.state();
       const result = isSnakesState(current)
         ? applySnakesMove(current, {
             playerId: current.currentPlayerId,
@@ -175,6 +276,34 @@ export class LocalMatchService {
       this.movingPieceId.set(null);
       this.errorMessage.set(toMessage(error));
     }
+  }
+
+  private buildMatch(): GameState {
+    const players = this.toCreatePlayers();
+    if (this.gameType() === GameType.SNAKES) {
+      return createSnakesMatchState({
+        matchId: 'local-snakes-hotseat',
+        players,
+        rules: this.snakesRules(),
+      });
+    }
+    return createMatchState({
+      matchId: 'local-hotseat',
+      players,
+    });
+  }
+
+  private toCreatePlayers(): CreateMatchPlayer[] {
+    return this.playerSlots().map((slot, index) => {
+      const name = slot.name.trim() || `Player ${index + 1}`;
+      const key = slot.color.toLowerCase();
+      return {
+        id: `player-${key}`,
+        userId: `user-${key}`,
+        name,
+        color: slot.color,
+      };
+    });
   }
 
   private async playAnimation(pieceId: string, steps: BoardCoordinate[]): Promise<void> {
@@ -209,6 +338,13 @@ export class LocalMatchService {
     }
     return { levelId };
   }
+}
+
+function defaultSlots(count: number): HotSeatPlayerSlot[] {
+  return PLAYER_COLOR_ORDER.slice(0, count).map((color) => ({
+    color,
+    name: '',
+  }));
 }
 
 function delay(ms: number): Promise<void> {

@@ -15,11 +15,13 @@
           } @else {
             <a routerLink="/" class="hover:text-arena-gold">Invitations</a>
             <a routerLink="/broadcast" class="hover:text-arena-gold">Live broadcast</a>
+            <a routerLink="/local" class="hover:text-arena-gold">Hot-seat</a>
             <a routerLink="/profile" class="hover:text-arena-gold">Profile</a>
           }
           <a routerLink="/profile" class="text-arena-mist/50 hover:text-arena-gold">{{ user.name }}</a>
           <button type="button" class="hover:text-piece-red" (click)="auth.logout()">Sign out</button>
         } @else {
+          <a routerLink="/local" class="hover:text-arena-gold">Hot-seat</a>
           <a routerLink="/broadcast" class="hover:text-arena-gold">Live broadcast</a>
           <a routerLink="/login" class="hover:text-arena-gold">Sign in</a>
           <a routerLink="/register" class="hover:text-arena-gold">Register</a>

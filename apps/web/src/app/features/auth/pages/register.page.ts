@@ -99,6 +99,9 @@ import { httpErrorMessage } from '../../../shared/format';
         </p>
         <p class="mt-3 text-center text-sm text-arena-mist/70">
           Or
+          Or play
+          <a routerLink="/local" class="text-arena-gold hover:underline">hot-seat</a>
+          /
           <a routerLink="/broadcast" class="text-arena-gold hover:underline">watch the live broadcast</a>
           — no account needed.
         </p>
