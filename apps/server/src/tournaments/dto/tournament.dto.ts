@@ -63,6 +63,12 @@ export class CreateTournamentDto {
   snakesLayout?: SnakesBoardLayoutDto;
 
   @IsOptional()
+  @IsInt()
+  @Min(2)
+  @Max(8)
+  marriageDeckCount?: number;
+
+  @IsOptional()
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => RoundDto)

@@ -19,6 +19,67 @@ export interface MovePiecePayload {
   pieceId: string;
 }
 
+export interface MarriageDrawPayload {
+  matchId: string;
+  source: 'stock' | 'discard';
+}
+
+export interface MarriageDiscardPayload {
+  matchId: string;
+  cardId: string;
+}
+
+export interface MarriageOpenPayload {
+  matchId: string;
+  /** Optional; server can auto-suggest if omitted. */
+  melds?: Array<[string, string, string]>;
+}
+
+export interface MarriageShowPayload {
+  matchId: string;
+  /** Optional discard; server picks a winning discard if omitted. */
+  discardCardId?: string;
+}
+
+export interface MarriageReorderPayload {
+  matchId: string;
+  /** Cards in the free hand tray (ordered). */
+  freeCardIds: string[];
+  /** Cards in the temporary sequence-hold tray (ordered). */
+  holdCardIds: string[];
+  /**
+   * Three pure sequences for seeing maal (optional reorder).
+   * After hasSeenMaal, membership must stay the same — breaking throws.
+   */
+  maalSequences: Array<[string, string, string]>;
+}
+
+/** Cut maal when the current drawer already has three pure opens. */
+export interface MarriageEnsureMaalPayload {
+  matchId: string;
+}
+
+/** Lay a hand card onto an open meld (after maal/tiplu is visible). */
+export interface MarriageExtendMeldPayload {
+  matchId: string;
+  cardId: string;
+  meldIndex: number;
+}
+
+/** Join two open sequence melds into one longer run. */
+export interface MarriageJoinMeldsPayload {
+  matchId: string;
+  meldIndexA: number;
+  meldIndexB: number;
+}
+
+/** Pull a card from an open sequence back into hand. */
+export interface MarriageRemoveMeldCardPayload {
+  matchId: string;
+  meldIndex: number;
+  cardId: string;
+}
+
 export interface ReconnectMatchPayload {
   matchId: string;
 }
@@ -109,6 +170,15 @@ export interface ClientToServerEvents {
   'leave-match': (payload: LeaveMatchPayload) => void;
   'roll-dice': (payload: RollDicePayload) => void;
   'move-piece': (payload: MovePiecePayload) => void;
+  'marriage-draw': (payload: MarriageDrawPayload) => void;
+  'marriage-discard': (payload: MarriageDiscardPayload) => void;
+  'marriage-open': (payload: MarriageOpenPayload) => void;
+  'marriage-show': (payload: MarriageShowPayload) => void;
+  'marriage-reorder': (payload: MarriageReorderPayload) => void;
+  'marriage-ensure-maal': (payload: MarriageEnsureMaalPayload) => void;
+  'marriage-extend-meld': (payload: MarriageExtendMeldPayload) => void;
+  'marriage-join-melds': (payload: MarriageJoinMeldsPayload) => void;
+  'marriage-remove-meld-card': (payload: MarriageRemoveMeldCardPayload) => void;
   'reconnect-match': (payload: ReconnectMatchPayload) => void;
   'admin-subscribe': () => void;
   'join-broadcast': () => void;

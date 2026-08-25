@@ -12,9 +12,12 @@ import {
   cloneSnakesLayout,
   GAME_TYPE_LABEL,
   GameType,
+  isMarriageRules,
   isSnakesRules,
+  MARRIAGE_DECK_OPTIONS,
   MatchStatus,
   MatchSummaryDto,
+  maxMarriagePlayers,
   ParticipantDto,
   resolveSnakesRules,
   SNAKES_LEVEL_LABEL,
@@ -99,7 +102,42 @@ import { SnakesPresetPickerComponent } from '../../game/components/snakes-preset
             >
               Snakes & Ladders
             </button>
+            <button
+              type="button"
+              class="rounded-full px-3 py-1.5 text-sm"
+              [class.bg-arena-gold]="tournamentGameType === GameType.MARRIAGE"
+              [class.text-arena-ink]="tournamentGameType === GameType.MARRIAGE"
+              [class.border]="tournamentGameType !== GameType.MARRIAGE"
+              [class.border-arena-line]="tournamentGameType !== GameType.MARRIAGE"
+              (click)="tournamentGameType = GameType.MARRIAGE"
+            >
+              Marriage
+            </button>
           </div>
+          @if (tournamentGameType === GameType.MARRIAGE) {
+            <div class="mt-3">
+              <p class="text-xs uppercase tracking-[0.25em] text-arena-gold/80">Decks</p>
+              <p class="mt-1 text-sm text-arena-mist/60">
+                Classic is 3. More decks seat more players (up to {{ maxSeatsForDecks(marriageDeckCount) }}).
+              </p>
+              <div class="mt-2 flex flex-wrap gap-2">
+                @for (decks of marriageDeckOptions; track decks) {
+                  <button
+                    type="button"
+                    class="rounded-full px-3 py-1.5 text-sm"
+                    [class.bg-arena-gold]="marriageDeckCount === decks"
+                    [class.text-arena-ink]="marriageDeckCount === decks"
+                    [class.border]="marriageDeckCount !== decks"
+                    [class.border-arena-line]="marriageDeckCount !== decks"
+                    (click)="marriageDeckCount = decks"
+                  >
+                    {{ decks }}
+                  </button>
+                }
+              </div>
+              <p class="mt-2 text-xs text-arena-mist/60">Dublee wins are disabled.</p>
+            </div>
+          }
           @if (tournamentGameType === GameType.SNAKES) {
             <div class="mt-4">
               <arena-snakes-preset-picker
@@ -187,6 +225,9 @@ import { SnakesPresetPickerComponent } from '../../game/components/snakes-preset
                   {{ GAME_TYPE_LABEL[tournament.gameType] || 'Ludo' }}
                   @if (tournament.gameType === GameType.SNAKES && isSnakesRules(tournament.rules)) {
                     · {{ SNAKES_LEVEL_LABEL[tournament.rules.levelId] || 'Classic' }}
+                  }
+                  @if (tournament.gameType === GameType.MARRIAGE && isMarriageRules(tournament.rules)) {
+                    · {{ tournament.rules.deckCount }} decks
                   }
                 </p>
                 <p class="mt-1 text-xs text-arena-mist/50">Created {{ formatDate(tournament.createdAt) }}</p>
@@ -407,7 +448,7 @@ import { SnakesPresetPickerComponent } from '../../game/components/snakes-preset
 
               @if (freeParticipants().length >= 2) {
                 <p class="mt-1 text-sm text-arena-mist/70">
-                  {{ selectedPlayerIds().length }} selected · tap 2–4 free players for one group, or split everyone.
+                  {{ selectedPlayerIds().length }} selected · tap 2–{{ maxTableSeats() }} free players for one group, or split everyone.
                   Players already in a match are unavailable.
                 </p>
                 <div class="mt-3 flex flex-wrap gap-2">
@@ -494,6 +535,7 @@ export class AdminTournamentsPage implements OnInit {
   readonly GameType = GameType;
   readonly SnakesLevelId = SnakesLevelId;
   readonly isSnakesRules = isSnakesRules;
+  readonly isMarriageRules = isMarriageRules;
 
   readonly rounds = computed(() => this.selected()?.rounds ?? []);
 
@@ -595,6 +637,8 @@ export class AdminTournamentsPage implements OnInit {
   tournamentName = '';
   tournamentGameType = GameType.LUDO;
   snakesLevelId = SnakesLevelId.CLASSIC;
+  marriageDeckCount = 3;
+  readonly marriageDeckOptions = [...MARRIAGE_DECK_OPTIONS];
   selectedBoardId = '';
   customLayout: SnakesBoardLayout = cloneSnakesLayout(resolveSnakesRules().layout);
   round = 'ROUND_1';
@@ -655,10 +699,12 @@ export class AdminTournamentsPage implements OnInit {
         this.tournamentGameType === GameType.SNAKES ? this.snakesLevelId : undefined,
         this.tournamentGameType === GameType.SNAKES && this.snakesLevelId === SnakesLevelId.CUSTOM
           ? this.customLayout
-          : undefined
+          : undefined,
+        this.tournamentGameType === GameType.MARRIAGE ? this.marriageDeckCount : undefined
       );
       this.tournamentName = '';
       this.tournamentGameType = GameType.LUDO;
+      this.marriageDeckCount = 3;
       this.snakesLevelId = SnakesLevelId.CLASSIC;
       this.selectedBoardId = '';
       this.customLayout = cloneSnakesLayout(resolveSnakesRules().layout);
@@ -710,8 +756,9 @@ export class AdminTournamentsPage implements OnInit {
     if (!tournament) {
       return;
     }
-    if (playerUserIds.length < 2 || playerUserIds.length > 4) {
-      this.error.set('Select 2 to 4 players to invite.');
+    const maxSeats = this.maxTableSeats();
+    if (playerUserIds.length < 2 || playerUserIds.length > maxSeats) {
+      this.error.set(`Select 2 to ${maxSeats} players to invite.`);
       return;
     }
     const busy = this.busyPlayerIds();
@@ -729,6 +776,18 @@ export class AdminTournamentsPage implements OnInit {
       this.selectedPlayerIds.set([]);
       await this.refreshSelected();
     });
+  }
+
+  maxTableSeats(): number {
+    const tournament = this.selected();
+    if (tournament?.gameType === GameType.MARRIAGE && isMarriageRules(tournament.rules)) {
+      return maxMarriagePlayers(tournament.rules.deckCount);
+    }
+    return 4;
+  }
+
+  maxSeatsForDecks(decks: number): number {
+    return maxMarriagePlayers(decks);
   }
 
   async createRandomMatch(): Promise<void> {

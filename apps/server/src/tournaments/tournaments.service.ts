@@ -8,6 +8,7 @@ import {
   isSnakesRules,
   ParticipantDto,
   ParticipantStatus,
+  resolveMarriageRules,
   resolveSnakesRules,
   TournamentDto,
   TournamentStatus,
@@ -35,14 +36,24 @@ export class TournamentsService {
   ) {}
 
   async create(dto: CreateTournamentDto): Promise<TournamentDto> {
-    const gameType = dto.gameType === GameType.SNAKES ? GameType.SNAKES : GameType.LUDO;
+    const gameType =
+      dto.gameType === GameType.SNAKES
+        ? GameType.SNAKES
+        : dto.gameType === GameType.MARRIAGE
+          ? GameType.MARRIAGE
+          : GameType.LUDO;
     const rules =
       gameType === GameType.SNAKES
         ? resolveSnakesRules({
             levelId: dto.snakesLevelId,
             layout: dto.snakesLayout,
           })
-        : DEFAULT_LUDO_RULES;
+        : gameType === GameType.MARRIAGE
+          ? resolveMarriageRules({
+              deckCount: dto.marriageDeckCount,
+              allowDubleeWin: false,
+            })
+          : DEFAULT_LUDO_RULES;
     if (gameType === GameType.SNAKES && isSnakesRules(rules)) {
       const layoutError = validateSnakesLayout(rules.layout);
       if (layoutError) {

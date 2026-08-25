@@ -1,6 +1,6 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { HydratedDocument, SchemaTypes, Types } from 'mongoose';
-import { GameState, GameType, MatchStatus, PlayerColor } from '@ludo-game/shared-types';
+import { GameState, GameType, MatchStatus } from '@ludo-game/shared-types';
 
 @Schema({ _id: false })
 export class MatchPlayer {
@@ -10,8 +10,25 @@ export class MatchPlayer {
   @Prop({ required: true })
   name!: string;
 
-  @Prop({ type: String, required: true, enum: PlayerColor })
-  color!: PlayerColor;
+  @Prop({
+    type: String,
+    required: true,
+    enum: [
+      'RED',
+      'GREEN',
+      'YELLOW',
+      'BLUE',
+      'PURPLE',
+      'ORANGE',
+      'TEAL',
+      'PINK',
+      'BROWN',
+      'CYAN',
+      'LIME',
+      'INDIGO',
+    ],
+  })
+  color!: string;
 
   @Prop({ default: false })
   ready!: boolean;

@@ -31,7 +31,7 @@ export class Tournament {
   gameType!: GameType;
 
   @Prop({ type: Object, default: DEFAULT_LUDO_RULES })
-  rules!: LudoRules | SnakesRules;
+  rules!: LudoRules | SnakesRules | import('@ludo-game/shared-types').MarriageRules;
 
   @Prop({ type: Object, default: DEFAULT_DISCONNECT_RULES })
   disconnectRules!: DisconnectRules;

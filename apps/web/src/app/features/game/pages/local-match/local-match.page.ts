@@ -112,7 +112,7 @@ import { PLAYER_SWATCH } from '../../models/theme';
                 <p class="mt-1 text-sm text-arena-mist/70">2 to 4 people at this table</p>
               </div>
               <div class="flex flex-wrap gap-2">
-                @for (count of playerCounts; track count) {
+                @for (count of match.allowedPlayerCounts(); track count) {
                   <button
                     type="button"
                     class="rounded-full px-3 py-1.5 text-sm"
@@ -144,7 +144,7 @@ import { PLAYER_SWATCH } from '../../models/theme';
                     />
                   </label>
                   <div class="mt-3 flex flex-wrap gap-2">
-                    @for (color of match.colors; track color) {
+                    @for (color of match.colors(); track color) {
                       <button
                         type="button"
                         class="h-8 w-8 rounded-full border-2 transition"
@@ -222,7 +222,6 @@ export class LocalMatchPage {
   readonly GameType = GameType;
   readonly SnakesLevelId = SnakesLevelId;
   readonly PlayerColor = PlayerColor;
-  readonly playerCounts = [2, 3, 4] as const;
   readonly editor = viewChild(SnakesLayoutEditorComponent);
 
   swatch(color: PlayerColor): string {

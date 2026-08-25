@@ -1,5 +1,5 @@
 import { GameType, MatchStatus, PieceState, PlayerColor, TurnPhase } from './enums';
-import { LudoRules, SnakesRules } from './rules';
+import { LudoRules, MarriageCard, MarriageMeld, MarriageRules, MarriageSeatColor, SnakesRules } from './rules';
 
 export interface DiceState {
   value: number | null;
@@ -75,24 +75,79 @@ export interface SnakesGameState extends GameStateBase {
   rules: SnakesRules;
 }
 
-export type GameState = LudoGameState | SnakesGameState;
+export interface MarriagePlayer {
+  id: string;
+  userId: string;
+  name: string;
+  color: MarriageSeatColor;
+  hand: MarriageCard[];
+  /**
+   * Temporary sequence-hold tray (ordered card ids). Subset of `hand`.
+   * Persisted so rejoin restores the layout.
+   */
+  holdCardIds: string[];
+  /**
+   * Three pure sequences used to qualify for seeing maal (display grouping; editable).
+   */
+  maalSequences: Array<[string, string, string]>;
+  /**
+   * Card ids that cannot be discarded after seeing maal (the nine cards that qualified).
+   * Survives rearranging trays until the player opens.
+   */
+  maalProtectIds: string[];
+  /** True after this player has qualified and may see the cut maal. */
+  hasSeenMaal: boolean;
+  /** Three pure melds laid when the player opens (table melds). */
+  openMelds: MarriageMeld[];
+  hasOpened: boolean;
+  connected: boolean;
+  finishedPosition?: number;
+  eliminated?: boolean;
+}
+
+export interface MarriageGameState extends GameStateBase {
+  gameType: GameType.MARRIAGE;
+  players: MarriagePlayer[];
+  stock: MarriageCard[];
+  discard: MarriageCard[];
+  /** Cut maal (tiplu); null until a player qualifies. Hidden per-viewer until hasSeenMaal. */
+  tiplu: MarriageCard | null;
+  /** Card drawn this turn (must discard before turn ends). */
+  drawnCardId: string | null;
+  rules: MarriageRules;
+}
+
+export type GameState = LudoGameState | SnakesGameState | MarriageGameState;
 
 export function isSnakesState(state: GameState): state is SnakesGameState {
   return state.gameType === GameType.SNAKES;
 }
 
+export function isMarriageState(state: GameState): state is MarriageGameState {
+  return state.gameType === GameType.MARRIAGE;
+}
+
 export function isLudoState(state: GameState): state is LudoGameState {
-  return state.gameType !== GameType.SNAKES;
+  return state.gameType === GameType.LUDO;
 }
 
 export function resolveGameType(
   value: GameType | { gameType?: GameType } | null | undefined
 ): GameType {
-  if (value === GameType.SNAKES || value === GameType.LUDO) {
+  if (
+    value === GameType.SNAKES ||
+    value === GameType.LUDO ||
+    value === GameType.MARRIAGE
+  ) {
     return value;
   }
-  if (value && typeof value === 'object' && value.gameType === GameType.SNAKES) {
-    return GameType.SNAKES;
+  if (value && typeof value === 'object') {
+    if (value.gameType === GameType.SNAKES) {
+      return GameType.SNAKES;
+    }
+    if (value.gameType === GameType.MARRIAGE) {
+      return GameType.MARRIAGE;
+    }
   }
   return GameType.LUDO;
 }
@@ -118,6 +173,23 @@ export interface CreateSnakesMatchInput {
   rules?: Partial<SnakesRules>;
   now?: string;
   initialConnected?: boolean;
+}
+
+export interface CreateMarriageMatchPlayer {
+  id: string;
+  userId: string;
+  name: string;
+  color: MarriageSeatColor;
+}
+
+export interface CreateMarriageMatchInput {
+  matchId: string;
+  players: CreateMarriageMatchPlayer[];
+  rules?: Partial<MarriageRules>;
+  now?: string;
+  initialConnected?: boolean;
+  /** Optional RNG seed for deterministic deals (tests). */
+  seed?: number;
 }
 
 export interface ValidMove {
@@ -177,4 +249,9 @@ export type GameEngineErrorCode =
   | 'ILLEGAL_MOVE'
   | 'INVALID_PLAYER_SETUP'
   | 'INVALID_BOARD_LAYOUT'
-  | 'PLAYER_NOT_ACTIVE';
+  | 'PLAYER_NOT_ACTIVE'
+  | 'INVALID_CARD'
+  | 'INVALID_MELD'
+  | 'ALREADY_OPENED'
+  | 'NOT_OPENED'
+  | 'WRONG_PHASE';

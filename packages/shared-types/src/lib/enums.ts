@@ -8,11 +8,13 @@ export enum PlayerColor {
 export enum GameType {
   LUDO = 'LUDO',
   SNAKES = 'SNAKES',
+  MARRIAGE = 'MARRIAGE',
 }
 
 export const GAME_TYPE_LABEL: Record<GameType, string> = {
   [GameType.LUDO]: 'Ludo',
   [GameType.SNAKES]: 'Snakes & Ladders',
+  [GameType.MARRIAGE]: 'Marriage',
 };
 
 export enum MatchStatus {
@@ -27,6 +29,8 @@ export enum MatchStatus {
 export enum TurnPhase {
   WAITING_FOR_ROLL = 'WAITING_FOR_ROLL',
   WAITING_FOR_MOVE = 'WAITING_FOR_MOVE',
+  WAITING_FOR_DRAW = 'WAITING_FOR_DRAW',
+  WAITING_FOR_DISCARD = 'WAITING_FOR_DISCARD',
   MATCH_OVER = 'MATCH_OVER',
 }
 

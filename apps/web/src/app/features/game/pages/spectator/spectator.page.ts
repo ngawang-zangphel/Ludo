@@ -8,11 +8,13 @@ import {
   signal,
 } from '@angular/core';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
-import { MatchDetailDto, MatchStatus } from '@ludo-game/shared-types';
+import { MatchDetailDto, MatchStatus, isMarriageState, MarriageGameState } from '@ludo-game/shared-types';
 import { ArenaApiService, MatchNeighbors } from '../../../../core/api/arena-api.service';
 import { AdminRealtimeService } from '../../../../core/socket/admin-realtime.service';
 import { GameSocketService } from '../../services/game-socket.service';
 import { GameTableComponent } from '../../components/game-table/game-table';
+import { MarriageTableComponent } from '../../components/marriage-table/marriage-table';
+import { MatchStartOverlayComponent } from '../../components/match-start-overlay/match-start-overlay';
 import { StatusBadgeComponent } from '../../../../shared/ui/status-badge';
 import { httpErrorMessage } from '../../../../shared/format';
 
@@ -20,9 +22,19 @@ import { httpErrorMessage } from '../../../../shared/format';
   selector: 'ludo-spectator-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
   providers: [GameSocketService],
-  imports: [RouterLink, GameTableComponent, StatusBadgeComponent],
+  imports: [
+    RouterLink,
+    GameTableComponent,
+    MarriageTableComponent,
+    MatchStartOverlayComponent,
+    StatusBadgeComponent,
+  ],
   template: `
     <div class="px-3 py-2 lg:px-6">
+      <arena-match-start-overlay
+        [countdown]="game.startCountdown()"
+        [dealing]="!!game.marriageDeal()"
+      />
       <div class="mx-auto mb-2 flex max-w-7xl flex-wrap items-center justify-between gap-2">
         <div>
           <a routerLink="/admin" class="text-[0.65rem] uppercase tracking-[0.3em] text-arena-gold hover:underline">Admin</a>
@@ -108,18 +120,31 @@ import { httpErrorMessage } from '../../../../shared/format';
       }
 
       @if (game.state(); as state) {
-        <ludo-game-table
-          [state]="state"
-          [displayCoords]="game.displayCoords()"
-          [interactive]="false"
-          [highlightValid]="true"
-          [movingPieceId]="game.movingPieceId()"
-          [hopTick]="game.hopTick()"
-          [diceUi]="game.diceUi()"
-          [canRoll]="false"
-          [lastEvent]="game.lastEvent()"
-          [errorMessage]="game.errorMessage()"
-        />
+        @if (asMarriage(state); as marriage) {
+          <arena-marriage-table
+            [state]="marriage"
+            [interactive]="false"
+            [viewerPlayerId]="null"
+            [showAllHands]="true"
+            [canOpen]="false"
+            [canShow]="false"
+            [selectedCardId]="null"
+            [deal]="game.marriageDeal()"
+          />
+        } @else {
+          <ludo-game-table
+            [state]="state"
+            [displayCoords]="game.displayCoords()"
+            [interactive]="false"
+            [highlightValid]="true"
+            [movingPieceId]="game.movingPieceId()"
+            [hopTick]="game.hopTick()"
+            [diceUi]="game.diceUi()"
+            [canRoll]="false"
+            [lastEvent]="game.lastEvent()"
+            [errorMessage]="game.errorMessage()"
+          />
+        }
       } @else {
         <div class="mx-auto max-w-xl rounded-3xl border border-dashed border-arena-line p-10 text-center text-arena-mist/70">
           This match has not started yet.
@@ -138,6 +163,12 @@ export class SpectatorPage implements OnInit, OnDestroy {
   readonly detail = signal<MatchDetailDto | null>(null);
   readonly neighbors = signal<MatchNeighbors | null>(null);
   readonly error = signal<string | null>(null);
+
+  asMarriage(state: unknown): MarriageGameState | null {
+    return state && typeof state === 'object' && isMarriageState(state as never)
+      ? (state as MarriageGameState)
+      : null;
+  }
 
   readonly onBroadcast = computed(
     () => !!this.detail() && this.adminRt.broadcastMatchId() === this.detail()?.id

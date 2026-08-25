@@ -6,6 +6,7 @@ import {
   GameEngineError,
   GameState,
   GameType,
+  isLudoState,
   isSnakesState,
   PLAYER_COLOR_ORDER,
   PlayerColor,
@@ -86,13 +87,22 @@ export class LocalMatchService {
     return match.players.find((player) => player.id === winnerId) ?? null;
   });
 
-  readonly colors = PLAYER_COLOR_ORDER;
+  readonly colors = computed(() => [...PLAYER_COLOR_ORDER]);
+
+  readonly allowedPlayerCounts = computed(() => [2, 3, 4]);
+
   readonly setupReady = computed(() =>
     this.playerSlots().every((slot) => slot.name.trim().length > 0)
   );
 
   setGameType(type: GameType): void {
+    if (type === GameType.MARRIAGE) {
+      return;
+    }
     this.gameType.set(type);
+    const nextCount = Math.min(this.playerCount(), 4);
+    this.playerCount.set(nextCount);
+    this.playerSlots.set(defaultSlots(nextCount));
     if (this.phase() === 'playing') {
       this.backToSetup();
     }
@@ -135,10 +145,7 @@ export class LocalMatchService {
       while (slots.length < next) {
         const used = new Set(slots.map((slot) => slot.color));
         const color = PLAYER_COLOR_ORDER.find((item) => !used.has(item)) ?? PlayerColor.RED;
-        slots.push({
-          name: '',
-          color,
-        });
+        slots.push({ name: '', color });
       }
     }
     this.playerCount.set(next);
@@ -226,7 +233,12 @@ export class LocalMatchService {
       }
       const result = isSnakesState(current)
         ? applySnakesDiceRoll(current, current.currentPlayerId)
-        : applyDiceRoll(current, current.currentPlayerId);
+        : isLudoState(current)
+          ? applyDiceRoll(current, current.currentPlayerId)
+          : null;
+      if (!result) {
+        return;
+      }
       const wait = Math.max(0, 650 - (Date.now() - startedAt));
       await delay(wait);
       this.state.set(result.state);
@@ -255,10 +267,15 @@ export class LocalMatchService {
             playerId: current.currentPlayerId,
             pieceId,
           })
-        : applyMove(current, {
-            playerId: current.currentPlayerId,
-            pieceId,
-          });
+        : isLudoState(current)
+          ? applyMove(current, {
+              playerId: current.currentPlayerId,
+              pieceId,
+            })
+          : null;
+      if (!result) {
+        return;
+      }
 
       if (result.animation && result.animation.steps.length > 0) {
         this.animating.set(true);
@@ -321,7 +338,7 @@ export class LocalMatchService {
       for (const player of state.players) {
         coords[player.tokenId] = getSnakesSquareCoordinate(player.position);
       }
-    } else {
+    } else if (isLudoState(state)) {
       for (const player of state.players) {
         for (const piece of player.pieces) {
           coords[piece.id] = getPieceCoordinate(player.color, piece.state, piece.position);

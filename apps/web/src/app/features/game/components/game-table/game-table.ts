@@ -4,6 +4,7 @@ import {
   DICE_AUTO_ROLL_MS,
   GameState,
   isLudoState,
+  isMarriageState,
   isSnakesState,
   LudoGameState,
   LudoPlayer,
@@ -172,9 +173,17 @@ export class GameTableComponent {
     return isSnakesState(state) ? state : null;
   });
 
-  readonly currentPlayer = computed(
-    () => this.state().players.find((player) => player.id === this.state().currentPlayerId) ?? null
-  );
+  readonly currentPlayer = computed(() => {
+    const state = this.state();
+    if (isMarriageState(state)) {
+      return null;
+    }
+    const player = state.players.find((entry) => entry.id === state.currentPlayerId);
+    if (!player) {
+      return null;
+    }
+    return { name: player.name, color: player.color };
+  });
 
   /** Shared deadline; falls back so countdown still shows for older live turns. */
   readonly rollDeadlineAt = computed(() => {

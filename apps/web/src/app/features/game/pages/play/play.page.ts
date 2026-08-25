@@ -8,11 +8,18 @@ import {
   signal,
 } from '@angular/core';
 import { ActivatedRoute, RouterLink } from '@angular/router';
-import { MatchDetailDto, MatchStatus } from '@ludo-game/shared-types';
+import {
+  isMarriageState,
+  MarriageGameState,
+  MatchDetailDto,
+  MatchStatus,
+} from '@ludo-game/shared-types';
 import { ArenaApiService } from '../../../../core/api/arena-api.service';
 import { AuthService } from '../../../../core/auth/auth.service';
 import { GameSocketService } from '../../services/game-socket.service';
 import { GameTableComponent } from '../../components/game-table/game-table';
+import { MarriageTableComponent } from '../../components/marriage-table/marriage-table';
+import { MatchStartOverlayComponent } from '../../components/match-start-overlay/match-start-overlay';
 import { StatusBadgeComponent } from '../../../../shared/ui/status-badge';
 import { httpErrorMessage } from '../../../../shared/format';
 
@@ -20,9 +27,19 @@ import { httpErrorMessage } from '../../../../shared/format';
   selector: 'ludo-play-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
   providers: [GameSocketService],
-  imports: [RouterLink, GameTableComponent, StatusBadgeComponent],
+  imports: [
+    RouterLink,
+    GameTableComponent,
+    MarriageTableComponent,
+    MatchStartOverlayComponent,
+    StatusBadgeComponent,
+  ],
   template: `
     <div class="px-3 py-2 lg:px-6">
+      <arena-match-start-overlay
+        [countdown]="game.startCountdown()"
+        [dealing]="!!game.marriageDeal()"
+      />
       <div class="mx-auto mb-2 flex max-w-7xl flex-wrap items-center justify-between gap-2">
         <div>
           <a routerLink="/" class="text-[0.65rem] uppercase tracking-[0.3em] text-arena-gold hover:underline">Invitations</a>
@@ -43,20 +60,49 @@ import { httpErrorMessage } from '../../../../shared/format';
       }
 
       @if (game.state(); as state) {
-        <ludo-game-table
-          [state]="state"
-          [displayCoords]="game.displayCoords()"
-          [interactive]="canPlay() && !game.animating()"
-          [highlightValid]="canPlay()"
-          [movingPieceId]="game.movingPieceId()"
-          [hopTick]="game.hopTick()"
-          [diceUi]="game.diceUi()"
-          [canRoll]="game.canRoll()"
-          [lastEvent]="game.lastEvent()"
-          [errorMessage]="game.errorMessage()"
-          (pieceSelect)="game.move($event)"
-          (roll)="game.roll()"
-        />
+        @if (asMarriage(state); as marriage) {
+          <arena-marriage-table
+            [state]="marriage"
+            [interactive]="canPlay()"
+            [viewerPlayerId]="auth.user()?.id ?? null"
+            [canOpen]="game.marriageCanOpen()"
+            [canShow]="game.marriageCanShowWin()"
+            [selectedCardId]="game.selectedCardId()"
+            [deal]="game.marriageDeal()"
+            (drawStock)="game.marriageDraw('stock')"
+            (drawDiscard)="game.marriageDraw('discard')"
+            (open)="game.marriageOpen()"
+            (show)="game.marriageShow()"
+            (discard)="game.marriageDiscard($event)"
+            (selectCard)="game.selectCard($event)"
+            (reorder)="game.marriageReorder($event)"
+            (extendMeld)="game.marriageExtendMeld($event.cardId, $event.meldIndex)"
+            (joinMelds)="game.marriageJoinMelds($event.meldIndexA, $event.meldIndexB)"
+            (meldCardRemove)="onMeldCardRemove($event)"
+            (layoutError)="game.errorMessage.set($event)"
+          />
+          @if (game.lastEvent(); as event) {
+            <p class="mx-auto mt-3 max-w-5xl text-center text-xs text-arena-mist/60">{{ event }}</p>
+          }
+          @if (game.errorMessage(); as err) {
+            <p class="mx-auto mt-2 max-w-5xl text-center text-sm text-piece-red">{{ err }}</p>
+          }
+        } @else {
+          <ludo-game-table
+            [state]="state"
+            [displayCoords]="game.displayCoords()"
+            [interactive]="canPlay() && !game.animating()"
+            [highlightValid]="canPlay()"
+            [movingPieceId]="game.movingPieceId()"
+            [hopTick]="game.hopTick()"
+            [diceUi]="game.diceUi()"
+            [canRoll]="game.canRoll()"
+            [lastEvent]="game.lastEvent()"
+            [errorMessage]="game.errorMessage()"
+            (pieceSelect)="game.move($event)"
+            (roll)="game.roll()"
+          />
+        }
       } @else if (removed()) {
         <div class="mx-auto max-w-xl rounded-3xl border border-dashed border-piece-red/40 p-10 text-center text-piece-red">
           You are not in this match.
@@ -91,18 +137,34 @@ import { httpErrorMessage } from '../../../../shared/format';
 export class PlayPage implements OnInit, OnDestroy {
   private readonly route = inject(ActivatedRoute);
   private readonly api = inject(ArenaApiService);
-  private readonly auth = inject(AuthService);
+  readonly auth = inject(AuthService);
   readonly game = inject(GameSocketService);
   readonly detail = signal<MatchDetailDto | null>(null);
   readonly error = signal<string | null>(null);
 
   readonly status = computed(() => this.game.status() ?? this.detail()?.status ?? null);
-  readonly canPlay = computed(() => !!this.game.me() && this.status() === MatchStatus.LIVE && !this.game.me()?.eliminated);
+  readonly canPlay = computed(
+    () =>
+      !!this.game.me() &&
+      this.status() === MatchStatus.LIVE &&
+      !this.game.me()?.eliminated &&
+      !this.game.introBusy()
+  );
   readonly removed = computed(() => {
     const roster = this.game.roster();
     const userId = this.auth.user()?.id;
     return roster.length > 0 && !!userId && !roster.some((player) => player.userId === userId);
   });
+
+  asMarriage(state: unknown): MarriageGameState | null {
+    return state && typeof state === 'object' && isMarriageState(state as never)
+      ? (state as MarriageGameState)
+      : null;
+  }
+
+  onMeldCardRemove(payload: { cardId: string; meldIndex: number }): void {
+    this.game.marriageRemoveMeldCard(payload.cardId, payload.meldIndex);
+  }
 
   async ngOnInit(): Promise<void> {
     const matchId = this.route.snapshot.paramMap.get('matchId');

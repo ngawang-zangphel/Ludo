@@ -6,6 +6,7 @@ import {
   SnakesLevelId,
   SNAKES_LEVEL_LAYOUTS,
 } from './snakes-layout';
+import type { MarriageRules } from './marriage';
 
 export {
   SnakesLevelId,
@@ -26,6 +27,36 @@ export {
   applySnakesBoardClick,
 } from './snakes-layout';
 export type { SnakesBoardLayout, SnakesTeleport, SnakesEditorTool, SnakesBoardClickResult } from './snakes-layout';
+
+export {
+  MARRIAGE_RANKS,
+  MARRIAGE_SUITS,
+  MARRIAGE_RANK_VALUE,
+  MARRIAGE_SEAT_COLORS,
+  MARRIAGE_SEAT_SWATCH,
+  MARRIAGE_HAND_SIZE,
+  MARRIAGE_OPEN_MELD_COUNT,
+  MARRIAGE_TOTAL_MELDS,
+  MARRIAGE_MIN_DECKS,
+  MARRIAGE_MAX_DECKS,
+  MARRIAGE_DECK_OPTIONS,
+  DEFAULT_MARRIAGE_RULES,
+  resolveMarriageRules,
+  clampMarriageDeckCount,
+  marriageCardCapacity,
+  canDealMarriage,
+  maxMarriagePlayers,
+} from './marriage';
+export type {
+  MarriageRank,
+  MarriageSuit,
+  MarriageCard,
+  MarriageMeldType,
+  MarriageMeld,
+  MarriageSeatColor,
+  MarriageDeckCount,
+  MarriageRules,
+} from './marriage';
 
 export interface LudoRules {
   extraTurnOnSix: boolean;
@@ -91,8 +122,12 @@ export function resolveSnakesRules(partial?: Partial<SnakesRules> | null): Snake
   };
 }
 
-export type GameRules = LudoRules | SnakesRules;
+export type GameRules = LudoRules | SnakesRules | MarriageRules;
 
 export function isSnakesRules(rules: GameRules): rules is SnakesRules {
   return 'levelId' in rules || 'layout' in rules;
+}
+
+export function isMarriageRules(rules: GameRules): rules is MarriageRules {
+  return 'deckCount' in rules && 'allowDubleeWin' in rules;
 }

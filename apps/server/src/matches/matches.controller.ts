@@ -33,8 +33,10 @@ export class MatchesController {
   }
 
   @Get(':id')
-  get(@Param('id') id: string): Promise<MatchDetailDto> {
-    return this.matches.getDetail(id);
+  get(@Param('id') id: string, @CurrentUser() user: SessionUser): Promise<MatchDetailDto> {
+    return this.matches.getDetail(id, user.id, {
+      revealAll: user.role === UserRole.ADMIN,
+    });
   }
 
   @Get(':id/result')

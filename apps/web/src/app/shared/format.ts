@@ -26,7 +26,13 @@ export function readyCountLabel(match: MatchSummaryDto): string {
 }
 
 export function gameTypeLabel(type: MatchSummaryDto['gameType']): string {
-  return type === 'SNAKES' ? 'Snakes & Ladders' : 'Ludo';
+  if (type === 'SNAKES') {
+    return 'Snakes & Ladders';
+  }
+  if (type === 'MARRIAGE') {
+    return 'Marriage';
+  }
+  return 'Ludo';
 }
 
 export function httpErrorMessage(error: unknown): string {

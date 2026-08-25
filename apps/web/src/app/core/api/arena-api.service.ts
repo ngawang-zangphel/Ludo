@@ -137,7 +137,8 @@ export class ArenaApiService {
     rounds?: Array<{ name: string; number: number }>,
     gameType?: string,
     snakesLevelId?: string,
-    snakesLayout?: { snakes: Array<{ from: number; to: number }>; ladders: Array<{ from: number; to: number }> }
+    snakesLayout?: { snakes: Array<{ from: number; to: number }>; ladders: Array<{ from: number; to: number }> },
+    marriageDeckCount?: number
   ): Promise<TournamentDto> {
     return firstValueFrom(
       this.http.post<TournamentDto>('/api/tournaments', {
@@ -146,6 +147,7 @@ export class ArenaApiService {
         gameType,
         snakesLevelId,
         snakesLayout,
+        marriageDeckCount,
       })
     );
   }

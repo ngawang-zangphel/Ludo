@@ -1,8 +1,11 @@
 import { ChangeDetectionStrategy, Component, OnDestroy, OnInit, inject, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
+import { isMarriageState, MarriageGameState } from '@ludo-game/shared-types';
 import { GameSocketService } from '../../services/game-socket.service';
 import { ArenaApiService } from '../../../../core/api/arena-api.service';
 import { GameTableComponent } from '../../components/game-table/game-table';
+import { MarriageTableComponent } from '../../components/marriage-table/marriage-table';
+import { MatchStartOverlayComponent } from '../../components/match-start-overlay/match-start-overlay';
 import { AuthService } from '../../../../core/auth/auth.service';
 
 @Component({
@@ -10,26 +13,43 @@ import { AuthService } from '../../../../core/auth/auth.service';
   changeDetection: ChangeDetectionStrategy.OnPush,
   providers: [GameSocketService],
   host: { class: 'broadcast-screen' },
-  imports: [GameTableComponent, RouterLink],
+  imports: [GameTableComponent, MarriageTableComponent, MatchStartOverlayComponent, RouterLink],
   template: `
     <div class="min-h-screen px-6 py-8">
+      <arena-match-start-overlay
+        [countdown]="game.startCountdown()"
+        [dealing]="!!game.marriageDeal()"
+      />
       <div class="mx-auto mb-6 max-w-7xl text-center">
         <p class="text-xs uppercase tracking-[0.4em] text-arena-gold">Arena · Live broadcast</p>
         <h1 class="mt-2 font-display text-4xl font-bold text-white md:text-5xl">Projector</h1>
       </div>
 
       @if (game.state(); as state) {
-        <ludo-game-table
-          [state]="state"
-          [displayCoords]="game.displayCoords()"
-          [interactive]="false"
-          [highlightValid]="true"
-          [movingPieceId]="game.movingPieceId()"
-          [hopTick]="game.hopTick()"
-          [diceUi]="game.diceUi()"
-          [canRoll]="false"
-          [lastEvent]="game.lastEvent()"
-        />
+        @if (asMarriage(state); as marriage) {
+          <arena-marriage-table
+            [state]="marriage"
+            [interactive]="false"
+            [viewerPlayerId]="null"
+            [showAllHands]="true"
+            [canOpen]="false"
+            [canShow]="false"
+            [selectedCardId]="null"
+            [deal]="game.marriageDeal()"
+          />
+        } @else {
+          <ludo-game-table
+            [state]="state"
+            [displayCoords]="game.displayCoords()"
+            [interactive]="false"
+            [highlightValid]="true"
+            [movingPieceId]="game.movingPieceId()"
+            [hopTick]="game.hopTick()"
+            [diceUi]="game.diceUi()"
+            [canRoll]="false"
+            [lastEvent]="game.lastEvent()"
+          />
+        }
       } @else {
         <div class="mx-auto mt-24 max-w-xl rounded-3xl border border-dashed border-arena-line p-12 text-center">
           <p class="font-display text-2xl text-white">Standing by</p>
@@ -55,6 +75,12 @@ export class BroadcastPage implements OnInit, OnDestroy {
   readonly auth = inject(AuthService);
   readonly game = inject(GameSocketService);
   readonly message = signal('Waiting for an admin to select a match.');
+
+  asMarriage(state: unknown): MarriageGameState | null {
+    return state && typeof state === 'object' && isMarriageState(state as never)
+      ? (state as MarriageGameState)
+      : null;
+  }
 
   async ngOnInit(): Promise<void> {
     try {

@@ -65,3 +65,38 @@ export {
   SNAKES_LADDERS,
   SNAKES_SNAKES,
 } from './lib/snakes/board';
+
+export { createMarriageMatchState, createLocalMarriageDemoMatch } from './lib/marriage/create-match';
+export {
+  drawMarriageCard,
+  discardMarriageCard,
+  openMarriage,
+  showMarriage,
+  marriageCanShow,
+  marriageSuggestOpen,
+  marriageReadyToSeeMaal,
+  ensureMaalVisibleBeforeDraw,
+  reorderMarriageHand,
+  extendMarriageMeld,
+  joinMarriageMelds,
+  removeMarriageMeldCard,
+} from './lib/marriage/actions';
+export {
+  buildMarriageDeck,
+  shuffleCards,
+  isWildCard,
+  isPoplu,
+  isJhiplu,
+  cardLabel,
+  parseMarriageCardId,
+} from './lib/marriage/cards';
+export {
+  classifyMeld,
+  classifyOpenSequence,
+  canPartitionHand,
+  findThreePureOpenMelds,
+  handHasThreePureOpens,
+  sortHand,
+  validateOpenMelds,
+} from './lib/marriage/melds';
+export { sanitizeMarriageState, sanitizeGameStateForViewer } from './lib/marriage/sanitize';

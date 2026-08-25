@@ -66,7 +66,8 @@ export interface ParticipantDto {
 export interface MatchPlayerDto {
   userId: string;
   name: string;
-  color: PlayerColor;
+  /** Ludo/Snakes: PlayerColor. Marriage may use extended seat colors. */
+  color: string;
   ready: boolean;
   eliminated?: boolean;
 }

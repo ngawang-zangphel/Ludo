@@ -11,11 +11,16 @@ import {
   GameState,
   GameType,
   isLudoState,
+  isMarriageRules,
+  isMarriageState,
   isSnakesState,
+  MARRIAGE_SEAT_COLORS,
+  MarriageSeatColor,
   MatchDetailDto,
   MatchResultDto,
   MatchStatus,
   MatchSummaryDto,
+  maxMarriagePlayers,
   ParticipantStatus,
   PLAYER_COLOR_ORDER,
   ServerToClientEvents,
@@ -28,12 +33,25 @@ import {
   applyMove,
   applySnakesDiceRoll,
   applySnakesMove,
+  createMarriageMatchState,
   createMatchState,
   createSnakesMatchState,
+  discardMarriageCard,
+  drawMarriageCard,
+  ensureMaalVisibleBeforeDraw,
+  extendMarriageMeld,
+  joinMarriageMelds,
+  removeMarriageMeldCard,
+  marriageCanShow,
+  marriageSuggestOpen,
+  openMarriage,
   openRollWindow,
   removePlayerFromMatch,
+  reorderMarriageHand,
+  sanitizeGameStateForViewer,
+  showMarriage,
 } from '@ludo-game/game-engine';
-import { Match, MatchDocument } from './schemas/match.schema';
+import { Match, MatchDocument, MatchPlayer } from './schemas/match.schema';
 import { MatchResult, MatchResultDocument } from './schemas/match-result.schema';
 import { MatchEvent, MatchEventDocument } from './schemas/match-event.schema';
 import { Tournament, TournamentDocument } from '../tournaments/schemas/tournament.schema';
@@ -151,7 +169,11 @@ export class MatchesService implements OnModuleInit {
     const freeIds = participants
       .filter((participant) => !busy.has(toObjectIdString(participant.userId)))
       .map((participant) => toObjectIdString(participant.userId));
-    const groups = splitIntoGroups(freeIds);
+    const groupSize =
+      tournament.gameType === GameType.MARRIAGE && isMarriageRules(tournament.rules)
+        ? maxMarriagePlayers(tournament.rules.deckCount)
+        : 4;
+    const groups = splitIntoGroups(freeIds, groupSize);
     if (groups.length === 0) {
       throw new BadRequestException('Need at least 2 free players to form a group.');
     }
@@ -170,15 +192,22 @@ export class MatchesService implements OnModuleInit {
   }
 
   async assignPlayers(matchId: string, dto: AssignPlayersDto): Promise<MatchDetailDto> {
-    if (dto.playerUserIds.length < 2 || dto.playerUserIds.length > 4) {
-      throw new BadRequestException('A match needs 2 to 4 players');
-    }
     const match = await this.state.loadMatch(matchId);
     if (match.status === MatchStatus.LIVE) {
       throw new BadRequestException('Cannot reassign a live match');
     }
+    const tournament = await this.requireTournament(toObjectIdString(match.tournamentId));
+    const gameType = match.gameType ?? tournament.gameType ?? GameType.LUDO;
+    const maxPlayers =
+      gameType === GameType.MARRIAGE && isMarriageRules(tournament.rules)
+        ? maxMarriagePlayers(tournament.rules.deckCount)
+        : 4;
+    if (dto.playerUserIds.length < 2 || dto.playerUserIds.length > maxPlayers) {
+      throw new BadRequestException(`A match needs 2 to ${maxPlayers} players`);
+    }
     await this.assertPlayersAvailable(toObjectIdString(match.tournamentId), dto.playerUserIds, matchId);
-    const colors = [...PLAYER_COLOR_ORDER];
+    const colors =
+      gameType === GameType.MARRIAGE ? [...MARRIAGE_SEAT_COLORS] : [...PLAYER_COLOR_ORDER];
     const players = [];
     for (let index = 0; index < dto.playerUserIds.length; index += 1) {
       const userId = dto.playerUserIds[index];
@@ -193,7 +222,7 @@ export class MatchesService implements OnModuleInit {
       players.push({
         userId: user._id,
         name: user.name,
-        color,
+        color: color as MatchPlayer['color'],
         ready: false,
       });
     }
@@ -206,6 +235,12 @@ export class MatchesService implements OnModuleInit {
 
   async assignRandom(matchId: string): Promise<MatchDetailDto> {
     const match = await this.state.loadMatch(matchId);
+    const tournament = await this.requireTournament(toObjectIdString(match.tournamentId));
+    const gameType = match.gameType ?? tournament.gameType ?? GameType.LUDO;
+    const maxPlayers =
+      gameType === GameType.MARRIAGE && isMarriageRules(tournament.rules)
+        ? maxMarriagePlayers(tournament.rules.deckCount)
+        : 4;
     const assigned = new Set(
       (
         await this.matches
@@ -219,7 +254,7 @@ export class MatchesService implements OnModuleInit {
     const available = await this.participants.find({ tournamentId: match.tournamentId }).exec();
     const unused = available.filter((participant) => !assigned.has(toObjectIdString(participant.userId)));
     shuffle(unused);
-    const picked = unused.slice(0, 4).map((participant) => toObjectIdString(participant.userId));
+    const picked = unused.slice(0, maxPlayers).map((participant) => toObjectIdString(participant.userId));
     if (picked.length < 2) {
       throw new BadRequestException('Not enough unassigned players');
     }
@@ -258,22 +293,38 @@ export class MatchesService implements OnModuleInit {
         id: toObjectIdString(player.userId),
         userId: toObjectIdString(player.userId),
         name: player.name,
-        color: player.color,
+        color: player.color as MarriageSeatColor,
       }));
-      const gameState =
-        gameType === GameType.SNAKES
-          ? createSnakesMatchState({
-              matchId,
-              initialConnected: true,
-              rules: tournament.rules as Partial<import('@ludo-game/shared-types').SnakesRules>,
-              players,
-            })
-          : createMatchState({
-              matchId,
-              initialConnected: true,
-              rules: tournament.rules as Partial<import('@ludo-game/shared-types').LudoRules>,
-              players,
-            });
+      let gameState: GameState;
+      if (gameType === GameType.SNAKES) {
+        gameState = createSnakesMatchState({
+          matchId,
+          initialConnected: true,
+          rules: tournament.rules as Partial<import('@ludo-game/shared-types').SnakesRules>,
+          players: players.map((player) => ({
+            ...player,
+            color: player.color as import('@ludo-game/shared-types').PlayerColor,
+          })),
+        });
+      } else if (gameType === GameType.MARRIAGE) {
+        gameState = createMarriageMatchState({
+          matchId,
+          initialConnected: true,
+          rules: tournament.rules as Partial<import('@ludo-game/shared-types').MarriageRules>,
+          players,
+        });
+        gameState = ensureMaalVisibleBeforeDraw(gameState).state;
+      } else {
+        gameState = createMatchState({
+          matchId,
+          initialConnected: true,
+          rules: tournament.rules as Partial<import('@ludo-game/shared-types').LudoRules>,
+          players: players.map((player) => ({
+            ...player,
+            color: player.color as import('@ludo-game/shared-types').PlayerColor,
+          })),
+        });
+      }
       const saved = await this.state.updateMatchState(matchId, gameState, {
         status: MatchStatus.LIVE,
         startedAt: new Date(),
@@ -286,7 +337,7 @@ export class MatchesService implements OnModuleInit {
         matchId,
         status: MatchStatus.LIVE,
       });
-      this.emitLive(matchId, 'match-state', { matchId, state: gameState });
+      await this.emitGameState(matchId, 'match-state', gameState);
       this.scheduleAutoRoll(matchId, gameState);
       await this.publishAdmin();
       return this.toDetailDto(saved, gameState);
@@ -309,7 +360,7 @@ export class MatchesService implements OnModuleInit {
       await this.recordEvent(saved, GameEventType.MATCH_PAUSED, gameState.currentPlayerId);
       logEvent('Match paused', { matchId });
       this.emitLive(matchId, 'match-paused', { matchId, status: MatchStatus.PAUSED });
-      this.emitLive(matchId, 'match-state-updated', { matchId, state: gameState });
+      await this.emitGameState(matchId, 'match-state-updated', gameState);
       await this.publishAdmin();
       return this.toDetailDto(saved, gameState);
     });
@@ -335,7 +386,7 @@ export class MatchesService implements OnModuleInit {
       await this.recordEvent(saved, GameEventType.MATCH_RESUMED, gameState.currentPlayerId);
       logEvent('Match resumed', { matchId });
       this.emitLive(matchId, 'match-resumed', { matchId, status: MatchStatus.LIVE });
-      this.emitLive(matchId, 'match-state-updated', { matchId, state: gameState });
+      await this.emitGameState(matchId, 'match-state-updated', gameState);
       this.scheduleAutoRoll(matchId, gameState);
       await this.publishAdmin();
       return this.toDetailDto(saved, gameState);
@@ -430,9 +481,14 @@ export class MatchesService implements OnModuleInit {
       if (!match.gameState || match.status !== MatchStatus.LIVE) {
         throw new BadRequestException('Match is not live');
       }
-      const result = isSnakesState(match.gameState)
-        ? applySnakesMove(match.gameState, { playerId: userId, pieceId })
-        : applyMove(match.gameState, { playerId: userId, pieceId });
+      let result;
+      if (isSnakesState(match.gameState)) {
+        result = applySnakesMove(match.gameState, { playerId: userId, pieceId });
+      } else if (isLudoState(match.gameState)) {
+        result = applyMove(match.gameState, { playerId: userId, pieceId });
+      } else {
+        throw new BadRequestException('This game type does not support piece moves');
+      }
       const extra: Partial<Match> = {};
       if (result.state.status === MatchStatus.COMPLETED) {
         extra.finishedAt = new Date();
@@ -462,6 +518,220 @@ export class MatchesService implements OnModuleInit {
         logEvent('Match completed', { matchId, winnerId: result.state.rankings[0] ?? '' });
       }
       this.scheduleAutoRoll(matchId, result.state);
+      await this.publishAdmin();
+      return result;
+    });
+  }
+
+  async marriageDraw(matchId: string, userId: string, source: 'stock' | 'discard') {
+    return this.enqueue(matchId, async () => {
+      const match = await this.state.loadMatch(matchId);
+      this.assertPlayer(match, userId);
+      if (!match.gameState || match.status !== MatchStatus.LIVE || !isMarriageState(match.gameState)) {
+        throw new BadRequestException('Marriage match is not live');
+      }
+      let gameState = match.gameState;
+      const ensured = ensureMaalVisibleBeforeDraw(gameState);
+      if (ensured.events.length) {
+        gameState = ensured.state;
+        const savedEnsure = await this.state.updateMatchState(matchId, gameState);
+        await this.recordEngineEvents(savedEnsure, ensured.events, userId);
+        await this.emitGameState(matchId, 'match-state-updated', gameState);
+      }
+      const result = drawMarriageCard(gameState, userId, source);
+      const saved = await this.state.updateMatchState(matchId, result.state);
+      await this.recordEngineEvents(saved, result.events, userId);
+      logEvent('Marriage draw', { matchId, userId, source });
+      await this.emitGameState(matchId, 'match-state-updated', result.state);
+      await this.publishAdmin();
+      return result;
+    });
+  }
+
+  async marriageDiscard(matchId: string, userId: string, cardId: string) {
+    return this.enqueue(matchId, async () => {
+      const match = await this.state.loadMatch(matchId);
+      this.assertPlayer(match, userId);
+      if (!match.gameState || match.status !== MatchStatus.LIVE || !isMarriageState(match.gameState)) {
+        throw new BadRequestException('Marriage match is not live');
+      }
+      const result = discardMarriageCard(match.gameState, userId, cardId);
+      const saved = await this.state.updateMatchState(matchId, result.state);
+      await this.recordEngineEvents(saved, result.events, userId);
+      logEvent('Marriage discard', { matchId, userId, cardId });
+      await this.emitGameState(matchId, 'match-state-updated', result.state);
+      await this.publishAdmin();
+      return result;
+    });
+  }
+
+  async marriageOpen(
+    matchId: string,
+    userId: string,
+    melds?: Array<[string, string, string]>
+  ) {
+    return this.enqueue(matchId, async () => {
+      const match = await this.state.loadMatch(matchId);
+      this.assertPlayer(match, userId);
+      if (!match.gameState || match.status !== MatchStatus.LIVE || !isMarriageState(match.gameState)) {
+        throw new BadRequestException('Marriage match is not live');
+      }
+      const resolved = melds ?? marriageSuggestOpen(match.gameState, userId);
+      if (!resolved) {
+        throw new BadRequestException('No three pure sequences/tunnels available to open');
+      }
+      const result = openMarriage(match.gameState, userId, resolved);
+      const saved = await this.state.updateMatchState(matchId, result.state);
+      await this.recordEngineEvents(saved, result.events, userId);
+      logEvent('Marriage open', { matchId, userId });
+      await this.emitGameState(matchId, 'match-state-updated', result.state);
+      await this.publishAdmin();
+      return result;
+    });
+  }
+
+  async marriageShow(matchId: string, userId: string, discardCardId?: string) {
+    return this.enqueue(matchId, async () => {
+      const match = await this.state.loadMatch(matchId);
+      this.assertPlayer(match, userId);
+      if (!match.gameState || match.status !== MatchStatus.LIVE || !isMarriageState(match.gameState)) {
+        throw new BadRequestException('Marriage match is not live');
+      }
+      const win = discardCardId
+        ? { discardCardId }
+        : marriageCanShow(match.gameState, userId);
+      if (!win) {
+        throw new BadRequestException('Cannot show — open first and finish with valid melds');
+      }
+      const result = showMarriage(match.gameState, userId, win.discardCardId);
+      const extra: Partial<Match> = {};
+      if (result.state.status === MatchStatus.COMPLETED) {
+        extra.finishedAt = new Date();
+        extra.winnerIds = result.state.rankings.map((id) => new Types.ObjectId(id));
+      }
+      const saved = await this.state.updateMatchState(matchId, result.state, extra);
+      await this.recordEngineEvents(saved, result.events, userId);
+      if (result.state.status === MatchStatus.COMPLETED) {
+        await this.completeMatch(saved, result.state);
+      }
+      logEvent('Marriage show', { matchId, userId });
+      await this.emitGameState(matchId, 'match-state-updated', result.state);
+      if (result.state.status === MatchStatus.COMPLETED) {
+        await this.emitMatchFinished(matchId, result.state);
+      }
+      await this.publishAdmin();
+      return result;
+    });
+  }
+
+  async marriageReorder(
+    matchId: string,
+    userId: string,
+    layout: {
+      freeCardIds: string[];
+      holdCardIds: string[];
+      maalSequences: Array<[string, string, string]>;
+    }
+  ) {
+    return this.enqueue(matchId, async () => {
+      const match = await this.state.loadMatch(matchId);
+      this.assertPlayer(match, userId);
+      if (!match.gameState || match.status !== MatchStatus.LIVE || !isMarriageState(match.gameState)) {
+        throw new BadRequestException('Marriage match is not live');
+      }
+      const result = reorderMarriageHand(match.gameState, userId, layout);
+      const saved = await this.state.updateMatchState(matchId, result.state);
+      await this.recordEngineEvents(saved, result.events, userId);
+      await this.emitGameState(matchId, 'match-state-updated', result.state);
+      return result;
+    });
+  }
+
+  /** Reveal maal when the current drawer already has three pure sequences. */
+  async marriageEnsureMaal(matchId: string, userId: string) {
+    return this.enqueue(matchId, async () => {
+      const match = await this.state.loadMatch(matchId);
+      this.assertPlayer(match, userId);
+      if (!match.gameState || match.status !== MatchStatus.LIVE || !isMarriageState(match.gameState)) {
+        throw new BadRequestException('Marriage match is not live');
+      }
+      if (match.gameState.currentPlayerId !== userId) {
+        throw new BadRequestException('Only the current player can reveal maal');
+      }
+      const result = ensureMaalVisibleBeforeDraw(match.gameState);
+      if (!result.events.length) {
+        return result;
+      }
+      const saved = await this.state.updateMatchState(matchId, result.state);
+      await this.recordEngineEvents(saved, result.events, userId);
+      logEvent('Marriage maal revealed', { matchId, userId });
+      await this.emitGameState(matchId, 'match-state-updated', result.state);
+      await this.publishAdmin();
+      return result;
+    });
+  }
+
+  async marriageExtendMeld(
+    matchId: string,
+    userId: string,
+    cardId: string,
+    meldIndex: number
+  ) {
+    return this.enqueue(matchId, async () => {
+      const match = await this.state.loadMatch(matchId);
+      this.assertPlayer(match, userId);
+      if (!match.gameState || match.status !== MatchStatus.LIVE || !isMarriageState(match.gameState)) {
+        throw new BadRequestException('Marriage match is not live');
+      }
+      const result = extendMarriageMeld(match.gameState, userId, cardId, meldIndex);
+      const saved = await this.state.updateMatchState(matchId, result.state);
+      await this.recordEngineEvents(saved, result.events, userId);
+      logEvent('Marriage extend meld', { matchId, userId, cardId, meldIndex });
+      await this.emitGameState(matchId, 'match-state-updated', result.state);
+      await this.publishAdmin();
+      return result;
+    });
+  }
+
+  async marriageJoinMelds(
+    matchId: string,
+    userId: string,
+    meldIndexA: number,
+    meldIndexB: number
+  ) {
+    return this.enqueue(matchId, async () => {
+      const match = await this.state.loadMatch(matchId);
+      this.assertPlayer(match, userId);
+      if (!match.gameState || match.status !== MatchStatus.LIVE || !isMarriageState(match.gameState)) {
+        throw new BadRequestException('Marriage match is not live');
+      }
+      const result = joinMarriageMelds(match.gameState, userId, meldIndexA, meldIndexB);
+      const saved = await this.state.updateMatchState(matchId, result.state);
+      await this.recordEngineEvents(saved, result.events, userId);
+      logEvent('Marriage join melds', { matchId, userId, meldIndexA, meldIndexB });
+      await this.emitGameState(matchId, 'match-state-updated', result.state);
+      await this.publishAdmin();
+      return result;
+    });
+  }
+
+  async marriageRemoveMeldCard(
+    matchId: string,
+    userId: string,
+    meldIndex: number,
+    cardId: string
+  ) {
+    return this.enqueue(matchId, async () => {
+      const match = await this.state.loadMatch(matchId);
+      this.assertPlayer(match, userId);
+      if (!match.gameState || match.status !== MatchStatus.LIVE || !isMarriageState(match.gameState)) {
+        throw new BadRequestException('Marriage match is not live');
+      }
+      const result = removeMarriageMeldCard(match.gameState, userId, meldIndex, cardId);
+      const saved = await this.state.updateMatchState(matchId, result.state);
+      await this.recordEngineEvents(saved, result.events, userId);
+      logEvent('Marriage remove meld card', { matchId, userId, meldIndex, cardId });
+      await this.emitGameState(matchId, 'match-state-updated', result.state);
       await this.publishAdmin();
       return result;
     });
@@ -501,7 +771,7 @@ export class MatchesService implements OnModuleInit {
         matchId,
         playerId: userId,
       });
-      this.emitLive(matchId, 'match-state-updated', { matchId, state: armed });
+      await this.emitGameState(matchId, 'match-state-updated', armed);
       logEvent(connected ? 'Player connected' : 'Player disconnected', { matchId, userId });
     });
   }
@@ -597,14 +867,18 @@ export class MatchesService implements OnModuleInit {
     );
   }
 
-  async getDetail(matchId: string): Promise<MatchDetailDto> {
+  async getDetail(
+    matchId: string,
+    viewerId?: string | null,
+    options?: { revealAll?: boolean }
+  ): Promise<MatchDetailDto> {
     return this.enqueue(matchId, async () => {
       const match = await this.state.loadMatch(matchId);
       if (match.status === MatchStatus.LIVE && match.gameState) {
         const state = await this.ensureAutoRollArmed(matchId, match.gameState);
-        return this.toDetailDto(await this.state.loadMatch(matchId), state);
+        return this.toDetailDto(await this.state.loadMatch(matchId), state, viewerId, options);
       }
-      return this.toDetailDto(match);
+      return this.toDetailDto(match, undefined, viewerId, options);
     });
   }
 
@@ -695,6 +969,53 @@ export class MatchesService implements OnModuleInit {
     if (this.broadcast.currentMatchId() === matchId) {
       this.realtime.emitToBroadcast(event, payload);
     }
+  }
+
+  private async emitGameState(
+    matchId: string,
+    event: 'match-state' | 'match-state-updated',
+    state: GameState
+  ): Promise<void> {
+    const includeBroadcast = this.broadcast.currentMatchId() === matchId;
+    if (isMarriageState(state)) {
+      await this.realtime.emitToMatchViewers(
+        matchId,
+        event,
+        (viewer) => ({
+          matchId,
+          state: sanitizeGameStateForViewer(state, viewer.userId, {
+            revealAll: viewer.isAdmin,
+          }),
+        }),
+        { includeBroadcast }
+      );
+      return;
+    }
+    this.emitLive(matchId, event, { matchId, state });
+  }
+
+  private async emitMatchFinished(matchId: string, state: GameState): Promise<void> {
+    const includeBroadcast = this.broadcast.currentMatchId() === matchId;
+    if (isMarriageState(state)) {
+      await this.realtime.emitToMatchViewers(
+        matchId,
+        'match-finished',
+        (viewer) => ({
+          matchId,
+          rankings: state.rankings,
+          state: sanitizeGameStateForViewer(state, viewer.userId, {
+            revealAll: viewer.isAdmin,
+          }),
+        }),
+        { includeBroadcast }
+      );
+      return;
+    }
+    this.emitLive(matchId, 'match-finished', {
+      matchId,
+      rankings: state.rankings,
+      state,
+    });
   }
 
   private clearAutoRoll(matchId: string): void {
@@ -984,20 +1305,33 @@ export class MatchesService implements OnModuleInit {
     return new Map(tournaments.map((item) => [toObjectIdString(item._id), item.name]));
   }
 
-  private async toDetailDto(match: MatchDocument, gameState?: MatchDocument['gameState']): Promise<MatchDetailDto> {
+  private async toDetailDto(
+    match: MatchDocument,
+    gameState?: MatchDocument['gameState'],
+    viewerId?: string | null,
+    options?: { revealAll?: boolean }
+  ): Promise<MatchDetailDto> {
     const tournament = await this.requireTournament(toObjectIdString(match.tournamentId));
-    return toDetail(match, tournament.name, gameState ?? match.gameState);
+    const state = gameState ?? match.gameState;
+    const detail = toDetail(match, tournament.name, state);
+    if (detail.gameState && isMarriageState(detail.gameState)) {
+      detail.gameState = sanitizeGameStateForViewer(detail.gameState, viewerId ?? null, {
+        revealAll: options?.revealAll === true,
+      });
+    }
+    return detail;
   }
 }
 
-function splitIntoGroups<T>(items: T[]): T[][] {
+function splitIntoGroups<T>(items: T[], groupSize = 4): T[][] {
   if (items.length < 2) {
     return [];
   }
+  const size = Math.max(2, Math.min(12, Math.floor(groupSize)));
   const queue = [...items];
   const groups: T[][] = [];
-  while (queue.length >= 4) {
-    groups.push(queue.splice(0, 4));
+  while (queue.length >= size) {
+    groups.push(queue.splice(0, size));
   }
   if (queue.length === 1 && groups.length > 0) {
     const last = groups[groups.length - 1];

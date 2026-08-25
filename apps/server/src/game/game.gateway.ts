@@ -14,6 +14,15 @@ import {
   AdminSetBroadcastPayload,
   ClientToServerEvents,
   JoinMatchPayload,
+  MarriageDiscardPayload,
+  MarriageDrawPayload,
+  MarriageEnsureMaalPayload,
+  MarriageExtendMeldPayload,
+  MarriageJoinMeldsPayload,
+  MarriageOpenPayload,
+  MarriageRemoveMeldCardPayload,
+  MarriageReorderPayload,
+  MarriageShowPayload,
   MovePiecePayload,
   ReconnectMatchPayload,
   RollDicePayload,
@@ -81,7 +90,9 @@ export class GameGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
     @MessageBody() payload: JoinMatchPayload
   ): Promise<void> {
     const user = this.requireUser(client);
-    const detail = await this.matches.getDetail(payload.matchId);
+    const detail = await this.matches.getDetail(payload.matchId, user.id, {
+      revealAll: user.role === UserRole.ADMIN,
+    });
     const isPlayer = detail.players.some((player) => player.userId === user.id);
     if (client.data.matchId && client.data.matchId !== payload.matchId) {
       client.leave(matchRoom(client.data.matchId));
@@ -145,6 +156,142 @@ export class GameGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
     }
   }
 
+  @SubscribeMessage('marriage-draw')
+  async marriageDraw(
+    @ConnectedSocket() client: ArenaSocket,
+    @MessageBody() payload: MarriageDrawPayload
+  ): Promise<void> {
+    const user = this.requireUser(client);
+    try {
+      await this.matches.marriageDraw(payload.matchId, user.id, payload.source);
+    } catch (error) {
+      this.emitError(client, payload.matchId, error);
+    }
+  }
+
+  @SubscribeMessage('marriage-discard')
+  async marriageDiscard(
+    @ConnectedSocket() client: ArenaSocket,
+    @MessageBody() payload: MarriageDiscardPayload
+  ): Promise<void> {
+    const user = this.requireUser(client);
+    try {
+      await this.matches.marriageDiscard(payload.matchId, user.id, payload.cardId);
+    } catch (error) {
+      this.emitError(client, payload.matchId, error);
+    }
+  }
+
+  @SubscribeMessage('marriage-open')
+  async marriageOpen(
+    @ConnectedSocket() client: ArenaSocket,
+    @MessageBody() payload: MarriageOpenPayload
+  ): Promise<void> {
+    const user = this.requireUser(client);
+    try {
+      await this.matches.marriageOpen(payload.matchId, user.id, payload.melds);
+    } catch (error) {
+      this.emitError(client, payload.matchId, error);
+    }
+  }
+
+  @SubscribeMessage('marriage-show')
+  async marriageShow(
+    @ConnectedSocket() client: ArenaSocket,
+    @MessageBody() payload: MarriageShowPayload
+  ): Promise<void> {
+    const user = this.requireUser(client);
+    try {
+      await this.matches.marriageShow(payload.matchId, user.id, payload.discardCardId);
+    } catch (error) {
+      this.emitError(client, payload.matchId, error);
+    }
+  }
+
+  @SubscribeMessage('marriage-reorder')
+  async marriageReorder(
+    @ConnectedSocket() client: ArenaSocket,
+    @MessageBody() payload: MarriageReorderPayload
+  ): Promise<void> {
+    const user = this.requireUser(client);
+    try {
+      await this.matches.marriageReorder(payload.matchId, user.id, {
+        freeCardIds: payload.freeCardIds,
+        holdCardIds: payload.holdCardIds,
+        maalSequences: payload.maalSequences,
+      });
+    } catch (error) {
+      this.emitError(client, payload.matchId, error);
+    }
+  }
+
+  @SubscribeMessage('marriage-ensure-maal')
+  async marriageEnsureMaal(
+    @ConnectedSocket() client: ArenaSocket,
+    @MessageBody() payload: MarriageEnsureMaalPayload
+  ): Promise<void> {
+    const user = this.requireUser(client);
+    try {
+      await this.matches.marriageEnsureMaal(payload.matchId, user.id);
+    } catch (error) {
+      this.emitError(client, payload.matchId, error);
+    }
+  }
+
+  @SubscribeMessage('marriage-extend-meld')
+  async marriageExtendMeld(
+    @ConnectedSocket() client: ArenaSocket,
+    @MessageBody() payload: MarriageExtendMeldPayload
+  ): Promise<void> {
+    const user = this.requireUser(client);
+    try {
+      await this.matches.marriageExtendMeld(
+        payload.matchId,
+        user.id,
+        payload.cardId,
+        payload.meldIndex
+      );
+    } catch (error) {
+      this.emitError(client, payload.matchId, error);
+    }
+  }
+
+  @SubscribeMessage('marriage-join-melds')
+  async marriageJoinMelds(
+    @ConnectedSocket() client: ArenaSocket,
+    @MessageBody() payload: MarriageJoinMeldsPayload
+  ): Promise<void> {
+    const user = this.requireUser(client);
+    try {
+      await this.matches.marriageJoinMelds(
+        payload.matchId,
+        user.id,
+        payload.meldIndexA,
+        payload.meldIndexB
+      );
+    } catch (error) {
+      this.emitError(client, payload.matchId, error);
+    }
+  }
+
+  @SubscribeMessage('marriage-remove-meld-card')
+  async marriageRemoveMeldCard(
+    @ConnectedSocket() client: ArenaSocket,
+    @MessageBody() payload: MarriageRemoveMeldCardPayload
+  ): Promise<void> {
+    const user = this.requireUser(client);
+    try {
+      await this.matches.marriageRemoveMeldCard(
+        payload.matchId,
+        user.id,
+        payload.meldIndex,
+        payload.cardId
+      );
+    } catch (error) {
+      this.emitError(client, payload.matchId, error);
+    }
+  }
+
   @SubscribeMessage('admin-subscribe')
   async adminSubscribe(@ConnectedSocket() client: ArenaSocket): Promise<void> {
     this.requireAdmin(client);
@@ -163,7 +310,7 @@ export class GameGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
     const matchId = this.broadcast.currentMatchId();
     client.emit('broadcast-match-changed', { matchId });
     if (matchId) {
-      const detail = await this.matches.getDetail(matchId);
+      const detail = await this.matches.getDetail(matchId, null, { revealAll: true });
       if (detail.gameState) {
         client.emit('match-state', { matchId, state: detail.gameState });
       }
@@ -216,7 +363,7 @@ export class GameGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
     if (!payload.matchId) {
       return;
     }
-    const detail = await this.matches.getDetail(payload.matchId);
+    const detail = await this.matches.getDetail(payload.matchId, null, { revealAll: true });
     if (detail.gameState) {
       this.realtime.emitToBroadcast('match-state', {
         matchId: payload.matchId,
