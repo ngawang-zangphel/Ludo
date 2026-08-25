@@ -29,7 +29,7 @@ import { httpErrorMessage } from '../../../../shared/format';
           <p class="text-sm text-arena-mist/70">
             {{ detail()?.tournamentName }} · {{ detail()?.round }} · Match {{ detail()?.matchNumber }}
             @if (neighbors(); as nav) {
-              · {{ nav.index }} / {{ nav.total }}
+              · Live {{ nav.index }} / {{ nav.total }}
             }
           </p>
         </div>
@@ -50,7 +50,7 @@ import { httpErrorMessage } from '../../../../shared/format';
             [disabled]="!neighbors()?.previousId"
             (click)="go(neighbors()?.previousId)"
           >
-            Previous
+            Previous live
           </button>
           <button
             type="button"
@@ -58,7 +58,7 @@ import { httpErrorMessage } from '../../../../shared/format';
             [disabled]="!neighbors()?.nextId"
             (click)="go(neighbors()?.nextId)"
           >
-            Next
+            Next live
           </button>
         </div>
       </div>

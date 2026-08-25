@@ -582,9 +582,16 @@ export class MatchesService {
 
   async neighbors(matchId: string): Promise<{ previousId: string | null; nextId: string | null; index: number; total: number }> {
     const match = await this.state.loadMatch(matchId);
+    // Browse live/paused tables so an admin can preview the next board before broadcasting.
+    // Always include the current match so Previous/Next stay usable even if it is waiting.
     const siblings = await this.matches
-      .find({ tournamentId: match.tournamentId })
-      .sort({ matchNumber: 1 })
+      .find({
+        $or: [
+          { status: { $in: [MatchStatus.LIVE, MatchStatus.PAUSED] } },
+          { _id: match._id },
+        ],
+      })
+      .sort({ tournamentId: 1, matchNumber: 1 })
       .exec();
     const index = siblings.findIndex((item) => toObjectIdString(item._id) === matchId);
     const previous = index > 0 ? siblings[index - 1] : undefined;
@@ -592,7 +599,7 @@ export class MatchesService {
     return {
       previousId: previous ? toObjectIdString(previous._id) : null,
       nextId: next ? toObjectIdString(next._id) : null,
-      index: index + 1,
+      index: index >= 0 ? index + 1 : 0,
       total: siblings.length,
     };
   }
