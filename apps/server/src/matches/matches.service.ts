@@ -177,6 +177,7 @@ export class MatchesService implements OnModuleInit {
     if (match.status === MatchStatus.LIVE) {
       throw new BadRequestException('Cannot reassign a live match');
     }
+    await this.assertPlayersAvailable(toObjectIdString(match.tournamentId), dto.playerUserIds, matchId);
     const colors = [...PLAYER_COLOR_ORDER];
     const players = [];
     for (let index = 0; index < dto.playerUserIds.length; index += 1) {
@@ -866,6 +867,29 @@ export class MatchesService implements OnModuleInit {
       playerId: playerId ? new Types.ObjectId(playerId) : undefined,
       payload,
     });
+  }
+
+  private async assertPlayersAvailable(
+    tournamentId: string,
+    playerUserIds: string[],
+    excludeMatchId?: string
+  ): Promise<void> {
+    const active = await this.matches
+      .find({
+        tournamentId: new Types.ObjectId(tournamentId),
+        status: { $nin: [MatchStatus.COMPLETED, MatchStatus.CANCELLED] },
+        ...(excludeMatchId ? { _id: { $ne: new Types.ObjectId(excludeMatchId) } } : {}),
+      })
+      .exec();
+    const busy = new Set(
+      active.flatMap((match) => match.players.map((player) => toObjectIdString(player.userId)))
+    );
+    const conflict = playerUserIds.find((userId) => busy.has(userId));
+    if (conflict) {
+      const user = await this.users.findById(conflict).catch(() => null);
+      const name = user?.name ?? 'A player';
+      throw new BadRequestException(`${name} is already in an active match`);
+    }
   }
 
   private async ensureParticipants(tournamentId: Types.ObjectId, userIds: string[]): Promise<void> {

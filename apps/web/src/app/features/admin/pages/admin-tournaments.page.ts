@@ -24,6 +24,7 @@ import {
   TournamentDto,
   TournamentStatus,
   UserDto,
+  UserRole,
 } from '@ludo-game/shared-types';
 import { ArenaApiService } from '../../../core/api/arena-api.service';
 import { StatusBadgeComponent } from '../../../shared/ui/status-badge';
@@ -62,9 +63,9 @@ import { SnakesPresetPickerComponent } from '../../game/components/snakes-preset
         <p class="mt-4 text-piece-red">{{ error() }}</p>
       }
 
-      <section class="mt-6 grid gap-4 lg:grid-cols-2">
+      <section class="mt-6">
         <form
-          class="rounded-3xl border border-arena-line bg-arena-navy/80 p-5"
+          class="max-w-xl rounded-3xl border border-arena-line bg-arena-navy/80 p-5"
           novalidate
           (ngSubmit)="createTournament()"
         >
@@ -142,17 +143,6 @@ import { SnakesPresetPickerComponent } from '../../game/components/snakes-preset
             type="submit"
           >
             Create
-          </button>
-        </form>
-        <form class="rounded-3xl border border-arena-line bg-arena-navy/80 p-5" (ngSubmit)="createPlayer()">
-          <h2 class="font-display text-lg">New player</h2>
-          <div class="mt-3 grid gap-2 sm:grid-cols-3">
-            <input class="field" name="playerName" placeholder="Name" [(ngModel)]="playerName" required />
-            <input class="field" name="playerEmail" type="email" placeholder="Email" [(ngModel)]="playerEmail" required />
-            <input class="field" name="playerPassword" placeholder="Password" [(ngModel)]="playerPassword" required />
-          </div>
-          <button class="mt-3 rounded-full border border-arena-gold px-4 py-2 text-sm text-arena-gold" type="submit">
-            Create player
           </button>
         </form>
       </section>
@@ -275,10 +265,10 @@ import { SnakesPresetPickerComponent } from '../../game/components/snakes-preset
 
         <section class="mt-8 grid gap-6 lg:grid-cols-2">
           <div class="rounded-3xl border border-arena-line bg-arena-navy/80 p-5">
-            <div class="flex items-center justify-between">
+            <div class="flex items-center justify-between gap-3">
               <h2 class="font-display text-lg">Participants</h2>
               <select
-                class="field max-w-[11rem]"
+                class="field max-w-44"
                 name="tournamentStatus"
                 [ngModel]="tournament.status"
                 (ngModelChange)="setStatus($event)"
@@ -290,22 +280,63 @@ import { SnakesPresetPickerComponent } from '../../game/components/snakes-preset
             </div>
             <ul class="mt-3 space-y-2 text-sm">
               @for (participant of participants(); track participant.id) {
-                <li>{{ participant.seed }}. {{ participant.name }} · {{ participant.status }}</li>
+                <li class="flex flex-wrap items-center gap-2">
+                  <span>{{ participant.seed }}. {{ participant.name }} · {{ participant.status }}</span>
+                  @if (participantSeatLabel(participant.userId); as seat) {
+                    <span
+                      class="rounded-full px-2 py-0.5 text-[10px] uppercase tracking-wider"
+                      [class.bg-piece-blue/15]="seat === 'Pending'"
+                      [class.text-piece-blue]="seat === 'Pending'"
+                      [class.bg-piece-red/15]="seat === 'In a match'"
+                      [class.text-piece-red]="seat === 'In a match'"
+                    >
+                      {{ seat }}
+                    </span>
+                  }
+                </li>
+              } @empty {
+                <li class="text-arena-mist/60">No participants yet.</li>
               }
             </ul>
-            <form class="mt-4 flex gap-2" (ngSubmit)="register()">
-              <select class="field flex-1" name="registerUserId" [(ngModel)]="registerUserId">
-                <option value="">Register a player</option>
-                @for (user of users(); track user.id) {
-                  @if (user.role === 'PLAYER') {
-                    <option [value]="user.id">{{ user.name }}</option>
-                  }
+
+            <div class="mt-4 border-t border-arena-line/80 pt-4">
+              <p class="text-sm font-medium text-white">Add players</p>
+              <p class="mt-1 text-sm text-arena-mist/60">
+                Select one or more players, then Add.
+                @if (registerUserIds().length) {
+                  · {{ registerUserIds().length }} selected
                 }
-              </select>
-              <button class="rounded-full bg-arena-gold px-4 py-2 text-sm font-semibold text-arena-ink" type="submit">
-                Add
+              </p>
+              <div class="mt-3 flex flex-wrap gap-2">
+                @for (user of availablePlayers(); track user.id) {
+                  <button
+                    type="button"
+                    class="rounded-full border px-3 py-1.5 text-sm"
+                    [class.border-arena-gold]="isRegisterSelected(user.id)"
+                    [class.bg-arena-gold]="isRegisterSelected(user.id)"
+                    [class.text-arena-ink]="isRegisterSelected(user.id)"
+                    [class.border-arena-line]="!isRegisterSelected(user.id)"
+                    (click)="toggleRegisterUser(user.id)"
+                  >
+                    {{ user.name }}
+                  </button>
+                } @empty {
+                  <p class="text-sm text-arena-mist/60">
+                    All players are already registered, or
+                    <a routerLink="/admin/users" class="text-arena-gold hover:underline">create users</a>
+                    first.
+                  </p>
+                }
+              </div>
+              <button
+                type="button"
+                class="mt-4 rounded-full bg-arena-gold px-4 py-2 text-sm font-semibold text-arena-ink disabled:opacity-40"
+                [disabled]="registerUserIds().length === 0"
+                (click)="registerSelected()"
+              >
+                Add {{ registerUserIds().length || '' }}
               </button>
-            </form>
+            </div>
           </div>
 
           <div class="rounded-3xl border border-arena-line bg-arena-navy/80 p-5">
@@ -376,7 +407,8 @@ import { SnakesPresetPickerComponent } from '../../game/components/snakes-preset
 
               @if (freeParticipants().length >= 2) {
                 <p class="mt-1 text-sm text-arena-mist/70">
-                  {{ selectedPlayerIds().length }} selected · tap 2–4 names for one group, or split everyone.
+                  {{ selectedPlayerIds().length }} selected · tap 2–4 free players for one group, or split everyone.
+                  Players already in a match are unavailable.
                 </p>
                 <div class="mt-3 flex flex-wrap gap-2">
                   @for (player of freeParticipants(); track player.userId) {
@@ -393,6 +425,11 @@ import { SnakesPresetPickerComponent } from '../../game/components/snakes-preset
                     </button>
                   }
                 </div>
+                @if (seatedParticipants().length) {
+                  <p class="mt-3 text-xs text-arena-mist/50">
+                    Busy (in a match): {{ seatedNames() }}
+                  </p>
+                }
                 <div class="mt-4 flex flex-wrap gap-2">
                   <button
                     type="button"
@@ -417,7 +454,7 @@ import { SnakesPresetPickerComponent } from '../../game/components/snakes-preset
                 }
               } @else if (seatedParticipants().length) {
                 <p class="mt-2 rounded-2xl bg-black/20 px-4 py-3 text-sm text-arena-mist/70">
-                  {{ seatedSummary() }} Add another player, or delete a table to free seats.
+                  {{ seatedSummary() }} Players in an active match cannot join another table until it finishes or is deleted.
                 </p>
               } @else {
                 <p class="mt-2 text-sm text-arena-mist/60">
@@ -451,6 +488,7 @@ export class AdminTournamentsPage implements OnInit {
   readonly error = signal<string | null>(null);
   readonly playerNames = playerNames;
   readonly selectedPlayerIds = signal<string[]>([]);
+  readonly registerUserIds = signal<string[]>([]);
   readonly GAME_TYPE_LABEL = GAME_TYPE_LABEL;
   readonly SNAKES_LEVEL_LABEL = SNAKES_LEVEL_LABEL;
   readonly GameType = GameType;
@@ -472,6 +510,19 @@ export class AdminTournamentsPage implements OnInit {
     return ids;
   });
 
+  readonly playerMatchStatus = computed(() => {
+    const byUser = new Map<string, MatchStatus>();
+    for (const match of this.matches()) {
+      if (match.status === MatchStatus.COMPLETED || match.status === MatchStatus.CANCELLED) {
+        continue;
+      }
+      for (const player of match.players) {
+        byUser.set(player.userId, match.status);
+      }
+    }
+    return byUser;
+  });
+
   readonly freeParticipants = computed(() =>
     this.participants().filter((player) => !this.busyPlayerIds().has(player.userId))
   );
@@ -481,6 +532,16 @@ export class AdminTournamentsPage implements OnInit {
   );
 
   readonly leftoverCount = computed(() => (this.freeParticipants().length === 1 ? 1 : 0));
+
+  readonly registeredUserIds = computed(
+    () => new Set(this.participants().map((participant) => participant.userId))
+  );
+
+  readonly availablePlayers = computed(() =>
+    this.users().filter(
+      (user) => user.role === UserRole.PLAYER && !this.registeredUserIds().has(user.id)
+    )
+  );
 
   readonly groupedTables = computed(() => {
     const matches = [...this.matches()].sort(
@@ -514,15 +575,28 @@ export class AdminTournamentsPage implements OnInit {
     return `${names.slice(0, -1).join(', ')} and ${names.at(-1)} are already at a table.`;
   }
 
+  seatedNames(): string {
+    return this.seatedParticipants()
+      .map((player) => player.name)
+      .join(', ');
+  }
+
+  participantSeatLabel(userId: string): 'Pending' | 'In a match' | null {
+    const status = this.playerMatchStatus().get(userId);
+    if (!status) {
+      return null;
+    }
+    if (status === MatchStatus.LIVE || status === MatchStatus.PAUSED) {
+      return 'In a match';
+    }
+    return 'Pending';
+  }
+
   tournamentName = '';
   tournamentGameType = GameType.LUDO;
   snakesLevelId = SnakesLevelId.CLASSIC;
   selectedBoardId = '';
   customLayout: SnakesBoardLayout = cloneSnakesLayout(resolveSnakesRules().layout);
-  playerName = '';
-  playerEmail = '';
-  playerPassword = 'Player123!';
-  registerUserId = '';
   round = 'ROUND_1';
   roundNumber = 1;
   matchNumber = 1;
@@ -534,6 +608,7 @@ export class AdminTournamentsPage implements OnInit {
   async select(tournament: TournamentDto): Promise<void> {
     this.selected.set(tournament);
     this.selectedPlayerIds.set([]);
+    this.registerUserIds.set([]);
     await this.refreshSelected();
   }
 
@@ -592,29 +667,29 @@ export class AdminTournamentsPage implements OnInit {
     });
   }
 
-  async createPlayer(): Promise<void> {
-    await this.guard(async () => {
-      await this.api.createUser({
-        email: this.playerEmail,
-        name: this.playerName,
-        password: this.playerPassword,
-      });
-      this.playerName = '';
-      this.playerEmail = '';
-      this.users.set(await this.api.users());
-    });
-  }
-
-  async register(): Promise<void> {
+  async registerSelected(): Promise<void> {
     const tournament = this.selected();
-    if (!tournament || !this.registerUserId) {
+    const userIds = this.registerUserIds();
+    if (!tournament || userIds.length === 0) {
       return;
     }
     await this.guard(async () => {
-      await this.api.register(tournament.id, this.registerUserId);
-      this.registerUserId = '';
+      for (const userId of userIds) {
+        await this.api.register(tournament.id, userId);
+      }
+      this.registerUserIds.set([]);
       await this.refreshSelected();
     });
+  }
+
+  isRegisterSelected(userId: string): boolean {
+    return this.registerUserIds().includes(userId);
+  }
+
+  toggleRegisterUser(userId: string): void {
+    this.registerUserIds.update((ids) =>
+      ids.includes(userId) ? ids.filter((id) => id !== userId) : [...ids, userId]
+    );
   }
 
   async setStatus(status: TournamentStatus): Promise<void> {
@@ -637,6 +712,11 @@ export class AdminTournamentsPage implements OnInit {
     }
     if (playerUserIds.length < 2 || playerUserIds.length > 4) {
       this.error.set('Select 2 to 4 players to invite.');
+      return;
+    }
+    const busy = this.busyPlayerIds();
+    if (playerUserIds.some((id) => busy.has(id))) {
+      this.error.set('One or more selected players are already in an active match.');
       return;
     }
     await this.guard(async () => {
