@@ -26,6 +26,7 @@ export interface LudoPlayer {
   pieces: LudoPiece[];
   connected: boolean;
   finishedPosition?: number;
+  eliminated?: boolean;
 }
 
 export interface SnakesPlayer {
@@ -38,6 +39,7 @@ export interface SnakesPlayer {
   position: number;
   connected: boolean;
   finishedPosition?: number;
+  eliminated?: boolean;
 }
 
 interface GameStateBase {
@@ -169,4 +171,5 @@ export type GameEngineErrorCode =
   | 'INVALID_PIECE'
   | 'ILLEGAL_MOVE'
   | 'INVALID_PLAYER_SETUP'
-  | 'INVALID_BOARD_LAYOUT';
+  | 'INVALID_BOARD_LAYOUT'
+  | 'PLAYER_NOT_ACTIVE';

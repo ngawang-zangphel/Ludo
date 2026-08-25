@@ -12,6 +12,7 @@ import { PLAYER_SWATCH } from '../../models/theme';
       [class.bg-arena-panel/90]="true"
       [class.ring-2]="active()"
       [class.ring-arena-gold]="active()"
+      [class.opacity-50]="player().eliminated"
     >
       <div class="mb-3 flex items-center justify-between gap-3">
         <div>
@@ -21,9 +22,13 @@ import { PLAYER_SWATCH } from '../../models/theme';
         <span class="h-4 w-4 rounded-full ring-2 ring-white/20" [style.background]="PLAYER_SWATCH[player().color]"></span>
       </div>
       <p class="text-xs text-arena-mist/60">
-        {{ player().connected ? 'Connected' : 'Reconnecting…' }}
-        @if (player().finishedPosition) {
-          · Finished {{ ordinal() }}
+        @if (player().eliminated) {
+          Removed
+        } @else {
+          {{ player().connected ? 'Connected' : 'Reconnecting…' }}
+          @if (player().finishedPosition) {
+            · Finished {{ ordinal() }}
+          }
         }
       </p>
       <div class="mt-3 flex items-end justify-between gap-2">

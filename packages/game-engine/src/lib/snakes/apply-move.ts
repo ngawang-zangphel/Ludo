@@ -11,8 +11,13 @@ import {
 } from '@ludo-game/shared-types';
 import { withUpdatedTimestamp } from '../queries';
 import { getSnakesSquareCoordinate, isLadder, layoutForRules, teleportFrom } from './board';
-import { extraOrPass } from './apply-dice-roll';
-import { isSnakesPlayerFinished, requireSnakesCurrentPlayer } from './queries';
+import { extraOrPass, passSnakesTurn } from './apply-dice-roll';
+import {
+  checkSnakesMatchFinished,
+  findSnakesPlayer,
+  isSnakesPlayerFinished,
+  requireSnakesCurrentPlayer,
+} from './queries';
 
 export function applySnakesMove(
   state: SnakesGameState,
@@ -67,6 +72,35 @@ export function applySnakesMove(
     ),
   };
 
+  if (destination > 1 && destination < SNAKES_FINISH_SQUARE) {
+    const bumped = next.players.filter(
+      (entry) =>
+        entry.id !== player.id &&
+        entry.position === destination &&
+        !isSnakesPlayerFinished(entry)
+    );
+    if (bumped.length > 0) {
+      next = {
+        ...next,
+        players: next.players.map((entry) =>
+          bumped.some((victim) => victim.id === entry.id) ? { ...entry, position: 1 } : entry
+        ),
+      };
+      for (const victim of bumped) {
+        events.push({
+          type: GameEventType.PIECE_CAPTURED,
+          playerId: player.id,
+          pieceId: player.tokenId,
+          payload: {
+            capturedPlayerId: victim.id,
+            from: destination,
+            to: 1,
+          },
+        });
+      }
+    }
+  }
+
   const moved = next.players.find((entry) => entry.id === player.id);
   if (moved && moved.position >= SNAKES_FINISH_SQUARE && moved.finishedPosition === undefined) {
     const place = next.rankings.length + 1;
@@ -102,15 +136,65 @@ export function applySnakesMove(
   };
 }
 
+export function removeSnakesPlayer(
+  state: SnakesGameState,
+  playerId: string,
+  now?: string
+): EngineResult<SnakesGameState> {
+  const player = findSnakesPlayer(state, playerId);
+  if (player.eliminated === true || player.finishedPosition !== undefined) {
+    throw new GameEngineError('PLAYER_NOT_ACTIVE', `${player.name} is already out of this match`);
+  }
+  if (state.status !== MatchStatus.LIVE && state.status !== MatchStatus.PAUSED) {
+    throw new GameEngineError(
+      'MATCH_NOT_LIVE',
+      `Match ${state.matchId} is ${state.status}, expected LIVE or PAUSED`
+    );
+  }
+
+  const events: GameEvent[] = [];
+  const wasPaused = state.status === MatchStatus.PAUSED;
+  let next: SnakesGameState = {
+    ...state,
+    players: state.players.map((entry) =>
+      entry.id === playerId ? { ...entry, eliminated: true, connected: false } : entry
+    ),
+  };
+  events.push({ type: GameEventType.PLAYER_REMOVED, playerId });
+
+  if (checkSnakesMatchFinished(next)) {
+    next = completeSnakesMatch(next, events);
+  } else if (next.currentPlayerId === playerId) {
+    next = passSnakesTurn(next, playerId, events);
+  }
+
+  if (wasPaused && next.status !== MatchStatus.COMPLETED) {
+    next = { ...next, status: MatchStatus.PAUSED };
+  }
+
+  next = withUpdatedTimestamp(next, now);
+  return { state: next, events, validPieceIds: [] };
+}
+
 function completeSnakesMatch(state: SnakesGameState, events: GameEvent[]): SnakesGameState {
   const remaining = [...state.players]
-    .filter((player) => player.finishedPosition === undefined)
+    .filter((player) => player.finishedPosition === undefined && !player.eliminated)
     .sort((left, right) => right.position - left.position);
+  const removed = state.players.filter(
+    (player) => player.eliminated === true && player.finishedPosition === undefined
+  );
 
   let rankings = [...state.rankings];
   let players = state.players;
 
   remaining.forEach((player) => {
+    const place = rankings.length + 1;
+    rankings = [...rankings, player.id];
+    players = players.map((entry) =>
+      entry.id === player.id ? { ...entry, finishedPosition: place } : entry
+    );
+  });
+  removed.forEach((player) => {
     const place = rankings.length + 1;
     rankings = [...rankings, player.id];
     players = players.map((entry) =>

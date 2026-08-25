@@ -16,6 +16,15 @@ export function playerNames(match: MatchSummaryDto): string {
   return match.players.map((player) => player.name).join(' · ');
 }
 
+export function allPlayersReady(match: MatchSummaryDto): boolean {
+  return match.players.length >= 2 && match.players.every((player) => player.ready);
+}
+
+export function readyCountLabel(match: MatchSummaryDto): string {
+  const ready = match.players.filter((player) => player.ready).length;
+  return `${ready}/${match.players.length} ready`;
+}
+
 export function gameTypeLabel(type: MatchSummaryDto['gameType']): string {
   return type === 'SNAKES' ? 'Snakes & Ladders' : 'Ludo';
 }

@@ -19,6 +19,7 @@ import {
 import {
   checkMatchFinished,
   findPiece,
+  findPlayer,
   getNextPlayer,
   isPlayerFinished,
   requireCurrentPlayer,
@@ -194,6 +195,46 @@ function shouldGrantExtraTurn(state: LudoGameState, move: ValidMove): boolean {
   return rolledSix || captured;
 }
 
+export function removeLudoPlayer(
+  state: LudoGameState,
+  playerId: string,
+  now?: string
+): EngineResult<LudoGameState> {
+  const player = findPlayer(state, playerId);
+  if (player.eliminated === true || player.finishedPosition !== undefined) {
+    throw new GameEngineError('PLAYER_NOT_ACTIVE', `${player.name} is already out of this match`);
+  }
+  if (state.status !== MatchStatus.LIVE && state.status !== MatchStatus.PAUSED) {
+    throw new GameEngineError(
+      'MATCH_NOT_LIVE',
+      `Match ${state.matchId} is ${state.status}, expected LIVE or PAUSED`
+    );
+  }
+
+  const events: GameEvent[] = [];
+  const wasPaused = state.status === MatchStatus.PAUSED;
+  let next: LudoGameState = {
+    ...state,
+    players: state.players.map((entry) =>
+      entry.id === playerId ? { ...entry, eliminated: true, connected: false } : entry
+    ),
+  };
+  events.push({ type: GameEventType.PLAYER_REMOVED, playerId });
+
+  if (checkMatchFinished(next)) {
+    next = completeMatch(next, events);
+  } else if (next.currentPlayerId === playerId) {
+    next = passTurn(next, playerId, events);
+  }
+
+  if (wasPaused && next.status !== MatchStatus.COMPLETED) {
+    next = { ...next, status: MatchStatus.PAUSED };
+  }
+
+  next = withUpdatedTimestamp(next, now);
+  return { state: next, events, validPieceIds: [] };
+}
+
 function passTurn(state: LudoGameState, fromPlayerId: string, events: GameEvent[]): LudoGameState {
   if (state.status === MatchStatus.COMPLETED) {
     return state;
@@ -227,12 +268,24 @@ function grantExtraTurn(state: LudoGameState, playerId: string, events: GameEven
 }
 
 function completeMatch(state: LudoGameState, events: GameEvent[]): LudoGameState {
-  const remaining = state.players.filter((player) => player.finishedPosition === undefined);
+  const remaining = state.players.filter(
+    (player) => player.finishedPosition === undefined && !player.eliminated
+  );
+  const removed = state.players.filter(
+    (player) => player.eliminated === true && player.finishedPosition === undefined
+  );
   let rankings = [...state.rankings];
   let players = state.players;
 
   remaining.forEach((player, index) => {
     const place = rankings.length + 1 + index;
+    rankings = [...rankings, player.id];
+    players = players.map((entry) =>
+      entry.id === player.id ? { ...entry, finishedPosition: place } : entry
+    );
+  });
+  removed.forEach((player) => {
+    const place = rankings.length + 1;
     rankings = [...rankings, player.id];
     players = players.map((entry) =>
       entry.id === player.id ? { ...entry, finishedPosition: place } : entry

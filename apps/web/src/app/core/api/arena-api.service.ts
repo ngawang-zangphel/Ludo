@@ -84,6 +84,10 @@ export class ArenaApiService {
     return firstValueFrom(this.http.post<MatchDetailDto>(`/api/matches/${matchId}/start`, {}));
   }
 
+  removePlayer(matchId: string, userId: string): Promise<MatchDetailDto> {
+    return firstValueFrom(this.http.delete<MatchDetailDto>(`/api/matches/${matchId}/players/${userId}`));
+  }
+
   pause(matchId: string): Promise<MatchDetailDto> {
     return firstValueFrom(this.http.post<MatchDetailDto>(`/api/matches/${matchId}/pause`, {}));
   }

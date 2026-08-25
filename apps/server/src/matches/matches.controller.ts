@@ -77,6 +77,12 @@ export class MatchesController {
     return this.matches.start(id);
   }
 
+  @Delete(':id/players/:userId')
+  @Roles(UserRole.ADMIN)
+  removePlayer(@Param('id') id: string, @Param('userId') userId: string): Promise<MatchDetailDto> {
+    return this.matches.removePlayer(id, userId);
+  }
+
   @Post(':id/pause')
   @Roles(UserRole.ADMIN)
   pause(@Param('id') id: string): Promise<MatchDetailDto> {

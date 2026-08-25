@@ -122,7 +122,7 @@ import { SnakesPlayerPanelComponent } from '../snakes-player-panel/snakes-player
       <ludo-turn-indicator
         [player]="currentPlayer()"
         [phase]="state().turnPhase"
-        [hint]="snakes() ? 'Roll to race toward 100' : 'Choose a highlighted piece'"
+        [hint]="snakes() ? 'Roll a 6 to enter, then race to 100' : 'Choose a highlighted piece'"
       />
       <ludo-dice
         [value]="state().dice.value"
@@ -174,7 +174,7 @@ export class GameTableComponent {
 
   readonly hint = computed(() =>
     this.snakes()
-      ? 'Race to 100. Ladders climb, snakes send you down.'
+      ? 'Race to 100. Roll a 6 to enter. Land on a player and they go back to 1.'
       : 'Roll a 6 to leave the yard.'
   );
 

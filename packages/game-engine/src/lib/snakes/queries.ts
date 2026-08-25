@@ -29,7 +29,15 @@ export function requireSnakesCurrentPlayer(state: SnakesGameState, playerId: str
 }
 
 export function isSnakesPlayerFinished(player: SnakesPlayer): boolean {
-  return player.finishedPosition !== undefined || player.position >= SNAKES_FINISH_SQUARE;
+  return (
+    player.eliminated === true ||
+    player.finishedPosition !== undefined ||
+    player.position >= SNAKES_FINISH_SQUARE
+  );
+}
+
+export function checkSnakesMatchFinished(state: SnakesGameState): boolean {
+  return state.players.filter((player) => !isSnakesPlayerFinished(player)).length <= 1;
 }
 
 export function getNextSnakesPlayer(

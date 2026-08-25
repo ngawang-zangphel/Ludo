@@ -35,14 +35,19 @@ export function applySnakesDiceRoll(
 
   const landing = player.position + value;
   const overshoot = landing > SNAKES_FINISH_SQUARE && state.rules.exactRollRequiredForFinish;
+  const needsSixToEnter = player.position <= 0 && value !== 6;
 
   let next: SnakesGameState = {
     ...state,
     dice: { value, rolled: true },
   };
 
-  if (overshoot) {
-    events.push({ type: GameEventType.NO_VALID_MOVES, playerId, payload: { landing } });
+  if (overshoot || needsSixToEnter) {
+    events.push({
+      type: GameEventType.NO_VALID_MOVES,
+      playerId,
+      payload: { landing, needsSix: needsSixToEnter },
+    });
     next = extraOrPass(next, playerId, value, events);
     next = withUpdatedTimestamp(next, now);
     return { state: next, events, validPieceIds: [] };

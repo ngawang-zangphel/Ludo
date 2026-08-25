@@ -1,6 +1,6 @@
 import { GameEvent, GameState, PieceMoveAnimation } from './game-state';
 import { MatchStatus } from './enums';
-import { MatchListPayload } from './api';
+import { MatchListPayload, MatchPlayerDto } from './api';
 
 export interface JoinMatchPayload {
   matchId: string;
@@ -67,6 +67,13 @@ export interface TurnChangedPayload {
   turnNumber: number;
 }
 
+export interface PlayerReadyPayload {
+  matchId: string;
+  playerId: string;
+  ready: boolean;
+  players: MatchPlayerDto[];
+}
+
 export interface PlayerConnectionPayload {
   matchId: string;
   playerId: string;
@@ -123,6 +130,7 @@ export interface ServerToClientEvents {
   'turn-changed': (payload: TurnChangedPayload) => void;
   'player-connected': (payload: PlayerConnectionPayload) => void;
   'player-disconnected': (payload: PlayerConnectionPayload) => void;
+  'player-ready': (payload: PlayerReadyPayload) => void;
   'match-started': (payload: MatchStatusPayload) => void;
   'match-paused': (payload: MatchStatusPayload) => void;
   'match-resumed': (payload: MatchStatusPayload) => void;

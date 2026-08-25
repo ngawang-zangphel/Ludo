@@ -119,7 +119,7 @@ interface BoardToken {
                 [attr.d]="snake.outline"
                 fill="#8adf3f"
                 stroke="#171717"
-                stroke-width="0.24"
+                stroke-width="0.18"
                 stroke-linejoin="round"
               />
               @for (spot of snake.spots; track $index) {
@@ -134,13 +134,13 @@ interface BoardToken {
                 />
               }
               <g [attr.transform]="'translate(' + snake.head.x + ' ' + snake.head.y + ') rotate(' + snake.angle + ')'">
-                <ellipse cx="0.35" cy="0" rx="2.05" ry="1.62" fill="#8adf3f" stroke="#171717" stroke-width="0.24" />
-                <circle cx="0.95" cy="-0.42" r="0.24" fill="#171717" />
-                <circle cx="0.95" cy="0.42" r="0.24" fill="#171717" />
+                <ellipse cx="0.22" cy="0" rx="1.22" ry="0.96" fill="#8adf3f" stroke="#171717" stroke-width="0.18" />
+                <circle cx="0.58" cy="-0.26" r="0.16" fill="#171717" />
+                <circle cx="0.58" cy="0.26" r="0.16" fill="#171717" />
                 <path
-                  d="M2.05 0 L2.72 -0.32 M2.05 0 L2.72 0.32"
+                  d="M1.22 0 L1.68 -0.2 M1.22 0 L1.68 0.2"
                   stroke="#e53935"
-                  stroke-width="0.18"
+                  stroke-width="0.14"
                   fill="none"
                   stroke-linecap="round"
                 />

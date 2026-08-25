@@ -12,6 +12,9 @@ export class MatchPlayer {
 
   @Prop({ type: String, required: true, enum: PlayerColor })
   color!: PlayerColor;
+
+  @Prop({ default: false })
+  ready!: boolean;
 }
 
 @Schema({ timestamps: true })

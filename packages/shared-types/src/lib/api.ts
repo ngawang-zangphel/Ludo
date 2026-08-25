@@ -58,6 +58,8 @@ export interface MatchPlayerDto {
   userId: string;
   name: string;
   color: PlayerColor;
+  ready: boolean;
+  eliminated?: boolean;
 }
 
 export interface MatchSummaryDto {

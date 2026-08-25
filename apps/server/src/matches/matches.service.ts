@@ -19,6 +19,7 @@ import {
   PLAYER_COLOR_ORDER,
   ServerToClientEvents,
   SnakesGameState,
+  GameEngineError,
 } from '@ludo-game/shared-types';
 import {
   applyDiceRoll,
@@ -27,6 +28,7 @@ import {
   applySnakesMove,
   createMatchState,
   createSnakesMatchState,
+  removePlayerFromMatch,
 } from '@ludo-game/game-engine';
 import { Match, MatchDocument } from './schemas/match.schema';
 import { MatchResult, MatchResultDocument } from './schemas/match-result.schema';
@@ -39,7 +41,7 @@ import {
 import { UsersService } from '../users/users.service';
 import { MatchStateService } from './match-state.service';
 import { MatchCommandQueue } from './match-command-queue.service';
-import { toDetail, toSummary } from './match-mapper';
+import { toDetail, toPlayerDto, toSummary } from './match-mapper';
 import { AssignPlayersDto, CreateMatchDto, CreateMatchGroupsDto } from './dto/match.dto';
 import { toObjectIdString } from '../common/types';
 import { logEvent } from '../common/logger';
@@ -166,6 +168,7 @@ export class MatchesService {
         userId: user._id,
         name: user.name,
         color,
+        ready: false,
       });
     }
     match.players = players;
@@ -204,6 +207,7 @@ export class MatchesService {
   async restart(matchId: string): Promise<MatchDetailDto> {
     return this.enqueue(matchId, async () => {
       const match = await this.state.loadMatch(matchId);
+      this.assertPlayersReady(match);
       match.status = MatchStatus.READY;
       match.gameState = null;
       match.startedAt = null;
@@ -217,12 +221,10 @@ export class MatchesService {
 
   private async startUnlocked(matchId: string): Promise<MatchDetailDto> {
       const match = await this.state.loadMatch(matchId);
-      if (match.players.length < 2) {
-        throw new BadRequestException('Assign players before starting');
-      }
       if (match.status === MatchStatus.LIVE) {
         throw new BadRequestException('Match is already live');
       }
+      this.assertPlayersReady(match);
       const tournament = await this.requireTournament(toObjectIdString(match.tournamentId));
       const gameType = match.gameType ?? tournament.gameType ?? GameType.LUDO;
       const players = match.players.map((player) => ({
@@ -235,13 +237,13 @@ export class MatchesService {
         gameType === GameType.SNAKES
           ? createSnakesMatchState({
               matchId,
-              initialConnected: false,
+              initialConnected: true,
               rules: tournament.rules as Partial<import('@ludo-game/shared-types').SnakesRules>,
               players,
             })
           : createMatchState({
               matchId,
-              initialConnected: false,
+              initialConnected: true,
               rules: tournament.rules as Partial<import('@ludo-game/shared-types').LudoRules>,
               players,
             });
@@ -420,10 +422,21 @@ export class MatchesService {
   async setConnected(matchId: string, userId: string, connected: boolean): Promise<void> {
     await this.enqueue(matchId, async () => {
       const match = await this.state.loadMatch(matchId);
-      if (!match.gameState) {
+      if (!match.players.some((player) => toObjectIdString(player.userId) === userId)) {
         return;
       }
-      if (!match.players.some((player) => toObjectIdString(player.userId) === userId)) {
+      const playing = match.status === MatchStatus.LIVE || match.status === MatchStatus.PAUSED;
+      if (!playing) {
+        const player = match.players.find((entry) => toObjectIdString(entry.userId) === userId);
+        if (player && Boolean(player.ready) !== connected) {
+          player.ready = connected;
+          match.markModified('players');
+          await this.state.persistMatch(match);
+          this.emitReady(match, userId, connected);
+          await this.publishAdmin();
+        }
+      }
+      if (!match.gameState) {
         return;
       }
       const gameState = {
@@ -440,6 +453,64 @@ export class MatchesService {
       });
       this.emitLive(matchId, 'match-state-updated', { matchId, state: gameState });
       logEvent(connected ? 'Player connected' : 'Player disconnected', { matchId, userId });
+    });
+  }
+
+  async removePlayer(matchId: string, userId: string): Promise<MatchDetailDto> {
+    return this.enqueue(matchId, async () => {
+      const match = await this.state.loadMatch(matchId);
+      const seated = match.players.find((player) => toObjectIdString(player.userId) === userId);
+      if (!seated) {
+        throw new NotFoundException('That player is not in this match');
+      }
+      if (match.status === MatchStatus.COMPLETED || match.status === MatchStatus.CANCELLED) {
+        throw new BadRequestException('Cannot remove a player from a finished match');
+      }
+
+      if (!match.gameState || match.status === MatchStatus.WAITING || match.status === MatchStatus.READY) {
+        match.players = match.players.filter(
+          (player) => toObjectIdString(player.userId) !== userId
+        ) as typeof match.players;
+        match.markModified('players');
+        match.status = match.players.length >= 2 ? MatchStatus.READY : MatchStatus.WAITING;
+        const saved = await this.state.persistMatch(match);
+        this.emitReady(saved, userId, false);
+        await this.publishAdmin();
+        logEvent('Player removed before start', { matchId, userId });
+        return this.toDetailDto(saved);
+      }
+
+      let result;
+      try {
+        result = removePlayerFromMatch(match.gameState, userId);
+      } catch (error) {
+        if (error instanceof GameEngineError) {
+          throw new BadRequestException(error.message);
+        }
+        throw error;
+      }
+      const extra: Partial<Match> = {};
+      if (result.state.status === MatchStatus.COMPLETED) {
+        extra.finishedAt = new Date();
+        extra.winnerIds = result.state.rankings.map((id) => new Types.ObjectId(id));
+      }
+      const saved = await this.state.updateMatchState(matchId, result.state, extra);
+      await this.recordEngineEvents(saved, result.events, userId);
+      if (result.state.status === MatchStatus.COMPLETED) {
+        await this.completeMatch(saved, result.state);
+      }
+      this.emitLive(matchId, 'match-state-updated', { matchId, state: result.state });
+      if (result.state.status === MatchStatus.COMPLETED) {
+        this.emitLive(matchId, 'match-finished', {
+          matchId,
+          rankings: result.state.rankings,
+          state: result.state,
+        });
+        logEvent('Match completed', { matchId, winnerId: result.state.rankings[0] ?? '' });
+      }
+      await this.publishAdmin();
+      logEvent('Player removed from match', { matchId, userId });
+      return this.toDetailDto(saved, result.state);
     });
   }
 
@@ -556,6 +627,28 @@ export class MatchesService {
     }
   }
 
+  private emitReady(match: MatchDocument, playerId: string, ready: boolean): void {
+    const matchId = toObjectIdString(match._id);
+    this.emitLive(matchId, 'player-ready', {
+      matchId,
+      playerId,
+      ready,
+      players: match.players.map((player) => toPlayerDto(player, match.gameState)),
+    });
+  }
+
+  private assertPlayersReady(match: MatchDocument): void {
+    if (match.players.length < 2) {
+      throw new BadRequestException('Assign players before starting');
+    }
+    const readyCount = match.players.filter((player) => player.ready).length;
+    if (readyCount < match.players.length) {
+      throw new BadRequestException(
+        `Every player must join the match before it can start (${readyCount}/${match.players.length} ready)`
+      );
+    }
+  }
+
   private async completeMatch(match: MatchDocument, gameState: GameState): Promise<void> {
     const rankings = gameState.rankings.map((userId, index) => {
       const player = match.players.find((entry) => toObjectIdString(entry.userId) === userId);
@@ -614,6 +707,7 @@ export class MatchesService {
       GameEventType.PIECE_CAPTURED,
       GameEventType.PIECE_REACHED_HOME,
       GameEventType.PLAYER_FINISHED,
+      GameEventType.PLAYER_REMOVED,
       GameEventType.TURN_CHANGED,
       GameEventType.MATCH_FINISHED,
       GameEventType.LANDED_ON_SNAKE,

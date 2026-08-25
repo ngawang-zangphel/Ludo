@@ -133,7 +133,7 @@ export function buildSnakeGraphic(from: number, to: number, index: number): Snak
   const tail = cellCenter(to);
   const samples = sampleSnake(head, tail, index);
   const body = samples.slice(3, Math.max(4, samples.length));
-  const outline = ribbon(body, 1.72, 0.07);
+  const outline = ribbon(body, 1.02, 0.05);
   const spots: SnakeSpot[] = [];
   const start = Math.round(samples.length * 0.14);
   const end = Math.round(samples.length * 0.9);
@@ -146,7 +146,7 @@ export function buildSnakeGraphic(from: number, to: number, index: number): Snak
       continue;
     }
     const t = sampleIndex / Math.max(1, samples.length - 1);
-    const local = lerp(1.72, 0.14, t * t * t);
+    const local = lerp(1.02, 0.1, t * t * t);
     spots.push({
       x: sample.point.x,
       y: sample.point.y,

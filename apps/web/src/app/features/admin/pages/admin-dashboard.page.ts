@@ -12,7 +12,14 @@ import { MatchStatus, MatchSummaryDto } from '@ludo-game/shared-types';
 import { ArenaApiService } from '../../../core/api/arena-api.service';
 import { AdminRealtimeService } from '../../../core/socket/admin-realtime.service';
 import { StatusBadgeComponent } from '../../../shared/ui/status-badge';
-import { formatDuration, gameTypeLabel, httpErrorMessage, playerNames } from '../../../shared/format';
+import {
+  allPlayersReady,
+  formatDuration,
+  gameTypeLabel,
+  httpErrorMessage,
+  playerNames,
+  readyCountLabel,
+} from '../../../shared/format';
 
 type Filter = 'ALL' | MatchStatus;
 
@@ -77,6 +84,9 @@ type Filter = 'ALL' | MatchStatus;
                     Turn: {{ match.currentPlayerName }} ·
                   }
                   Duration {{ formatDuration(match.durationSeconds) }}
+                  @if (match.status === MatchStatus.WAITING || match.status === MatchStatus.READY) {
+                    · {{ readyCountLabel(match) }}
+                  }
                   @if (realtime.broadcastMatchId() === match.id) {
                     · <span class="text-arena-gold">On broadcast</span>
                   }
@@ -84,13 +94,46 @@ type Filter = 'ALL' | MatchStatus;
               </div>
               <ludo-status-badge [status]="match.status" />
             </div>
+            @if (match.players.length) {
+              <div class="mt-3 flex flex-wrap gap-2">
+                @for (player of match.players; track player.userId) {
+                  <span class="inline-flex items-center gap-2 rounded-full border border-arena-line px-3 py-1 text-xs">
+                    {{ player.name }}
+                    @if (player.eliminated) {
+                      <span class="text-piece-red">Removed</span>
+                    } @else if (match.status === MatchStatus.WAITING || match.status === MatchStatus.READY) {
+                      <span [class.text-arena-gold]="player.ready" [class.text-arena-mist/50]="!player.ready">
+                        {{ player.ready ? 'Ready' : 'Waiting' }}
+                      </span>
+                    }
+                    @if (canRemove(match) && !player.eliminated) {
+                      <button
+                        type="button"
+                        class="text-piece-red hover:underline"
+                        (click)="removeSeat(match, player.userId, player.name)"
+                      >
+                        Remove
+                      </button>
+                    }
+                  </span>
+                }
+              </div>
+            }
             <div class="mt-4 flex flex-wrap gap-2">
               <a class="btn-ghost" [routerLink]="['/admin/matches', match.id]">Watch</a>
               <button type="button" class="btn-ghost" (click)="run(() => api.broadcast(match.id))">
                 Broadcast
               </button>
               @if (match.status === MatchStatus.READY || match.status === MatchStatus.WAITING) {
-                <button type="button" class="btn-gold" (click)="run(() => api.start(match.id))">Start</button>
+                <button
+                  type="button"
+                  class="btn-gold disabled:cursor-not-allowed disabled:opacity-40"
+                  [disabled]="!allPlayersReady(match)"
+                  [title]="allPlayersReady(match) ? '' : 'Every seated player must join the match first'"
+                  (click)="run(() => api.start(match.id))"
+                >
+                  Start
+                </button>
               }
               @if (match.status === MatchStatus.LIVE) {
                 <button type="button" class="btn-ghost" (click)="run(() => api.pause(match.id))">Pause</button>
@@ -156,6 +199,8 @@ export class AdminDashboardPage implements OnInit, OnDestroy {
   readonly formatDuration = formatDuration;
   readonly playerNames = playerNames;
   readonly gameTypeLabel = gameTypeLabel;
+  readonly allPlayersReady = allPlayersReady;
+  readonly readyCountLabel = readyCountLabel;
 
   readonly visible = computed(() => {
     const filter = this.filter();
@@ -183,6 +228,21 @@ export class AdminDashboardPage implements OnInit, OnDestroy {
 
   labelFor(item: Filter): string {
     return String(item).replace(/_/g, ' ');
+  }
+
+  canRemove(match: MatchSummaryDto): boolean {
+    return match.status !== MatchStatus.COMPLETED && match.status !== MatchStatus.CANCELLED;
+  }
+
+  async removeSeat(match: MatchSummaryDto, userId: string, name: string): Promise<void> {
+    const live = match.status === MatchStatus.LIVE || match.status === MatchStatus.PAUSED;
+    const message = live
+      ? `Remove ${name} from this match? They will be out of the game.`
+      : `Remove ${name} from this table?`;
+    if (!window.confirm(message)) {
+      return;
+    }
+    await this.run(() => this.api.removePlayer(match.id, userId));
   }
 
   async run(action: () => Promise<unknown>): Promise<void> {

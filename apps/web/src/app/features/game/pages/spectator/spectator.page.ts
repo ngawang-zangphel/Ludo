@@ -3,11 +3,12 @@ import {
   Component,
   OnDestroy,
   OnInit,
+  computed,
   inject,
   signal,
 } from '@angular/core';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
-import { MatchDetailDto } from '@ludo-game/shared-types';
+import { MatchDetailDto, MatchStatus } from '@ludo-game/shared-types';
 import { ArenaApiService, MatchNeighbors } from '../../../../core/api/arena-api.service';
 import { GameSocketService } from '../../services/game-socket.service';
 import { GameTableComponent } from '../../components/game-table/game-table';
@@ -66,6 +67,32 @@ import { httpErrorMessage } from '../../../../shared/format';
         <p class="mx-auto max-w-7xl text-piece-red">{{ error() }}</p>
       }
 
+      @if (seats().length) {
+        <div class="mx-auto mb-4 flex max-w-7xl flex-wrap gap-2">
+          @for (player of seats(); track player.userId) {
+            <span class="inline-flex items-center gap-2 rounded-full border border-arena-line px-3 py-1 text-xs">
+              {{ player.name }}
+              @if (player.eliminated) {
+                <span class="text-piece-red">Removed</span>
+              } @else if (!game.state()) {
+                <span [class.text-arena-gold]="player.ready" [class.text-arena-mist/50]="!player.ready">
+                  {{ player.ready ? 'Ready' : 'Waiting' }}
+                </span>
+              }
+              @if (canRemove() && !player.eliminated) {
+                <button
+                  type="button"
+                  class="text-piece-red hover:underline"
+                  (click)="removePlayer(player.userId)"
+                >
+                  Remove
+                </button>
+              }
+            </span>
+          }
+        </div>
+      }
+
       @if (game.state(); as state) {
         <ludo-game-table
           [state]="state"
@@ -82,6 +109,7 @@ import { httpErrorMessage } from '../../../../shared/format';
       } @else {
         <div class="mx-auto max-w-xl rounded-3xl border border-dashed border-arena-line p-10 text-center text-arena-mist/70">
           This match has not started yet.
+          <p class="mt-2 text-sm">Players must join from their invite before you can start from the dashboard.</p>
         </div>
       }
     </div>
@@ -95,6 +123,23 @@ export class SpectatorPage implements OnInit, OnDestroy {
   readonly detail = signal<MatchDetailDto | null>(null);
   readonly neighbors = signal<MatchNeighbors | null>(null);
   readonly error = signal<string | null>(null);
+
+  readonly seats = computed(() => {
+    const roster = this.game.roster();
+    const state = this.game.state();
+    const source = roster.length ? roster : (this.detail()?.players ?? []);
+    return source.map((player) => ({
+      ...player,
+      eliminated:
+        player.eliminated === true ||
+        state?.players.find((entry) => entry.id === player.userId)?.eliminated === true,
+    }));
+  });
+
+  readonly canRemove = computed(() => {
+    const status = this.game.status() ?? this.detail()?.status;
+    return status !== MatchStatus.COMPLETED && status !== MatchStatus.CANCELLED;
+  });
 
   ngOnInit(): void {
     this.route.paramMap.subscribe((params) => {
@@ -117,6 +162,29 @@ export class SpectatorPage implements OnInit, OnDestroy {
     }
   }
 
+  async removePlayer(userId: string): Promise<void> {
+    const match = this.detail();
+    const seat = this.seats().find((player) => player.userId === userId);
+    if (!match) {
+      return;
+    }
+    const live = match.status === MatchStatus.LIVE || match.status === MatchStatus.PAUSED || !!this.game.state();
+    const message = live
+      ? `Remove ${seat?.name ?? 'this player'} from this match? They will be out of the game.`
+      : `Remove ${seat?.name ?? 'this player'} from this table?`;
+    if (!window.confirm(message)) {
+      return;
+    }
+    try {
+      const detail = await this.api.removePlayer(match.id, userId);
+      this.detail.set(detail);
+      this.game.seed(detail.gameState);
+      this.game.seedRoster(detail.players);
+    } catch (error) {
+      this.error.set(httpErrorMessage(error));
+    }
+  }
+
   go(matchId: string | null | undefined): void {
     if (matchId) {
       void this.router.navigate(['/admin/matches', matchId]);
@@ -131,6 +199,7 @@ export class SpectatorPage implements OnInit, OnDestroy {
       this.neighbors.set(neighbors);
       this.game.attach(matchId, 'spectator');
       this.game.seed(detail.gameState);
+      this.game.seedRoster(detail.players);
     } catch (error) {
       this.error.set(httpErrorMessage(error));
     }

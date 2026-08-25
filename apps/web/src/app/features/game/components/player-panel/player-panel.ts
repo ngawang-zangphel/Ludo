@@ -15,6 +15,7 @@ import { HomePathComponent } from '../home-path/home-path';
       [class.bg-arena-panel/90]="true"
       [class.ring-2]="active()"
       [class.ring-arena-gold]="active()"
+      [class.opacity-50]="player().eliminated"
     >
       <div class="mb-3 flex items-center justify-between gap-3">
         <div>
@@ -27,9 +28,13 @@ import { HomePathComponent } from '../home-path/home-path';
         ></span>
       </div>
       <p class="mb-3 text-xs text-arena-mist/60">
-        {{ player().connected ? 'Connected' : 'Reconnecting…' }}
-        @if (player().finishedPosition) {
-          · Finished {{ ordinal() }}
+        @if (player().eliminated) {
+          Removed
+        } @else {
+          {{ player().connected ? 'Connected' : 'Reconnecting…' }}
+          @if (player().finishedPosition) {
+            · Finished {{ ordinal() }}
+          }
         }
       </p>
       <ludo-home-path [player]="player()" />

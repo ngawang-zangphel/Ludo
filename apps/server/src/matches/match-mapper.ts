@@ -2,10 +2,11 @@ import {
   GameState,
   GameType,
   MatchDetailDto,
+  MatchPlayerDto,
   MatchStatus,
   MatchSummaryDto,
 } from '@ludo-game/shared-types';
-import { MatchDocument } from './schemas/match.schema';
+import { MatchDocument, MatchPlayer } from './schemas/match.schema';
 import { toObjectIdString } from '../common/types';
 
 export function durationSeconds(startedAt: Date | null, finishedAt: Date | null): number | null {
@@ -34,11 +35,7 @@ export function toSummary(
     roundNumber: match.roundNumber,
     matchNumber: match.matchNumber,
     status: (state?.status as MatchStatus | undefined) ?? match.status,
-    players: match.players.map((player) => ({
-      userId: toObjectIdString(player.userId),
-      name: player.name,
-      color: player.color,
-    })),
+    players: match.players.map((player) => toPlayerDto(player, state)),
     currentPlayerId: currentId,
     currentPlayerName: current?.name ?? null,
     winnerIds,
@@ -50,6 +47,18 @@ export function toSummary(
     durationSeconds: durationSeconds(match.startedAt, match.finishedAt),
     turnNumber: state?.turnNumber ?? 0,
     updatedAt: match.updatedAt ? match.updatedAt.toISOString() : new Date().toISOString(),
+  };
+}
+
+export function toPlayerDto(player: MatchPlayer, gameState?: GameState | null): MatchPlayerDto {
+  const userId = toObjectIdString(player.userId);
+  const seated = gameState?.players.find((entry) => entry.id === userId);
+  return {
+    userId,
+    name: player.name,
+    color: player.color,
+    ready: Boolean(player.ready),
+    eliminated: seated?.eliminated === true,
   };
 }
 

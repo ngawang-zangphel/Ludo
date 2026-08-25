@@ -7,11 +7,13 @@ import {
   isSnakesState,
   MatchErrorPayload,
   MatchFinishedPayload,
+  MatchPlayerDto,
   MatchStatePayload,
   MatchStatus,
   MatchStatusPayload,
   PieceMovedPayload,
   PieceMoveAnimation,
+  PlayerReadyPayload,
   TurnPhase,
 } from '@ludo-game/shared-types';
 import { getPieceCoordinate, getSnakesSquareCoordinate } from '@ludo-game/game-engine';
@@ -39,6 +41,7 @@ export class GameSocketService {
   readonly errorMessage = signal<string | null>(null);
   readonly lastEvent = signal<string | null>(null);
   readonly status = signal<MatchStatus | null>(null);
+  readonly roster = signal<MatchPlayerDto[]>([]);
 
   readonly currentPlayer = computed(() => {
     const match = this.state();
@@ -59,6 +62,7 @@ export class GameSocketService {
       match.status === MatchStatus.LIVE &&
       match.turnPhase === TurnPhase.WAITING_FOR_ROLL &&
       this.isMyTurn() &&
+      !this.me()?.eliminated &&
       !this.animating() &&
       this.diceUi() !== 'ROLLING'
     );
@@ -122,6 +126,11 @@ export class GameSocketService {
         this.status.set(payload.state.status);
       }
     });
+    this.listen('player-ready', (payload: PlayerReadyPayload) => {
+      if (payload.matchId === this.matchId()) {
+        this.roster.set(payload.players);
+      }
+    });
     this.listen('broadcast-match-changed', (payload: BroadcastMatchChangedPayload) => {
       if (this.mode !== 'broadcast') {
         return;
@@ -147,6 +156,10 @@ export class GameSocketService {
     }
   }
 
+  seedRoster(players: MatchPlayerDto[]): void {
+    this.roster.set(players);
+  }
+
   detach(): void {
     const socket = this.sockets.client;
     const matchId = this.matchId();
@@ -161,6 +174,7 @@ export class GameSocketService {
     this.unsubs = [];
     this.matchId.set(null);
     this.state.set(null);
+    this.roster.set([]);
     this.errorMessage.set(null);
     this.animating.set(false);
     this.movingPieceId.set(null);

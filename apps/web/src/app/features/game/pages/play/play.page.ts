@@ -10,6 +10,7 @@ import {
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { MatchDetailDto, MatchStatus } from '@ludo-game/shared-types';
 import { ArenaApiService } from '../../../../core/api/arena-api.service';
+import { AuthService } from '../../../../core/auth/auth.service';
 import { GameSocketService } from '../../services/game-socket.service';
 import { GameTableComponent } from '../../components/game-table/game-table';
 import { StatusBadgeComponent } from '../../../../shared/ui/status-badge';
@@ -56,9 +57,24 @@ import { httpErrorMessage } from '../../../../shared/format';
           (pieceSelect)="game.move($event)"
           (roll)="game.roll()"
         />
+      } @else if (removed()) {
+        <div class="mx-auto max-w-xl rounded-3xl border border-dashed border-piece-red/40 p-10 text-center text-piece-red">
+          You are not in this match.
+        </div>
       } @else {
         <div class="mx-auto max-w-xl rounded-3xl border border-dashed border-arena-line p-10 text-center text-arena-mist/70">
-          Waiting for the admin to start this match.
+          <p>Waiting for the admin to start this match.</p>
+          <p class="mt-2 text-xs uppercase tracking-[0.2em] text-arena-gold">You are ready</p>
+          <ul class="mt-6 space-y-2 text-left text-sm">
+            @for (player of game.roster(); track player.userId) {
+              <li class="flex items-center justify-between rounded-2xl border border-arena-line px-4 py-2">
+                <span>{{ player.name }}</span>
+                <span [class.text-arena-gold]="player.ready" [class.text-arena-mist/50]="!player.ready">
+                  {{ player.ready ? 'Ready' : 'Waiting' }}
+                </span>
+              </li>
+            }
+          </ul>
         </div>
       }
 
@@ -75,12 +91,18 @@ import { httpErrorMessage } from '../../../../shared/format';
 export class PlayPage implements OnInit, OnDestroy {
   private readonly route = inject(ActivatedRoute);
   private readonly api = inject(ArenaApiService);
+  private readonly auth = inject(AuthService);
   readonly game = inject(GameSocketService);
   readonly detail = signal<MatchDetailDto | null>(null);
   readonly error = signal<string | null>(null);
 
   readonly status = computed(() => this.game.status() ?? this.detail()?.status ?? null);
-  readonly canPlay = computed(() => !!this.game.me() && this.status() === MatchStatus.LIVE);
+  readonly canPlay = computed(() => !!this.game.me() && this.status() === MatchStatus.LIVE && !this.game.me()?.eliminated);
+  readonly removed = computed(() => {
+    const roster = this.game.roster();
+    const userId = this.auth.user()?.id;
+    return roster.length > 0 && !!userId && !roster.some((player) => player.userId === userId);
+  });
 
   async ngOnInit(): Promise<void> {
     const matchId = this.route.snapshot.paramMap.get('matchId');
@@ -91,6 +113,7 @@ export class PlayPage implements OnInit, OnDestroy {
       this.detail.set(await this.api.match(matchId));
       this.game.attach(matchId, 'player');
       this.game.seed(this.detail()?.gameState ?? null);
+      this.game.seedRoster(this.detail()?.players ?? []);
     } catch (error) {
       this.error.set(httpErrorMessage(error));
     }

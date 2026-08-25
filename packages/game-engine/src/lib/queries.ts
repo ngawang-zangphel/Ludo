@@ -44,6 +44,7 @@ export function findPiece(player: LudoPlayer, pieceId: string): LudoPiece {
 
 export function isPlayerFinished(player: LudoPlayer): boolean {
   return (
+    player.eliminated === true ||
     player.finishedPosition !== undefined ||
     player.pieces.every((piece) => piece.state === PieceState.HOME)
   );
