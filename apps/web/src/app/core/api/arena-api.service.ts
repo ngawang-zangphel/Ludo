@@ -7,6 +7,8 @@ import {
   MatchStatus,
   MatchSummaryDto,
   ParticipantDto,
+  SnakesBoardLayout,
+  SnakesCustomBoardDto,
   TournamentDto,
   TournamentStatus,
   UserDto,
@@ -156,6 +158,30 @@ export class ArenaApiService {
 
   deleteTournament(id: string): Promise<{ ok: true }> {
     return firstValueFrom(this.http.delete<{ ok: true }>(`/api/tournaments/${id}`));
+  }
+
+  snakesBoards(): Promise<SnakesCustomBoardDto[]> {
+    return firstValueFrom(this.http.get<SnakesCustomBoardDto[]>('/api/snakes-boards'));
+  }
+
+  createSnakesBoard(name: string, layout: SnakesBoardLayout): Promise<SnakesCustomBoardDto> {
+    return firstValueFrom(
+      this.http.post<SnakesCustomBoardDto>('/api/snakes-boards', { name, layout })
+    );
+  }
+
+  updateSnakesBoard(
+    id: string,
+    name: string,
+    layout: SnakesBoardLayout
+  ): Promise<SnakesCustomBoardDto> {
+    return firstValueFrom(
+      this.http.patch<SnakesCustomBoardDto>(`/api/snakes-boards/${id}`, { name, layout })
+    );
+  }
+
+  deleteSnakesBoard(id: string): Promise<{ ok: true }> {
+    return firstValueFrom(this.http.delete<{ ok: true }>(`/api/snakes-boards/${id}`));
   }
 
   participants(tournamentId: string): Promise<ParticipantDto[]> {

@@ -19,6 +19,7 @@ import {
   resolveSnakesRules,
   SNAKES_LEVEL_LABEL,
   SnakesBoardLayout,
+  SnakesCustomBoardDto,
   SnakesLevelId,
   TournamentDto,
   TournamentStatus,
@@ -27,31 +28,52 @@ import {
 import { ArenaApiService } from '../../../core/api/arena-api.service';
 import { StatusBadgeComponent } from '../../../shared/ui/status-badge';
 import { httpErrorMessage, playerNames } from '../../../shared/format';
-import { SnakesLayoutEditorComponent } from '../../game/components/snakes-layout-editor/snakes-layout-editor';
+import { SnakesBoardComponent } from '../../game/components/snakes-board/snakes-board';
 import { SnakesPresetPickerComponent } from '../../game/components/snakes-preset-picker/snakes-preset-picker';
 
 @Component({
   selector: 'ludo-admin-tournaments-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [FormsModule, RouterLink, StatusBadgeComponent, SnakesLayoutEditorComponent, SnakesPresetPickerComponent],
+  imports: [
+    FormsModule,
+    RouterLink,
+    StatusBadgeComponent,
+    SnakesBoardComponent,
+    SnakesPresetPickerComponent,
+  ],
   template: `
     <div class="mx-auto max-w-6xl px-4 py-8">
-      <a routerLink="/admin" class="text-xs uppercase tracking-[0.3em] text-arena-gold hover:underline">Dashboard</a>
-      <h1 class="mt-2 font-display text-3xl font-bold text-white">Tournaments</h1>
+      <div class="flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <a routerLink="/admin" class="text-xs uppercase tracking-[0.3em] text-arena-gold hover:underline">
+            Dashboard
+          </a>
+          <h1 class="mt-2 font-display text-3xl font-bold text-white">Tournaments</h1>
+        </div>
+        <a
+          routerLink="/admin/boards"
+          class="rounded-full border border-arena-gold px-4 py-2 text-sm text-arena-gold"
+        >
+          Custom boards
+        </a>
+      </div>
 
       @if (error()) {
         <p class="mt-4 text-piece-red">{{ error() }}</p>
       }
 
       <section class="mt-6 grid gap-4 lg:grid-cols-2">
-        <form class="rounded-3xl border border-arena-line bg-arena-navy/80 p-5" (ngSubmit)="createTournament()">
+        <form
+          class="rounded-3xl border border-arena-line bg-arena-navy/80 p-5"
+          novalidate
+          (ngSubmit)="createTournament()"
+        >
           <h2 class="font-display text-lg">New tournament</h2>
           <input
             class="mt-3 w-full rounded-xl border border-arena-line bg-arena-ink px-3 py-2"
             name="tournamentName"
             placeholder="Tournament name"
             [(ngModel)]="tournamentName"
-            required
           />
           <div class="mt-3 flex gap-2">
             <button
@@ -84,17 +106,41 @@ import { SnakesPresetPickerComponent } from '../../game/components/snakes-preset
                 (valueChange)="setCreateLevel($event)"
               />
               @if (snakesLevelId === SnakesLevelId.CUSTOM) {
+                <div class="mt-3 space-y-3">
+                  <label class="block">
+                    <span class="text-xs uppercase tracking-[0.25em] text-arena-gold/80">Saved board</span>
+                    <select
+                      class="field mt-2 w-full"
+                      name="selectedBoardId"
+                      [ngModel]="selectedBoardId"
+                      (ngModelChange)="onSelectBoard($event)"
+                    >
+                      <option value="">Select a custom board</option>
+                      @for (board of customBoards(); track board.id) {
+                        <option [value]="board.id">{{ board.name }}</option>
+                      }
+                    </select>
+                  </label>
+                  @if (customBoards().length === 0) {
+                    <p class="text-sm text-arena-mist/60">
+                      No custom boards yet.
+                      <a routerLink="/admin/boards" class="text-arena-gold hover:underline">Create one</a>
+                    </p>
+                  } @else if (selectedBoardId) {
+                    <arena-snakes-board [layout]="customLayout" [compact]="true" />
+                  }
+                </div>
+              } @else {
                 <div class="mt-3">
-                  <arena-snakes-layout-editor
-                    [layout]="customLayout"
-                    [compact]="true"
-                    (layoutChange)="customLayout = $event"
-                  />
+                  <arena-snakes-board [layout]="customLayout" [compact]="true" />
                 </div>
               }
             </div>
           }
-          <button class="mt-3 rounded-full bg-arena-gold px-4 py-2 text-sm font-semibold text-arena-ink" type="submit">
+          <button
+            class="mt-3 rounded-full bg-arena-gold px-4 py-2 text-sm font-semibold text-arena-ink"
+            type="submit"
+          >
             Create
           </button>
         </form>
@@ -207,6 +253,26 @@ import { SnakesPresetPickerComponent } from '../../game/components/snakes-preset
       </section>
 
       @if (selected(); as tournament) {
+        @if (tournament.gameType === GameType.SNAKES && isSnakesRules(tournament.rules)) {
+          <section class="mt-8 rounded-3xl border border-arena-line bg-arena-navy/80 p-5">
+            <div class="flex flex-wrap items-end justify-between gap-3">
+              <div>
+                <p class="text-xs uppercase tracking-[0.25em] text-arena-gold">Board</p>
+                <h2 class="mt-1 font-display text-lg text-white">
+                  {{ SNAKES_LEVEL_LABEL[tournament.rules.levelId] || 'Classic' }} preview
+                </h2>
+                <p class="mt-1 text-sm text-arena-mist/60">
+                  {{ tournament.rules.layout.snakes.length }} snakes ·
+                  {{ tournament.rules.layout.ladders.length }} ladders
+                </p>
+              </div>
+            </div>
+            <div class="mt-4 max-w-md">
+              <arena-snakes-board [layout]="tournament.rules.layout" [compact]="true" />
+            </div>
+          </section>
+        }
+
         <section class="mt-8 grid gap-6 lg:grid-cols-2">
           <div class="rounded-3xl border border-arena-line bg-arena-navy/80 p-5">
             <div class="flex items-center justify-between">
@@ -377,6 +443,7 @@ export class AdminTournamentsPage implements OnInit {
   private readonly api = inject(ArenaApiService);
   readonly statuses = Object.values(TournamentStatus);
   readonly tournaments = signal<TournamentDto[]>([]);
+  readonly customBoards = signal<SnakesCustomBoardDto[]>([]);
   readonly selected = signal<TournamentDto | null>(null);
   readonly participants = signal<ParticipantDto[]>([]);
   readonly matches = signal<MatchSummaryDto[]>([]);
@@ -450,6 +517,7 @@ export class AdminTournamentsPage implements OnInit {
   tournamentName = '';
   tournamentGameType = GameType.LUDO;
   snakesLevelId = SnakesLevelId.CLASSIC;
+  selectedBoardId = '';
   customLayout: SnakesBoardLayout = cloneSnakesLayout(resolveSnakesRules().layout);
   playerName = '';
   playerEmail = '';
@@ -471,15 +539,42 @@ export class AdminTournamentsPage implements OnInit {
 
   setCreateLevel(levelId: SnakesLevelId): void {
     this.snakesLevelId = levelId;
-    if (levelId !== SnakesLevelId.CUSTOM) {
-      this.customLayout = cloneSnakesLayout(resolveSnakesRules({ levelId }).layout);
+    this.selectedBoardId = '';
+    if (levelId === SnakesLevelId.CUSTOM) {
+      const first = this.customBoards()[0];
+      if (first) {
+        this.onSelectBoard(first.id);
+      } else {
+        this.customLayout = cloneSnakesLayout(resolveSnakesRules().layout);
+      }
+      return;
     }
+    this.customLayout = cloneSnakesLayout(resolveSnakesRules({ levelId }).layout);
+  }
+
+  onSelectBoard(boardId: string): void {
+    this.selectedBoardId = boardId;
+    const board = this.customBoards().find((item) => item.id === boardId);
+    this.customLayout = board
+      ? cloneSnakesLayout(board.layout)
+      : cloneSnakesLayout(resolveSnakesRules().layout);
   }
 
   async createTournament(): Promise<void> {
+    const name = this.tournamentName.trim();
+    if (!name) {
+      this.error.set('Enter a tournament name.');
+      return;
+    }
+    if (this.tournamentGameType === GameType.SNAKES && this.snakesLevelId === SnakesLevelId.CUSTOM) {
+      if (!this.selectedBoardId) {
+        this.error.set('Select a saved custom board, or create one under Custom boards.');
+        return;
+      }
+    }
     await this.guard(async () => {
       const created = await this.api.createTournament(
-        this.tournamentName,
+        name,
         undefined,
         this.tournamentGameType,
         this.tournamentGameType === GameType.SNAKES ? this.snakesLevelId : undefined,
@@ -490,6 +585,7 @@ export class AdminTournamentsPage implements OnInit {
       this.tournamentName = '';
       this.tournamentGameType = GameType.LUDO;
       this.snakesLevelId = SnakesLevelId.CLASSIC;
+      this.selectedBoardId = '';
       this.customLayout = cloneSnakesLayout(resolveSnakesRules().layout);
       await this.refresh();
       await this.select(created);
@@ -687,9 +783,14 @@ export class AdminTournamentsPage implements OnInit {
 
   private async refresh(): Promise<void> {
     await this.guard(async () => {
-      const [tournaments, users] = await Promise.all([this.api.tournaments(), this.api.users()]);
+      const [tournaments, users, boards] = await Promise.all([
+        this.api.tournaments(),
+        this.api.users(),
+        this.api.snakesBoards(),
+      ]);
       this.tournaments.set(tournaments);
       this.users.set(users);
+      this.customBoards.set(boards);
       if (!this.selected() && tournaments[0]) {
         await this.select(tournaments[0]);
       }

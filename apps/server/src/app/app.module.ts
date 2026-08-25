@@ -9,6 +9,7 @@ import { GameModule } from '../game/game.module';
 import { BroadcastModule } from '../broadcast/broadcast.module';
 import { RealtimeModule } from '../realtime/realtime.module';
 import { SeedModule } from '../seed/seed.module';
+import { SnakesBoardsModule } from '../snakes-boards/snakes-boards.module';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 
@@ -42,6 +43,7 @@ import { AppService } from './app.service';
     UsersModule,
     AuthModule,
     TournamentsModule,
+    SnakesBoardsModule,
     MatchesModule,
     BroadcastModule,
     GameModule,

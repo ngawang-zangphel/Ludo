@@ -63,6 +63,14 @@ export const appRoutes: Route[] = [
       ),
   },
   {
+    path: 'admin/boards',
+    canActivate: [adminGuard],
+    loadComponent: () =>
+      import('./features/admin/pages/admin-snakes-boards.page').then(
+        (module) => module.AdminSnakesBoardsPage
+      ),
+  },
+  {
     path: 'admin/matches/:matchId',
     canActivate: [adminGuard],
     loadComponent: () =>

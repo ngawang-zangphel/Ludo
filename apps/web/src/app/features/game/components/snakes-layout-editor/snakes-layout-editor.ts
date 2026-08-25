@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, input, output, signal } from '@angular/core';
 import {
   applySnakesBoardClick,
+  emptySnakesLayout,
   SnakesBoardLayout,
   SnakesEditorTool,
 } from '@ludo-game/shared-types';
@@ -26,6 +27,13 @@ import { SnakesBoardComponent } from '../snakes-board/snakes-board';
             {{ option.label }}
           </button>
         }
+        <button
+          type="button"
+          class="rounded-full border border-arena-line px-3 py-1.5 text-sm text-arena-mist/80 hover:border-arena-gold hover:text-arena-gold"
+          (click)="clearBoard()"
+        >
+          Clear board
+        </button>
       </div>
       <p class="text-sm" [class.text-piece-red]="error()" [class.text-arena-mist/70]="!error()">
         {{ error() || hint() }}
@@ -62,6 +70,13 @@ export class SnakesLayoutEditorComponent {
     this.pendingFrom.set(null);
     this.error.set(null);
     this.hint.set(this.tools.find((item) => item.id === tool)?.hint ?? '');
+  }
+
+  clearBoard(): void {
+    this.pendingFrom.set(null);
+    this.error.set(null);
+    this.hint.set('Board cleared. Place snakes and ladders.');
+    this.layoutChange.emit(emptySnakesLayout());
   }
 
   applySquare(square: number): void {

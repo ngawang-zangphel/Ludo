@@ -52,7 +52,7 @@ export class MatchStateService {
             ...extra,
           },
         },
-        { new: true }
+        { returnDocument: 'after' }
       )
       .exec();
 

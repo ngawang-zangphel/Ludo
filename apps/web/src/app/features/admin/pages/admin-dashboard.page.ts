@@ -47,6 +47,12 @@ type Filter = 'ALL' | MatchStatus;
           >
             Tournaments
           </a>
+          <a
+            routerLink="/admin/boards"
+            class="rounded-full border border-arena-gold px-4 py-2 text-sm text-arena-gold"
+          >
+            Custom boards
+          </a>
         </div>
       </div>
 

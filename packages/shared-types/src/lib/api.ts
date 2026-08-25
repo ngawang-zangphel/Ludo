@@ -11,6 +11,7 @@ import {
   TournamentStatus,
   UserRole,
 } from './enums';
+import { SnakesBoardLayout } from './snakes-layout';
 
 export interface UserDto {
   id: string;
@@ -18,6 +19,14 @@ export interface UserDto {
   name: string;
   role: UserRole;
   online?: boolean;
+}
+
+export interface SnakesCustomBoardDto {
+  id: string;
+  name: string;
+  layout: SnakesBoardLayout;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface AuthResponseDto {
