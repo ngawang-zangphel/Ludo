@@ -102,7 +102,13 @@ export class GameSocketService {
       void this.onPieceMoved(payload);
     });
     this.listen('match-error', (payload: MatchErrorPayload) => {
-      this.diceUi.set('WAITING');
+      if (this.diceUi() === 'ROLLING') {
+        this.diceUi.set('WAITING');
+      }
+      // Benign when client and server both fire auto-roll at the deadline.
+      if (/already been rolled/i.test(payload.message)) {
+        return;
+      }
       this.errorMessage.set(payload.message);
     });
     this.listen('match-started', (payload: MatchStatusPayload) => {

@@ -9,7 +9,7 @@ import {
   TurnPhase,
 } from '@ludo-game/shared-types';
 import { DiceRng, rollDice } from '../rng';
-import { withUpdatedTimestamp } from '../queries';
+import { clearRollWindow, openRollWindow, withUpdatedTimestamp } from '../queries';
 import { getNextSnakesPlayer, requireSnakesCurrentPlayer } from './queries';
 
 export function applySnakesDiceRoll(
@@ -48,17 +48,17 @@ export function applySnakesDiceRoll(
       playerId,
       payload: { landing, needsSix: needsSixToEnter },
     });
-    next = extraOrPass(next, playerId, value, events);
+    next = openRollWindow(extraOrPass(next, playerId, value, events), now);
     next = withUpdatedTimestamp(next, now);
     return { state: next, events, validPieceIds: [] };
   }
 
   next = withUpdatedTimestamp(
-    {
+    clearRollWindow({
       ...next,
       turnPhase: TurnPhase.WAITING_FOR_MOVE,
       validPieceIds: [player.tokenId],
-    },
+    }),
     now
   );
 

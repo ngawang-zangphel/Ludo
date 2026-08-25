@@ -1,14 +1,17 @@
 import { ChangeDetectionStrategy, Component, computed, input, output } from '@angular/core';
 import {
   BoardCoordinate,
+  DICE_AUTO_ROLL_MS,
   GameState,
   isLudoState,
   isSnakesState,
   LudoGameState,
   LudoPlayer,
+  MatchStatus,
   PlayerColor,
   SnakesGameState,
   SnakesPlayer,
+  TurnPhase,
 } from '@ludo-game/shared-types';
 import { DiceUiState } from '../../models/dice';
 import { LudoBoardComponent } from '../ludo-board/ludo-board';
@@ -31,8 +34,8 @@ import { SnakesPlayerPanelComponent } from '../snakes-player-panel/snakes-player
   ],
   template: `
     @if (ludo(); as ludo) {
-      <div class="mx-auto grid max-w-7xl gap-4 lg:grid-cols-[minmax(220px,1fr)_auto_minmax(220px,1fr)] lg:items-center">
-        <div class="space-y-4">
+      <div class="mx-auto grid max-w-7xl gap-2 lg:grid-cols-[minmax(160px,0.85fr)_auto_minmax(160px,0.85fr)] lg:items-center lg:gap-3">
+        <div class="space-y-2">
           @if (ludoPlayer(ludo, PlayerColor.GREEN); as green) {
             <ludo-player-panel
               [player]="green"
@@ -53,7 +56,7 @@ import { SnakesPlayerPanelComponent } from '../snakes-player-panel/snakes-player
           }
         </div>
 
-        <div class="flex flex-col items-center gap-4">
+        <div class="flex flex-col items-center gap-2">
           <ludo-board
             [state]="ludo"
             [displayCoords]="displayCoords()"
@@ -65,7 +68,7 @@ import { SnakesPlayerPanelComponent } from '../snakes-player-panel/snakes-player
           />
         </div>
 
-        <div class="space-y-4">
+        <div class="space-y-2">
           @if (ludoPlayer(ludo, PlayerColor.YELLOW); as yellow) {
             <ludo-player-panel
               [player]="yellow"
@@ -87,8 +90,8 @@ import { SnakesPlayerPanelComponent } from '../snakes-player-panel/snakes-player
         </div>
       </div>
     } @else if (snakes(); as snakes) {
-      <div class="mx-auto grid max-w-7xl gap-4 lg:grid-cols-[minmax(220px,1fr)_auto_minmax(220px,1fr)] lg:items-center">
-        <div class="space-y-4">
+      <div class="mx-auto grid max-w-7xl gap-2 lg:grid-cols-[minmax(160px,0.85fr)_auto_minmax(160px,0.85fr)] lg:items-center lg:gap-3">
+        <div class="space-y-2">
           @if (snakesPlayer(snakes, PlayerColor.GREEN); as green) {
             <arena-snakes-player-panel [player]="green" [active]="isActive(green.id)" />
           }
@@ -96,7 +99,7 @@ import { SnakesPlayerPanelComponent } from '../snakes-player-panel/snakes-player
             <arena-snakes-player-panel [player]="red" [active]="isActive(red.id)" />
           }
         </div>
-        <div class="flex flex-col items-center gap-4">
+        <div class="flex flex-col items-center gap-2">
           <arena-snakes-board
             [state]="snakes"
             [displayCoords]="displayCoords()"
@@ -107,7 +110,7 @@ import { SnakesPlayerPanelComponent } from '../snakes-player-panel/snakes-player
             (squareSelect)="squareSelect.emit($event)"
           />
         </div>
-        <div class="space-y-4">
+        <div class="space-y-2">
           @if (snakesPlayer(snakes, PlayerColor.YELLOW); as yellow) {
             <arena-snakes-player-panel [player]="yellow" [active]="isActive(yellow.id)" />
           }
@@ -118,7 +121,7 @@ import { SnakesPlayerPanelComponent } from '../snakes-player-panel/snakes-player
       </div>
     }
 
-    <footer class="mx-auto mt-6 grid max-w-4xl gap-4 md:grid-cols-[1fr_auto_1fr] md:items-center">
+    <footer class="mx-auto mt-2 grid max-w-4xl gap-2 md:grid-cols-[1fr_auto_1fr] md:items-center">
       <ludo-turn-indicator
         [player]="currentPlayer()"
         [phase]="state().turnPhase"
@@ -128,13 +131,14 @@ import { SnakesPlayerPanelComponent } from '../snakes-player-panel/snakes-player
         [value]="state().dice.value"
         [state]="diceUi()"
         [canRoll]="canRoll()"
+        [rollDeadlineAt]="rollDeadlineAt()"
         (roll)="roll.emit()"
       />
-      <div class="rounded-2xl border border-arena-line bg-arena-navy/70 px-4 py-3 text-sm text-arena-mist/70">
+      <div class="rounded-xl border border-arena-line bg-arena-navy/70 px-3 py-2 text-xs text-arena-mist/70">
         <p>Turn {{ state().turnNumber }} · version {{ state().version }}</p>
-        <p class="mt-1">{{ lastEvent() || hint() }}</p>
+        <p class="mt-0.5 line-clamp-2">{{ lastEvent() || hint() }}</p>
         @if (errorMessage(); as error) {
-          <p class="mt-2 text-piece-red">{{ error }}</p>
+          <p class="mt-1 text-piece-red">{{ error }}</p>
         }
       </div>
     </footer>
@@ -171,6 +175,22 @@ export class GameTableComponent {
   readonly currentPlayer = computed(
     () => this.state().players.find((player) => player.id === this.state().currentPlayerId) ?? null
   );
+
+  /** Shared deadline; falls back so countdown still shows for older live turns. */
+  readonly rollDeadlineAt = computed(() => {
+    const state = this.state();
+    if (state.rollDeadlineAt) {
+      return state.rollDeadlineAt;
+    }
+    if (state.turnPhase !== TurnPhase.WAITING_FOR_ROLL || state.status !== MatchStatus.LIVE) {
+      return null;
+    }
+    const started = Date.parse(state.updatedAt);
+    if (Number.isNaN(started)) {
+      return null;
+    }
+    return new Date(started + DICE_AUTO_ROLL_MS).toISOString();
+  });
 
   readonly hint = computed(() =>
     this.snakes()

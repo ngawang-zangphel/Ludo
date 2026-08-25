@@ -22,12 +22,12 @@ import { httpErrorMessage } from '../../../../shared/format';
   providers: [GameSocketService],
   imports: [RouterLink, GameTableComponent, StatusBadgeComponent],
   template: `
-    <div class="px-4 py-6 lg:px-8">
-      <div class="mx-auto mb-6 flex max-w-7xl flex-wrap items-center justify-between gap-4">
+    <div class="px-3 py-2 lg:px-6">
+      <div class="mx-auto mb-2 flex max-w-7xl flex-wrap items-center justify-between gap-2">
         <div>
-          <a routerLink="/admin" class="text-xs uppercase tracking-[0.3em] text-arena-gold hover:underline">Admin</a>
-          <h1 class="font-display text-3xl font-bold text-white">Spectator</h1>
-          <p class="text-sm text-arena-mist/70">
+          <a routerLink="/admin" class="text-[0.65rem] uppercase tracking-[0.3em] text-arena-gold hover:underline">Admin</a>
+          <h1 class="font-display text-xl font-bold text-white md:text-2xl">Spectator</h1>
+          <p class="text-xs text-arena-mist/70">
             {{ detail()?.tournamentName }} · {{ detail()?.round }} · Match {{ detail()?.matchNumber }}
             @if (neighbors(); as nav) {
               · Live {{ nav.index }} / {{ nav.total }}
@@ -43,7 +43,7 @@ import { httpErrorMessage } from '../../../../shared/format';
             @if (onBroadcast()) {
               <button
                 type="button"
-                class="rounded-full border border-piece-red px-4 py-2 text-sm text-piece-red"
+                class="rounded-full border border-piece-red px-3 py-1.5 text-xs text-piece-red"
                 (click)="stopBroadcast()"
               >
                 Stop broadcast
@@ -51,7 +51,7 @@ import { httpErrorMessage } from '../../../../shared/format';
             } @else {
               <button
                 type="button"
-                class="rounded-full border border-arena-gold px-4 py-2 text-sm text-arena-gold"
+                class="rounded-full border border-arena-gold px-3 py-1.5 text-xs text-arena-gold"
                 (click)="broadcast(match.id)"
               >
                 Broadcast this match
@@ -60,7 +60,7 @@ import { httpErrorMessage } from '../../../../shared/format';
           }
           <button
             type="button"
-            class="rounded-full border border-arena-line px-4 py-2 text-sm disabled:opacity-40"
+            class="rounded-full border border-arena-line px-3 py-1.5 text-xs disabled:opacity-40"
             [disabled]="!neighbors()?.previousId"
             (click)="go(neighbors()?.previousId)"
           >
@@ -68,7 +68,7 @@ import { httpErrorMessage } from '../../../../shared/format';
           </button>
           <button
             type="button"
-            class="rounded-full border border-arena-line px-4 py-2 text-sm disabled:opacity-40"
+            class="rounded-full border border-arena-line px-3 py-1.5 text-xs disabled:opacity-40"
             [disabled]="!neighbors()?.nextId"
             (click)="go(neighbors()?.nextId)"
           >
@@ -82,9 +82,9 @@ import { httpErrorMessage } from '../../../../shared/format';
       }
 
       @if (seats().length) {
-        <div class="mx-auto mb-4 flex max-w-7xl flex-wrap gap-2">
+        <div class="mx-auto mb-2 flex max-w-7xl flex-wrap gap-1.5">
           @for (player of seats(); track player.userId) {
-            <span class="inline-flex items-center gap-2 rounded-full border border-arena-line px-3 py-1 text-xs">
+            <span class="inline-flex items-center gap-2 rounded-full border border-arena-line px-2.5 py-0.5 text-[0.7rem]">
               {{ player.name }}
               @if (player.eliminated) {
                 <span class="text-piece-red">Removed</span>

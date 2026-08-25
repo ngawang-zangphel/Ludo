@@ -1,4 +1,5 @@
 import {
+  DICE_AUTO_ROLL_MS,
   GameEngineError,
   LudoGameState,
   LudoPiece,
@@ -91,6 +92,25 @@ export function withUpdatedTimestamp<T extends { version: number; updatedAt: str
     ...state,
     version: state.version + 1,
     updatedAt: isoNow(now),
+  };
+}
+
+/** Mark when the current player must auto-roll (idle + countdown). */
+export function openRollWindow<T extends { rollDeadlineAt: string | null }>(
+  state: T,
+  now?: string
+): T {
+  const at = Date.parse(isoNow(now));
+  return {
+    ...state,
+    rollDeadlineAt: new Date(at + DICE_AUTO_ROLL_MS).toISOString(),
+  };
+}
+
+export function clearRollWindow<T extends { rollDeadlineAt: string | null }>(state: T): T {
+  return {
+    ...state,
+    rollDeadlineAt: null,
   };
 }
 

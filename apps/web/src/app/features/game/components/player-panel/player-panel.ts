@@ -10,24 +10,24 @@ import { HomePathComponent } from '../home-path/home-path';
   imports: [PlayerYardComponent, HomePathComponent],
   template: `
     <section
-      class="rounded-3xl border p-4 shadow-lg backdrop-blur"
+      class="rounded-2xl border px-3 py-2.5 shadow-lg backdrop-blur"
       [class.border-arena-gold]="active()"
       [class.bg-arena-panel/90]="true"
       [class.ring-2]="active()"
       [class.ring-arena-gold]="active()"
       [class.opacity-50]="player().eliminated"
     >
-      <div class="mb-3 flex items-center justify-between gap-3">
+      <div class="mb-1.5 flex items-center justify-between gap-2">
         <div>
-          <p class="text-xs uppercase tracking-[0.2em] text-arena-mist/50">{{ player().color }}</p>
-          <h3 class="font-display text-lg font-semibold">{{ player().name }}</h3>
+          <p class="text-[0.65rem] uppercase tracking-[0.2em] text-arena-mist/50">{{ player().color }}</p>
+          <h3 class="font-display text-sm font-semibold leading-tight">{{ player().name }}</h3>
         </div>
         <span
-          class="h-4 w-4 rounded-full"
+          class="h-3 w-3 rounded-full"
           [style.background]="PLAYER_SWATCH[player().color]"
         ></span>
       </div>
-      <p class="mb-3 text-xs text-arena-mist/60">
+      <p class="mb-1.5 text-[0.65rem] text-arena-mist/60">
         @if (player().eliminated) {
           Removed
         } @else {
@@ -38,7 +38,7 @@ import { HomePathComponent } from '../home-path/home-path';
         }
       </p>
       <ludo-home-path [player]="player()" />
-      <div class="mt-3">
+      <div class="mt-1.5">
         <ludo-player-yard
           [player]="player()"
           [validPieceIds]="validPieceIds()"

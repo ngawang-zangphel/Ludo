@@ -7,7 +7,13 @@ import {
   TurnPhase,
 } from '@ludo-game/shared-types';
 import { getValidMoves } from './valid-moves';
-import { getNextPlayer, requireCurrentPlayer, withUpdatedTimestamp } from './queries';
+import {
+  clearRollWindow,
+  getNextPlayer,
+  openRollWindow,
+  requireCurrentPlayer,
+  withUpdatedTimestamp,
+} from './queries';
 import { DiceRng, rollDice } from './rng';
 
 export function applyDiceRoll(
@@ -51,7 +57,7 @@ export function applyDiceRoll(
       playerId,
       payload: { consecutiveSixes },
     });
-    next = passTurn(next, playerId, events);
+    next = openRollWindow(passTurn(next, playerId, events), now);
     next = withUpdatedTimestamp(next, now);
     return { state: next, events, validPieceIds: [] };
   }
@@ -63,18 +69,18 @@ export function applyDiceRoll(
     events.push({ type: GameEventType.NO_VALID_MOVES, playerId });
     const extraTurn = value === 6 && state.rules.extraTurnOnSix;
     next = extraTurn
-      ? grantExtraTurn(next, playerId, events)
-      : passTurn(next, playerId, events);
+      ? openRollWindow(grantExtraTurn(next, playerId, events), now)
+      : openRollWindow(passTurn(next, playerId, events), now);
     next = withUpdatedTimestamp(next, now);
     return { state: next, events, validPieceIds: [] };
   }
 
   next = withUpdatedTimestamp(
-    {
+    clearRollWindow({
       ...next,
       turnPhase: TurnPhase.WAITING_FOR_MOVE,
       validPieceIds,
-    },
+    }),
     now
   );
 

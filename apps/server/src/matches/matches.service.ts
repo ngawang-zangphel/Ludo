@@ -2,6 +2,7 @@ import {
   BadRequestException,
   Injectable,
   NotFoundException,
+  OnModuleInit,
 } from '@nestjs/common';
 import { InjectConnection, InjectModel } from '@nestjs/mongoose';
 import { Connection, Model, Types } from 'mongoose';
@@ -20,6 +21,7 @@ import {
   ServerToClientEvents,
   SnakesGameState,
   GameEngineError,
+  TurnPhase,
 } from '@ludo-game/shared-types';
 import {
   applyDiceRoll,
@@ -28,6 +30,7 @@ import {
   applySnakesMove,
   createMatchState,
   createSnakesMatchState,
+  openRollWindow,
   removePlayerFromMatch,
 } from '@ludo-game/game-engine';
 import { Match, MatchDocument } from './schemas/match.schema';
@@ -49,7 +52,9 @@ import { RealtimeService } from '../realtime/realtime.service';
 import { BroadcastService } from '../broadcast/broadcast.service';
 
 @Injectable()
-export class MatchesService {
+export class MatchesService implements OnModuleInit {
+  private readonly autoRollTimers = new Map<string, ReturnType<typeof setTimeout>>();
+
   constructor(
     @InjectModel(Match.name) private readonly matches: Model<MatchDocument>,
     @InjectModel(MatchResult.name) private readonly results: Model<MatchResultDocument>,
@@ -64,6 +69,26 @@ export class MatchesService {
     private readonly realtime: RealtimeService,
     private readonly broadcast: BroadcastService
   ) {}
+
+  async onModuleInit(): Promise<void> {
+    const live = await this.matches.find({ status: MatchStatus.LIVE }).exec();
+    for (const match of live) {
+      if (!match.gameState) {
+        continue;
+      }
+      const matchId = toObjectIdString(match._id);
+      try {
+        await this.enqueue(matchId, async () => {
+          const fresh = await this.state.loadMatch(matchId);
+          if (fresh.gameState) {
+            await this.ensureAutoRollArmed(matchId, fresh.gameState);
+          }
+        });
+      } catch {
+        logEvent('Failed to restore auto-roll timer', { matchId });
+      }
+    }
+  }
 
   enqueue<T>(matchId: string, task: () => Promise<T>): Promise<T> {
     return this.queue.enqueue(matchId, task);
@@ -206,6 +231,7 @@ export class MatchesService {
 
   async restart(matchId: string): Promise<MatchDetailDto> {
     return this.enqueue(matchId, async () => {
+      this.clearAutoRoll(matchId);
       const match = await this.state.loadMatch(matchId);
       this.assertPlayersReady(match);
       match.status = MatchStatus.READY;
@@ -260,6 +286,7 @@ export class MatchesService {
         status: MatchStatus.LIVE,
       });
       this.emitLive(matchId, 'match-state', { matchId, state: gameState });
+      this.scheduleAutoRoll(matchId, gameState);
       await this.publishAdmin();
       return this.toDetailDto(saved, gameState);
   }
@@ -270,7 +297,13 @@ export class MatchesService {
       if (match.status !== MatchStatus.LIVE || !match.gameState) {
         throw new BadRequestException('Only live matches can be paused');
       }
-      const gameState = { ...match.gameState, status: MatchStatus.PAUSED, version: match.gameState.version + 1 };
+      this.clearAutoRoll(matchId);
+      const gameState = {
+        ...match.gameState,
+        status: MatchStatus.PAUSED,
+        rollDeadlineAt: null,
+        version: match.gameState.version + 1,
+      };
       const saved = await this.state.updateMatchState(matchId, gameState, { status: MatchStatus.PAUSED });
       await this.recordEvent(saved, GameEventType.MATCH_PAUSED, gameState.currentPlayerId);
       logEvent('Match paused', { matchId });
@@ -287,12 +320,22 @@ export class MatchesService {
       if (match.status !== MatchStatus.PAUSED || !match.gameState) {
         throw new BadRequestException('Only paused matches can be resumed');
       }
-      const gameState = { ...match.gameState, status: MatchStatus.LIVE, version: match.gameState.version + 1 };
+      let gameState: GameState = {
+        ...match.gameState,
+        status: MatchStatus.LIVE,
+        version: match.gameState.version + 1,
+      };
+      if (gameState.turnPhase === TurnPhase.WAITING_FOR_ROLL) {
+        gameState = openRollWindow(gameState);
+      } else {
+        gameState = { ...gameState, rollDeadlineAt: null };
+      }
       const saved = await this.state.updateMatchState(matchId, gameState, { status: MatchStatus.LIVE });
       await this.recordEvent(saved, GameEventType.MATCH_RESUMED, gameState.currentPlayerId);
       logEvent('Match resumed', { matchId });
       this.emitLive(matchId, 'match-resumed', { matchId, status: MatchStatus.LIVE });
       this.emitLive(matchId, 'match-state-updated', { matchId, state: gameState });
+      this.scheduleAutoRoll(matchId, gameState);
       await this.publishAdmin();
       return this.toDetailDto(saved, gameState);
     });
@@ -300,10 +343,11 @@ export class MatchesService {
 
   async cancel(matchId: string): Promise<MatchDetailDto> {
     return this.enqueue(matchId, async () => {
+      this.clearAutoRoll(matchId);
       const match = await this.state.loadMatch(matchId);
       match.status = MatchStatus.CANCELLED;
       if (match.gameState) {
-        match.gameState = { ...match.gameState, status: MatchStatus.CANCELLED };
+        match.gameState = { ...match.gameState, status: MatchStatus.CANCELLED, rollDeadlineAt: null };
       }
       match.finishedAt = new Date();
       const saved = await this.state.persistMatch(match);
@@ -319,6 +363,7 @@ export class MatchesService {
 
   async remove(matchId: string): Promise<{ ok: true }> {
     return this.enqueue(matchId, async () => {
+      this.clearAutoRoll(matchId);
       const match = await this.state.loadMatch(matchId);
       if (this.broadcast.currentMatchId() === matchId) {
         await this.broadcast.setMatch(null);
@@ -371,6 +416,7 @@ export class MatchesService {
         state: result.state,
       });
       this.emitLive(matchId, 'match-state-updated', { matchId, state: result.state });
+      this.scheduleAutoRoll(matchId, result.state);
       await this.publishAdmin();
       return result;
     });
@@ -414,6 +460,7 @@ export class MatchesService {
         });
         logEvent('Match completed', { matchId, winnerId: result.state.rankings[0] ?? '' });
       }
+      this.scheduleAutoRoll(matchId, result.state);
       await this.publishAdmin();
       return result;
     });
@@ -447,11 +494,13 @@ export class MatchesService {
         version: match.gameState.version + 1,
       } as GameState;
       await this.state.updateMatchState(matchId, gameState);
+      // Keep the shared auto-roll clock running even if this seat is offline.
+      const armed = await this.ensureAutoRollArmed(matchId, gameState);
       this.emitLive(matchId, connected ? 'player-connected' : 'player-disconnected', {
         matchId,
         playerId: userId,
       });
-      this.emitLive(matchId, 'match-state-updated', { matchId, state: gameState });
+      this.emitLive(matchId, 'match-state-updated', { matchId, state: armed });
       logEvent(connected ? 'Player connected' : 'Player disconnected', { matchId, userId });
     });
   }
@@ -508,6 +557,7 @@ export class MatchesService {
         });
         logEvent('Match completed', { matchId, winnerId: result.state.rankings[0] ?? '' });
       }
+      this.scheduleAutoRoll(matchId, result.state);
       await this.publishAdmin();
       logEvent('Player removed from match', { matchId, userId });
       return this.toDetailDto(saved, result.state);
@@ -547,8 +597,14 @@ export class MatchesService {
   }
 
   async getDetail(matchId: string): Promise<MatchDetailDto> {
-    const match = await this.state.loadMatch(matchId);
-    return this.toDetailDto(match);
+    return this.enqueue(matchId, async () => {
+      const match = await this.state.loadMatch(matchId);
+      if (match.status === MatchStatus.LIVE && match.gameState) {
+        const state = await this.ensureAutoRollArmed(matchId, match.gameState);
+        return this.toDetailDto(await this.state.loadMatch(matchId), state);
+      }
+      return this.toDetailDto(match);
+    });
   }
 
   async listForPlayer(userId: string): Promise<MatchSummaryDto[]> {
@@ -638,6 +694,69 @@ export class MatchesService {
     if (this.broadcast.currentMatchId() === matchId) {
       this.realtime.emitToBroadcast(event, payload);
     }
+  }
+
+  private clearAutoRoll(matchId: string): void {
+    const timer = this.autoRollTimers.get(matchId);
+    if (timer) {
+      clearTimeout(timer);
+      this.autoRollTimers.delete(matchId);
+    }
+  }
+
+  /**
+   * Guarantees a shared roll deadline + server timer while WAITING_FOR_ROLL.
+   * Runs whether the current player is online, reconnecting, or offline.
+   */
+  private async ensureAutoRollArmed(matchId: string, state: GameState): Promise<GameState> {
+    if (state.status !== MatchStatus.LIVE || state.turnPhase !== TurnPhase.WAITING_FOR_ROLL) {
+      this.clearAutoRoll(matchId);
+      return state;
+    }
+
+    const deadlineMs = state.rollDeadlineAt ? Date.parse(state.rollDeadlineAt) : Number.NaN;
+    const missing = !state.rollDeadlineAt || Number.isNaN(deadlineMs);
+    let next = state;
+
+    if (missing) {
+      next = openRollWindow({
+        ...state,
+        version: state.version + 1,
+        updatedAt: new Date().toISOString(),
+      });
+      await this.state.updateMatchState(matchId, next);
+      logEvent('Armed roll deadline', {
+        matchId,
+        rollDeadlineAt: next.rollDeadlineAt ?? '',
+        currentPlayerId: next.currentPlayerId,
+      });
+    }
+
+    this.scheduleAutoRoll(matchId, next);
+    return next;
+  }
+
+  private scheduleAutoRoll(matchId: string, state: GameState): void {
+    this.clearAutoRoll(matchId);
+    if (
+      state.status !== MatchStatus.LIVE ||
+      state.turnPhase !== TurnPhase.WAITING_FOR_ROLL ||
+      !state.rollDeadlineAt
+    ) {
+      return;
+    }
+    const delay = Date.parse(state.rollDeadlineAt) - Date.now();
+    const playerId = state.currentPlayerId;
+    const run = () => {
+      this.autoRollTimers.delete(matchId);
+      // Auto-roll for whoever's turn it is — connected status does not matter.
+      void this.rollDice(matchId, playerId).catch(() => undefined);
+    };
+    if (delay <= 0) {
+      run();
+      return;
+    }
+    this.autoRollTimers.set(matchId, setTimeout(run, delay + 25));
   }
 
   private emitReady(match: MatchDocument, playerId: string, ready: boolean): void {
@@ -796,6 +915,7 @@ export class MatchesService {
 
     const tokenId = rolled.validPieceIds[0];
     if (!tokenId) {
+      this.scheduleAutoRoll(matchId, rolled.state);
       await this.publishAdmin();
       return rolled;
     }
@@ -829,6 +949,7 @@ export class MatchesService {
       });
       logEvent('Match completed', { matchId, winnerId: moved.state.rankings[0] ?? '' });
     }
+    this.scheduleAutoRoll(matchId, moved.state);
     await this.publishAdmin();
     return moved;
   }

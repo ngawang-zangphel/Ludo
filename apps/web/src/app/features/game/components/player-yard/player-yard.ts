@@ -7,7 +7,7 @@ import { LudoPieceComponent } from '../ludo-piece/ludo-piece';
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [LudoPieceComponent],
   template: `
-    <div class="grid grid-cols-2 gap-2 rounded-2xl bg-black/20 p-3">
+    <div class="grid grid-cols-2 gap-1.5 rounded-xl bg-black/20 p-2">
       @for (piece of yardPieces(); track piece.id) {
         <div class="flex h-12 w-12 items-end justify-center">
           <ludo-piece

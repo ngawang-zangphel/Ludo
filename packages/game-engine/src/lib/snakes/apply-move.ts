@@ -9,7 +9,7 @@ import {
   SnakesGameState,
   TurnPhase,
 } from '@ludo-game/shared-types';
-import { withUpdatedTimestamp } from '../queries';
+import { clearRollWindow, openRollWindow, withUpdatedTimestamp } from '../queries';
 import { getSnakesSquareCoordinate, isLadder, layoutForRules, teleportFrom } from './board';
 import { extraOrPass, passSnakesTurn } from './apply-dice-roll';
 import {
@@ -122,9 +122,9 @@ export function applySnakesMove(
   const playerDone = stillPlaying ? isSnakesPlayerFinished(stillPlaying) : true;
 
   if (playerDone) {
-    next = completeSnakesMatch(next, events);
+    next = clearRollWindow(completeSnakesMatch(next, events));
   } else {
-    next = extraOrPass(next, player.id, dice, events);
+    next = openRollWindow(extraOrPass(next, player.id, dice, events), now);
   }
 
   next = withUpdatedTimestamp(next, now);
@@ -163,13 +163,13 @@ export function removeSnakesPlayer(
   events.push({ type: GameEventType.PLAYER_REMOVED, playerId });
 
   if (checkSnakesMatchFinished(next)) {
-    next = completeSnakesMatch(next, events);
+    next = clearRollWindow(completeSnakesMatch(next, events));
   } else if (next.currentPlayerId === playerId) {
-    next = passSnakesTurn(next, playerId, events);
+    next = openRollWindow(passSnakesTurn(next, playerId, events), now);
   }
 
   if (wasPaused && next.status !== MatchStatus.COMPLETED) {
-    next = { ...next, status: MatchStatus.PAUSED };
+    next = { ...next, status: MatchStatus.PAUSED, rollDeadlineAt: null };
   }
 
   next = withUpdatedTimestamp(next, now);

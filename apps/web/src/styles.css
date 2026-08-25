@@ -35,7 +35,7 @@ body {
 .ludo-board-frame {
   position: relative;
   aspect-ratio: 1;
-  width: min(92vw, 72vh, 760px);
+  width: min(92vw, calc(100dvh - 15.5rem), 560px);
   border-radius: 1.5rem;
   overflow: hidden;
   background: #0c1426;
@@ -65,8 +65,8 @@ body {
 .snakes-board-frame {
   position: relative;
   aspect-ratio: 1;
-  width: min(92vw, 72vh, 760px);
-  padding: 0.7rem;
+  width: min(92vw, calc(100dvh - 15.5rem), 560px);
+  padding: 0.55rem;
   overflow: hidden;
   border-radius: 1.15rem;
   background:
@@ -334,14 +334,63 @@ body {
 }
 
 .dice-scene {
-  --dice-size: 5.35rem;
-  --dice-half: 2.675rem;
+  --dice-size: 3.6rem;
+  --dice-half: 1.8rem;
   position: relative;
   display: grid;
   place-items: center;
-  width: 7.2rem;
-  height: 6.6rem;
+  width: 5rem;
+  height: 4.6rem;
   perspective: 900px;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: inherit;
+}
+
+.dice-scene:disabled {
+  cursor: default;
+}
+
+.dice-scene.is-clickable {
+  cursor: pointer;
+}
+
+.dice-scene.is-clickable:hover .dice-rig {
+  filter: brightness(1.08);
+}
+
+.dice-scene.is-clickable:focus-visible {
+  outline: 2px solid var(--color-arena-gold);
+  outline-offset: 6px;
+  border-radius: 1rem;
+}
+
+.dice-countdown {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+  font-family: var(--font-display, ui-sans-serif);
+  font-size: 1.7rem;
+  font-weight: 700;
+  line-height: 1;
+  color: #fff8e7;
+  text-shadow:
+    0 0 12px rgba(0, 0, 0, 0.75),
+    0 2px 4px rgba(0, 0, 0, 0.65);
+}
+
+.dice-result-label {
+  margin: -0.15rem 0 0;
+  font-family: var(--font-display, ui-sans-serif);
+  font-size: 1.15rem;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: 0.04em;
+  color: var(--color-arena-gold);
 }
 
 .dice-shadow {
@@ -363,7 +412,8 @@ body {
   position: relative;
   width: var(--dice-size);
   height: var(--dice-size);
-  transform: rotateX(-24deg) rotateY(32deg);
+  /* Shallow tilt: front face dominates so the rolled value is obvious. */
+  transform: rotateX(-12deg) rotateY(14deg);
   transform-style: preserve-3d;
 }
 
@@ -394,8 +444,8 @@ body {
   grid-template-columns: repeat(3, 1fr);
   grid-template-rows: repeat(3, 1fr);
   place-items: center;
-  padding: 0.55rem;
-  border-radius: 0.72rem;
+  padding: 0.35rem;
+  border-radius: 0.5rem;
   background:
     linear-gradient(145deg, #fffdf6 0%, #f3e4c2 48%, #d7be86 100%);
   box-shadow:
@@ -403,6 +453,7 @@ body {
     inset 0 -2px 4px rgba(90, 64, 20, 0.18),
     inset 0 0 0 1px rgba(90, 64, 20, 0.16);
   backface-visibility: hidden;
+  transition: filter 0.25s ease, opacity 0.25s ease, box-shadow 0.25s ease;
 }
 
 .dice-face[data-face="1"] { transform: rotateY(0deg) translateZ(var(--dice-half)); }
@@ -412,9 +463,31 @@ body {
 .dice-face[data-face="5"] { transform: rotateX(-90deg) translateZ(var(--dice-half)); }
 .dice-face[data-face="6"] { transform: rotateY(180deg) translateZ(var(--dice-half)); }
 
+/* Dim every side except the result face so only one value reads clearly. */
+.dice-cube.is-settled .dice-face {
+  filter: brightness(0.42);
+  opacity: 0.55;
+}
+
+.dice-cube.is-settled[data-face="1"] .dice-face[data-face="1"],
+.dice-cube.is-settled[data-face="2"] .dice-face[data-face="2"],
+.dice-cube.is-settled[data-face="3"] .dice-face[data-face="3"],
+.dice-cube.is-settled[data-face="4"] .dice-face[data-face="4"],
+.dice-cube.is-settled[data-face="5"] .dice-face[data-face="5"],
+.dice-cube.is-settled[data-face="6"] .dice-face[data-face="6"] {
+  filter: none;
+  opacity: 1;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.9),
+    inset 0 -2px 4px rgba(90, 64, 20, 0.18),
+    inset 0 0 0 1px rgba(90, 64, 20, 0.16),
+    0 0 0 2px rgba(212, 175, 55, 0.35),
+    0 8px 18px rgba(0, 0, 0, 0.35);
+}
+
 .dice-pip {
-  width: 0.72rem;
-  height: 0.72rem;
+  width: 0.55rem;
+  height: 0.55rem;
   border-radius: 999px;
   background: transparent;
 }

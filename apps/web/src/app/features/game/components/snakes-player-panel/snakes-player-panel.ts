@@ -7,21 +7,21 @@ import { PLAYER_SWATCH } from '../../models/theme';
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section
-      class="rounded-3xl border p-4 shadow-lg backdrop-blur"
+      class="rounded-2xl border px-3 py-2.5 shadow-lg backdrop-blur"
       [class.border-arena-gold]="active()"
       [class.bg-arena-panel/90]="true"
       [class.ring-2]="active()"
       [class.ring-arena-gold]="active()"
       [class.opacity-50]="player().eliminated"
     >
-      <div class="mb-3 flex items-center justify-between gap-3">
+      <div class="mb-1.5 flex items-center justify-between gap-2">
         <div>
-          <p class="text-xs uppercase tracking-[0.2em] text-arena-mist/50">{{ player().color }}</p>
-          <h3 class="font-display text-lg font-semibold">{{ player().name }}</h3>
+          <p class="text-[0.65rem] uppercase tracking-[0.2em] text-arena-mist/50">{{ player().color }}</p>
+          <h3 class="font-display text-sm font-semibold leading-tight">{{ player().name }}</h3>
         </div>
-        <span class="h-4 w-4 rounded-full ring-2 ring-white/20" [style.background]="PLAYER_SWATCH[player().color]"></span>
+        <span class="h-3 w-3 rounded-full ring-2 ring-white/20" [style.background]="PLAYER_SWATCH[player().color]"></span>
       </div>
-      <p class="text-xs text-arena-mist/60">
+      <p class="text-[0.65rem] text-arena-mist/60">
         @if (player().eliminated) {
           Removed
         } @else {
@@ -31,13 +31,13 @@ import { PLAYER_SWATCH } from '../../models/theme';
           }
         }
       </p>
-      <div class="mt-3 flex items-end justify-between gap-2">
-        <p class="font-display text-3xl leading-none text-white">
+      <div class="mt-1.5 flex items-end justify-between gap-2">
+        <p class="font-display text-xl leading-none text-white">
           {{ player().position === 0 ? 'Start' : player().position }}
         </p>
-        <p class="pb-1 text-xs text-arena-mist/45">/ 100</p>
+        <p class="pb-0.5 text-[0.65rem] text-arena-mist/45">/ 100</p>
       </div>
-      <div class="mt-3 h-1.5 overflow-hidden rounded-full bg-black/30">
+      <div class="mt-1.5 h-1 overflow-hidden rounded-full bg-black/30">
         <div
           class="h-full rounded-full transition-[width] duration-300"
           [style.width.%]="progress()"

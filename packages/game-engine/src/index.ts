@@ -45,6 +45,8 @@ export {
   checkMatchFinished,
   isPlayerFinished,
   getActivePlayers,
+  openRollWindow,
+  clearRollWindow,
 } from './lib/queries';
 
 export { applyDiceRoll } from './lib/apply-dice-roll';

@@ -1,6 +1,7 @@
 import {
   CreateMatchInput,
   DEFAULT_LUDO_RULES,
+  DICE_AUTO_ROLL_MS,
   GameEngineError,
   GameType,
   LudoGameState,
@@ -73,6 +74,7 @@ export function createMatchState(input: CreateMatchInput): LudoGameState {
     validPieceIds: [],
     rankings: [],
     rules,
+    rollDeadlineAt: new Date(Date.parse(now) + DICE_AUTO_ROLL_MS).toISOString(),
     version: 0,
     createdAt: now,
     updatedAt: now,

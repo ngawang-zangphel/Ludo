@@ -18,10 +18,12 @@ import {
 } from './board/coordinates';
 import {
   checkMatchFinished,
+  clearRollWindow,
   findPiece,
   findPlayer,
   getNextPlayer,
   isPlayerFinished,
+  openRollWindow,
   requireCurrentPlayer,
   withUpdatedTimestamp,
 } from './queries';
@@ -74,15 +76,16 @@ export function applyMove(
   }
 
   if (checkMatchFinished(next)) {
-    next = completeMatch(next, events);
+    next = clearRollWindow(completeMatch(next, events));
   } else {
     const extraTurn = shouldGrantExtraTurn(state, move);
     const stillPlaying = next.players.find((entry) => entry.id === player.id);
     const playerDone = stillPlaying ? isPlayerFinished(stillPlaying) : true;
 
-    next = extraTurn && !playerDone
-      ? grantExtraTurn(next, player.id, events)
-      : passTurn(next, player.id, events);
+    next =
+      extraTurn && !playerDone
+        ? openRollWindow(grantExtraTurn(next, player.id, events), now)
+        : openRollWindow(passTurn(next, player.id, events), now);
   }
 
   next = withUpdatedTimestamp(next, now);
@@ -222,13 +225,13 @@ export function removeLudoPlayer(
   events.push({ type: GameEventType.PLAYER_REMOVED, playerId });
 
   if (checkMatchFinished(next)) {
-    next = completeMatch(next, events);
+    next = clearRollWindow(completeMatch(next, events));
   } else if (next.currentPlayerId === playerId) {
-    next = passTurn(next, playerId, events);
+    next = openRollWindow(passTurn(next, playerId, events), now);
   }
 
   if (wasPaused && next.status !== MatchStatus.COMPLETED) {
-    next = { ...next, status: MatchStatus.PAUSED };
+    next = { ...next, status: MatchStatus.PAUSED, rollDeadlineAt: null };
   }
 
   next = withUpdatedTimestamp(next, now);

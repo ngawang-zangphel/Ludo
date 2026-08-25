@@ -1,5 +1,6 @@
 import {
   CreateSnakesMatchInput,
+  DICE_AUTO_ROLL_MS,
   GameEngineError,
   GameType,
   MatchStatus,
@@ -76,6 +77,7 @@ export function createSnakesMatchState(input: CreateSnakesMatchInput): SnakesGam
     validPieceIds: [],
     rankings: [],
     rules,
+    rollDeadlineAt: new Date(Date.parse(now) + DICE_AUTO_ROLL_MS).toISOString(),
     version: 0,
     createdAt: now,
     updatedAt: now,

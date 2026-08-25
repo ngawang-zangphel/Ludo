@@ -1,17 +1,36 @@
-import { ChangeDetectionStrategy, Component, computed, input, output } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  DestroyRef,
+  computed,
+  effect,
+  inject,
+  input,
+  output,
+  signal,
+} from '@angular/core';
+import { DICE_COUNTDOWN_MS } from '@ludo-game/shared-types';
 import { DiceUiState } from '../../models/dice';
 
 @Component({
   selector: 'ludo-dice',
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <div class="flex flex-col items-center gap-3">
-      <div class="dice-scene">
+    <div class="flex flex-col items-center gap-1.5">
+      <button
+        type="button"
+        class="dice-scene"
+        [class.is-clickable]="canRoll()"
+        [disabled]="!canRoll()"
+        [attr.aria-label]="canRoll() ? 'Roll dice' : 'Dice'"
+        (click)="requestRoll()"
+      >
         <div class="dice-shadow" [class.is-rolling]="state() === 'ROLLING'"></div>
         <div class="dice-rig">
           <div
             class="dice-cube"
             [class.is-rolling]="state() === 'ROLLING'"
+            [class.is-settled]="state() !== 'ROLLING'"
             [attr.data-face]="settledFace()"
           >
             @for (face of faces; track face.value) {
@@ -23,12 +42,18 @@ import { DiceUiState } from '../../models/dice';
             }
           </div>
         </div>
-      </div>
+        @if (countdown(); as seconds) {
+          <span class="dice-countdown" aria-live="polite">{{ seconds }}</span>
+        }
+      </button>
+      @if (state() === 'RESULT' && value(); as rolled) {
+        <p class="dice-result-label" aria-live="polite">{{ rolled }}</p>
+      }
       <button
         type="button"
-        class="rounded-full bg-arena-gold px-6 py-2 font-display text-sm font-semibold text-arena-ink disabled:cursor-not-allowed disabled:opacity-40"
+        class="rounded-full bg-arena-gold px-4 py-1.5 font-display text-xs font-semibold text-arena-ink disabled:cursor-not-allowed disabled:opacity-40"
         [disabled]="!canRoll()"
-        (click)="roll.emit()"
+        (click)="requestRoll()"
       >
         {{ label() }}
       </button>
@@ -36,11 +61,18 @@ import { DiceUiState } from '../../models/dice';
   `,
 })
 export class DiceComponent {
+  private readonly destroyRef = inject(DestroyRef);
+  private tickTimer: ReturnType<typeof setInterval> | null = null;
+  private autoRolledForDeadline: string | null = null;
+
   readonly value = input<number | null>(null);
   readonly state = input<DiceUiState>('WAITING');
   readonly canRoll = input(false);
+  /** Shared deadline from match state so every viewer sees the same countdown. */
+  readonly rollDeadlineAt = input<string | null>(null);
   readonly roll = output<void>();
   readonly faces = DICE_FACES;
+  readonly countdown = signal<number | null>(null);
 
   readonly settledFace = computed(() => {
     const value = this.value();
@@ -51,14 +83,74 @@ export class DiceComponent {
   });
 
   readonly label = computed(() => {
+    const seconds = this.countdown();
+    if (seconds != null) {
+      return `Auto-roll in ${seconds}`;
+    }
     if (this.state() === 'ROLLING') {
       return 'Rolling…';
     }
-    if (this.state() === 'RESULT' && this.value()) {
+    if (this.state() === 'RESULT' && this.value() && !this.canRoll()) {
       return `Rolled ${this.value()}`;
     }
     return 'Roll dice';
   });
+
+  constructor() {
+    effect(() => {
+      const deadline = this.rollDeadlineAt();
+      const rolling = this.state() === 'ROLLING';
+      this.clearTick();
+      if (!deadline || rolling) {
+        this.countdown.set(null);
+        return;
+      }
+      this.syncCountdown(deadline);
+      this.tickTimer = setInterval(() => this.syncCountdown(deadline), 250);
+    });
+
+    this.destroyRef.onDestroy(() => this.clearTick());
+  }
+
+  requestRoll(): void {
+    if (!this.canRoll()) {
+      return;
+    }
+    this.countdown.set(null);
+    this.roll.emit();
+  }
+
+  private syncCountdown(deadline: string): void {
+    const remainingMs = Date.parse(deadline) - Date.now();
+    if (Number.isNaN(remainingMs)) {
+      this.countdown.set(null);
+      return;
+    }
+
+    if (remainingMs <= 0) {
+      this.countdown.set(null);
+      if (this.canRoll() && this.autoRolledForDeadline !== deadline) {
+        this.autoRolledForDeadline = deadline;
+        this.roll.emit();
+      }
+      return;
+    }
+
+    // Visible countdown only during the final DICE_COUNTDOWN_MS window.
+    if (remainingMs > DICE_COUNTDOWN_MS) {
+      this.countdown.set(null);
+      return;
+    }
+
+    this.countdown.set(Math.max(1, Math.ceil(remainingMs / 1000)));
+  }
+
+  private clearTick(): void {
+    if (this.tickTimer != null) {
+      clearInterval(this.tickTimer);
+      this.tickTimer = null;
+    }
+  }
 }
 
 const PIP_MAP: Record<number, boolean[]> = {

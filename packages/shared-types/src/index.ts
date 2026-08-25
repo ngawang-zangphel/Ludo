@@ -4,3 +4,5 @@ export * from './lib/coordinates';
 export * from './lib/game-state';
 export * from './lib/socket';
 export * from './lib/api';
+export * from './lib/dice-timing';
+export * from './lib/snakes-layout';

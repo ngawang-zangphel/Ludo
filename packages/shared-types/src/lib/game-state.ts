@@ -51,6 +51,11 @@ interface GameStateBase {
   turnNumber: number;
   validPieceIds: string[];
   rankings: string[];
+  /**
+   * When the current player must auto-roll. Set while WAITING_FOR_ROLL so every
+   * client can show the same idle/countdown timer. Null otherwise.
+   */
+  rollDeadlineAt: string | null;
   /** Optimistic concurrency token. Incremented on every authoritative change. */
   version: number;
   createdAt: string;

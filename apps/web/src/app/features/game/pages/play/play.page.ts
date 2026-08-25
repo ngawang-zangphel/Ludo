@@ -22,14 +22,14 @@ import { httpErrorMessage } from '../../../../shared/format';
   providers: [GameSocketService],
   imports: [RouterLink, GameTableComponent, StatusBadgeComponent],
   template: `
-    <div class="px-4 py-6 lg:px-8">
-      <div class="mx-auto mb-6 flex max-w-7xl flex-wrap items-center justify-between gap-4">
+    <div class="px-3 py-2 lg:px-6">
+      <div class="mx-auto mb-2 flex max-w-7xl flex-wrap items-center justify-between gap-2">
         <div>
-          <a routerLink="/" class="text-xs uppercase tracking-[0.3em] text-arena-gold hover:underline">Invitations</a>
-          <h1 class="font-display text-3xl font-bold text-white">
+          <a routerLink="/" class="text-[0.65rem] uppercase tracking-[0.3em] text-arena-gold hover:underline">Invitations</a>
+          <h1 class="font-display text-xl font-bold text-white md:text-2xl">
             {{ detail()?.tournamentName || 'Match room' }}
           </h1>
-          <p class="text-sm text-arena-mist/70">
+          <p class="text-xs text-arena-mist/70">
             {{ detail()?.round }} · Match {{ detail()?.matchNumber }}
           </p>
         </div>
