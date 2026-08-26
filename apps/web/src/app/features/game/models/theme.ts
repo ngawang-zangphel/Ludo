@@ -1,17 +1,17 @@
 import { PlayerColor } from '@ludo-game/shared-types';
 
 export const PLAYER_SWATCH: Record<PlayerColor, string> = {
-  [PlayerColor.RED]: '#ff4d6d',
-  [PlayerColor.GREEN]: '#22c55e',
-  [PlayerColor.YELLOW]: '#f5c842',
-  [PlayerColor.BLUE]: '#38bdf8',
+  [PlayerColor.RED]: '#ff4b4b',
+  [PlayerColor.GREEN]: '#3dcc6a',
+  [PlayerColor.YELLOW]: '#ffd23a',
+  [PlayerColor.BLUE]: '#4fc3f7',
 };
 
 export const PLAYER_TRACK: Record<PlayerColor, string> = {
-  [PlayerColor.RED]: '#7a1d32',
-  [PlayerColor.GREEN]: '#166534',
-  [PlayerColor.YELLOW]: '#927115',
-  [PlayerColor.BLUE]: '#1d4e7a',
+  [PlayerColor.RED]: '#ff5f5f',
+  [PlayerColor.GREEN]: '#4caf50',
+  [PlayerColor.YELLOW]: '#ffc93d',
+  [PlayerColor.BLUE]: '#4fc3f7',
 };
 
 export const PIECE_PAINT: Record<
@@ -19,27 +19,27 @@ export const PIECE_PAINT: Record<
   { light: string; mid: string; deep: string; shade: string }
 > = {
   [PlayerColor.RED]: {
-    light: '#ff8fa3',
-    mid: '#ff4d6d',
-    deep: '#c81e3a',
-    shade: '#7a1024',
+    light: '#ff8a8a',
+    mid: '#ff4b4b',
+    deep: '#e53935',
+    shade: '#b71c1c',
   },
   [PlayerColor.GREEN]: {
-    light: '#86efac',
-    mid: '#22c55e',
-    deep: '#15803d',
-    shade: '#14532d',
+    light: '#81e59a',
+    mid: '#3dcc6a',
+    deep: '#2e9e4f',
+    shade: '#1b5e20',
   },
   [PlayerColor.YELLOW]: {
-    light: '#fde68a',
-    mid: '#f5c842',
-    deep: '#ca8a04',
-    shade: '#854d0e',
+    light: '#ffe57a',
+    mid: '#ffd23a',
+    deep: '#f5b400',
+    shade: '#c48a00',
   },
   [PlayerColor.BLUE]: {
-    light: '#7dd3fc',
-    mid: '#38bdf8',
-    deep: '#0284c7',
-    shade: '#0c4a6e',
+    light: '#90e0ff',
+    mid: '#4fc3f7',
+    deep: '#29b6f6',
+    shade: '#0288d1',
   },
 };

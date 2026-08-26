@@ -89,3 +89,19 @@ export const PLAYER_COLOR_ORDER: readonly PlayerColor[] = [
   PlayerColor.YELLOW,
   PlayerColor.BLUE,
 ] as const;
+
+/** Opposite corners: GREEN (NW) ↔ BLUE (SE), RED (SW) ↔ YELLOW (NE). */
+export const PLAYER_COLOR_OPPOSITE: Record<PlayerColor, PlayerColor> = {
+  [PlayerColor.RED]: PlayerColor.YELLOW,
+  [PlayerColor.GREEN]: PlayerColor.BLUE,
+  [PlayerColor.YELLOW]: PlayerColor.RED,
+  [PlayerColor.BLUE]: PlayerColor.GREEN,
+};
+
+/** Default seats. Two players sit on a diagonal; 3–4 fill clockwise from RED. */
+export function defaultSeatColors(count: number): PlayerColor[] {
+  if (count === 2) {
+    return [PlayerColor.GREEN, PlayerColor.BLUE];
+  }
+  return PLAYER_COLOR_ORDER.slice(0, Math.min(4, Math.max(2, count)));
+}

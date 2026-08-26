@@ -5,44 +5,32 @@ import { PLAYER_SWATCH } from '../../models/theme';
 @Component({
   selector: 'arena-snakes-player-panel',
   changeDetection: ChangeDetectionStrategy.OnPush,
+  host: { class: 'inline-flex' },
   template: `
     <section
-      class="rounded-2xl border px-3 py-2.5 shadow-lg backdrop-blur"
-      [class.border-arena-gold]="active()"
-      [class.bg-arena-panel/90]="true"
-      [class.ring-2]="active()"
-      [class.ring-arena-gold]="active()"
+      class="king-badge snakes-badge"
+      [class.is-active]="active()"
+      [class.is-end]="align() === 'end'"
       [class.opacity-50]="player().eliminated"
+      [style.--seat-color]="PLAYER_SWATCH[player().color]"
     >
-      <div class="mb-1.5 flex items-center justify-between gap-2">
-        <div>
-          <p class="text-[0.65rem] uppercase tracking-[0.2em] text-arena-mist/50">{{ player().color }}</p>
-          <h3 class="font-display text-sm font-semibold leading-tight">{{ player().name }}</h3>
-        </div>
-        <span class="h-3 w-3 rounded-full ring-2 ring-white/20" [style.background]="PLAYER_SWATCH[player().color]"></span>
-      </div>
-      <p class="text-[0.65rem] text-arena-mist/60">
-        @if (player().eliminated) {
-          Removed
-        } @else {
-          {{ player().connected ? 'Connected' : 'Reconnecting…' }}
-          @if (player().finishedPosition) {
-            · Finished {{ ordinal() }}
+      <span class="king-pin" aria-hidden="true">
+        <svg viewBox="0 0 32 42">
+          <path
+            fill="currentColor"
+            d="M16 1.5c-7.2 0-13 5.7-13 12.7 0 9.3 13 26.3 13 26.3s13-17 13-26.3C29 7.2 23.2 1.5 16 1.5Z"
+          />
+          <circle cx="16" cy="14" r="5.2" fill="#fff" opacity="0.95" />
+        </svg>
+      </span>
+      <div class="snakes-badge-copy">
+        <p class="snakes-badge-name">{{ player().name }}</p>
+        <p class="snakes-badge-meta">
+          <span>{{ squareLabel() }}</span>
+          @if (active() && !player().eliminated && !player().finishedPosition) {
+            <span class="arena-seat-turn">Turn</span>
           }
-        }
-      </p>
-      <div class="mt-1.5 flex items-end justify-between gap-2">
-        <p class="font-display text-xl leading-none text-white">
-          {{ player().position === 0 ? 'Start' : player().position }}
         </p>
-        <p class="pb-0.5 text-[0.65rem] text-arena-mist/45">/ 100</p>
-      </div>
-      <div class="mt-1.5 h-1 overflow-hidden rounded-full bg-black/30">
-        <div
-          class="h-full rounded-full transition-[width] duration-300"
-          [style.width.%]="progress()"
-          [style.background]="PLAYER_SWATCH[player().color]"
-        ></div>
       </div>
     </section>
   `,
@@ -51,15 +39,19 @@ export class SnakesPlayerPanelComponent {
   readonly PLAYER_SWATCH = PLAYER_SWATCH;
   readonly player = input.required<SnakesPlayer>();
   readonly active = input(false);
+  readonly align = input<'start' | 'end'>('start');
 
-  readonly progress = computed(() => Math.min(100, Math.max(0, this.player().position)));
-
-  readonly ordinal = computed(() => {
-    const place = this.player().finishedPosition;
-    if (place === 1) return '1st';
-    if (place === 2) return '2nd';
-    if (place === 3) return '3rd';
-    if (place === 4) return '4th';
-    return '';
+  readonly squareLabel = computed(() => {
+    const player = this.player();
+    if (player.finishedPosition) {
+      if (player.finishedPosition === 1) return '1st';
+      if (player.finishedPosition === 2) return '2nd';
+      if (player.finishedPosition === 3) return '3rd';
+      return `${player.finishedPosition}th`;
+    }
+    if (player.position <= 0) {
+      return 'GO';
+    }
+    return String(player.position);
   });
 }

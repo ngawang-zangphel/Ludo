@@ -1,10 +1,25 @@
-import { ChangeDetectionStrategy, Component, inject, viewChild } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  inject,
+  OnInit,
+  signal,
+  viewChild,
+} from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
-import { GameType, PlayerColor, SnakesLevelId } from '@ludo-game/shared-types';
+import {
+  GameType,
+  PlayerColor,
+  SnakesCustomBoardDto,
+  SnakesLevelId,
+} from '@ludo-game/shared-types';
+import { ArenaApiService } from '../../../../core/api/arena-api.service';
 import { AuthService } from '../../../../core/auth/auth.service';
+import { httpErrorMessage, gameTypeLabel } from '../../../../shared/format';
 import { LocalMatchService } from '../../services/local-match.service';
 import { GameTableComponent } from '../../components/game-table/game-table';
+import { SnakesBoardComponent } from '../../components/snakes-board/snakes-board';
 import { SnakesLayoutEditorComponent } from '../../components/snakes-layout-editor/snakes-layout-editor';
 import { SnakesPresetPickerComponent } from '../../components/snakes-preset-picker/snakes-preset-picker';
 import { PLAYER_SWATCH } from '../../models/theme';
@@ -17,20 +32,31 @@ import { PLAYER_SWATCH } from '../../models/theme';
     FormsModule,
     GameTableComponent,
     RouterLink,
+    SnakesBoardComponent,
     SnakesLayoutEditorComponent,
     SnakesPresetPickerComponent,
   ],
   template: `
-    <div class="min-h-screen px-4 py-6 lg:px-8">
-      <header class="mx-auto mb-6 flex max-w-7xl flex-wrap items-center justify-between gap-4">
+    <div
+      class="min-h-screen px-4 py-4 lg:px-8"
+      [class.arena-play-page]="match.phase() === 'playing'"
+    >
+      <header
+        class="mx-auto mb-4 flex max-w-7xl flex-wrap items-center justify-between gap-3"
+        [class.mb-6]="match.phase() === 'setup'"
+      >
         <div>
-          <p class="text-xs uppercase tracking-[0.3em] text-arena-gold">Hot-seat · offline engine</p>
-          <h1 class="font-display text-3xl font-bold text-white md:text-4xl">Hot-seat arena</h1>
+          <p class="text-xs uppercase tracking-[0.3em] text-arena-gold">
+            {{ match.phase() === 'playing' ? 'Hot-seat' : 'Hot-seat · pass and play' }}
+          </p>
+          <h1 class="font-display text-2xl font-bold text-white md:text-4xl">
+            {{ match.phase() === 'playing' ? playTitle() : 'Hot-seat arena' }}
+          </h1>
         </div>
         <div class="flex flex-wrap gap-2">
           <a
             [routerLink]="homeLink()"
-            class="rounded-full border border-arena-line px-4 py-2 text-sm text-arena-mist"
+            class="rounded-full border border-arena-line px-4 py-2 text-sm text-arena-mist hover:border-arena-gold"
           >
             {{ homeLabel() }}
           </a>
@@ -44,7 +70,7 @@ import { PLAYER_SWATCH } from '../../models/theme';
             </button>
             <button
               type="button"
-              class="rounded-full border border-arena-gold px-4 py-2 text-sm text-arena-gold"
+              class="rounded-full bg-arena-gold px-4 py-2 text-sm font-semibold text-arena-ink"
               (click)="match.startMatch()"
             >
               Restart
@@ -54,7 +80,11 @@ import { PLAYER_SWATCH } from '../../models/theme';
       </header>
 
       @if (match.phase() === 'setup') {
-        <section class="mx-auto max-w-3xl rounded-3xl border border-arena-line bg-arena-navy/80 p-5 md:p-6">
+        <section
+          class="mx-auto rounded-3xl border border-arena-line bg-arena-navy/80 p-5 md:p-6"
+          [class.max-w-5xl]="match.gameType() === GameType.SNAKES"
+          [class.max-w-3xl]="match.gameType() !== GameType.SNAKES"
+        >
           <p class="text-xs uppercase tracking-[0.25em] text-arena-gold/80">Step 1</p>
           <h2 class="mt-1 font-display text-2xl text-white">Choose game & players</h2>
           <p class="mt-2 text-sm text-arena-mist/70">
@@ -93,9 +123,62 @@ import { PLAYER_SWATCH } from '../../models/theme';
             <div class="mt-6 space-y-3">
               <arena-snakes-preset-picker
                 [value]="match.snakesLevelId()"
-                (valueChange)="match.setSnakesLevel($event)"
+                [showCreate]="true"
+                [createSelected]="match.customSource() === 'create' && match.snakesLevelId() === SnakesLevelId.CUSTOM"
+                (valueChange)="onSnakesLevel($event)"
+                (createSelectedChange)="onCreateOwn($event)"
               />
-              @if (match.snakesLevelId() === SnakesLevelId.CUSTOM) {
+              @if (match.snakesLevelId() !== SnakesLevelId.CUSTOM) {
+                <div>
+                  <arena-snakes-board [layout]="match.customLayout()" [compact]="true" />
+                  <p class="mt-2 text-xs text-arena-mist/50">
+                    {{ match.customLayout().snakes.length }} snakes ·
+                    {{ match.customLayout().ladders.length }} ladders
+                  </p>
+                </div>
+              } @else if (match.customSource() === 'library') {
+                @if (boardsLoading()) {
+                  <p class="text-sm text-arena-mist/60">Loading saved boards…</p>
+                } @else if (boardsError(); as err) {
+                  <p class="text-sm text-piece-red">{{ err }}</p>
+                } @else {
+                  <div class="grid gap-3 sm:grid-cols-2">
+                    @for (board of customBoards(); track board.id) {
+                      <article
+                        class="cursor-pointer overflow-hidden rounded-2xl border bg-black/20 p-3 text-left transition hover:border-arena-gold/70"
+                        [class.border-arena-gold]="match.selectedCustomBoardId() === board.id"
+                        [class.border-arena-line]="match.selectedCustomBoardId() !== board.id"
+                        role="button"
+                        tabindex="0"
+                        (click)="match.selectSavedBoard(board.id, board.layout)"
+                        (keydown.enter)="match.selectSavedBoard(board.id, board.layout)"
+                        (keydown.space)="$event.preventDefault(); match.selectSavedBoard(board.id, board.layout)"
+                      >
+                        <p class="font-display text-white">{{ board.name }}</p>
+                        <p class="mt-1 text-xs text-arena-mist/50">
+                          {{ board.layout.snakes.length }} snakes ·
+                          {{ board.layout.ladders.length }} ladders
+                        </p>
+                        <div class="relative mt-2">
+                          <arena-snakes-board [layout]="board.layout" [compact]="true" />
+                          <div class="absolute inset-0" aria-hidden="true"></div>
+                        </div>
+                      </article>
+                    } @empty {
+                      <p
+                        class="col-span-full rounded-2xl border border-dashed border-arena-line px-4 py-8 text-center text-sm text-arena-mist/60"
+                      >
+                        No saved custom boards yet. Choose Create your own to draw a board for this
+                        match.
+                      </p>
+                    }
+                  </div>
+                }
+              } @else {
+                <p class="text-sm text-arena-mist/70">
+                  Place snakes and ladders below. This board stays on this device for this match
+                  only — it is not saved.
+                </p>
                 <arena-snakes-layout-editor
                   [layout]="match.customLayout()"
                   [compact]="true"
@@ -166,6 +249,16 @@ import { PLAYER_SWATCH } from '../../models/theme';
           @if (match.errorMessage(); as err) {
             <p class="mt-4 text-sm text-piece-red">{{ err }}</p>
           }
+          @if (
+            match.gameType() === GameType.SNAKES &&
+            match.snakesLevelId() === SnakesLevelId.CUSTOM &&
+            match.customSource() === 'library' &&
+            !match.selectedCustomBoardId()
+          ) {
+            <p class="mt-4 text-sm text-arena-mist/60">
+              Select a saved board to start, or switch to Create your own.
+            </p>
+          }
 
           <button
             type="button"
@@ -177,7 +270,7 @@ import { PLAYER_SWATCH } from '../../models/theme';
           </button>
         </section>
       } @else if (match.state(); as state) {
-        @if (match.gameType() === GameType.SNAKES && match.snakesLevelId() === SnakesLevelId.CUSTOM) {
+        @if (match.editingOwnBoard()) {
           <div class="mx-auto mb-5 max-w-7xl">
             <arena-snakes-layout-editor
               [layout]="match.customLayout()"
@@ -198,7 +291,7 @@ import { PLAYER_SWATCH } from '../../models/theme';
           [canRoll]="match.canRoll()"
           [lastEvent]="match.lastEvent()"
           [errorMessage]="match.errorMessage()"
-          [editable]="match.gameType() === GameType.SNAKES && match.snakesLevelId() === SnakesLevelId.CUSTOM"
+          [editable]="match.editingOwnBoard()"
           [pendingSquare]="editor()?.pendingFrom() ?? null"
           (pieceSelect)="match.move($event)"
           (roll)="match.roll()"
@@ -206,9 +299,9 @@ import { PLAYER_SWATCH } from '../../models/theme';
         />
 
         @if (match.winner(); as winner) {
-          <div class="pointer-events-none fixed inset-x-0 bottom-8 flex justify-center">
-            <div class="rounded-full bg-arena-gold px-6 py-3 font-display text-lg font-semibold text-arena-ink shadow-2xl">
-              {{ winner.name }} wins the arena
+          <div class="pointer-events-none fixed inset-x-0 bottom-10 z-20 flex justify-center">
+            <div class="rounded-full bg-arena-gold px-7 py-3.5 font-display text-xl font-semibold text-arena-ink shadow-[0_12px_40px_rgba(228,193,106,0.45)]">
+              {{ winner.name }} wins
             </div>
           </div>
         }
@@ -216,13 +309,36 @@ import { PLAYER_SWATCH } from '../../models/theme';
     </div>
   `,
 })
-export class LocalMatchPage {
+export class LocalMatchPage implements OnInit {
   readonly auth = inject(AuthService);
   readonly match = inject(LocalMatchService);
+  private readonly api = inject(ArenaApiService);
   readonly GameType = GameType;
   readonly SnakesLevelId = SnakesLevelId;
   readonly PlayerColor = PlayerColor;
   readonly editor = viewChild(SnakesLayoutEditorComponent);
+  readonly customBoards = signal<SnakesCustomBoardDto[]>([]);
+  readonly boardsLoading = signal(false);
+  readonly boardsError = signal<string | null>(null);
+
+  ngOnInit(): void {
+    void this.loadBoards();
+  }
+
+  onSnakesLevel(levelId: SnakesLevelId): void {
+    if (levelId === SnakesLevelId.CUSTOM) {
+      this.match.setCustomSource('library');
+      this.ensureSavedBoardSelected();
+      return;
+    }
+    this.match.setSnakesLevel(levelId);
+  }
+
+  onCreateOwn(create: boolean): void {
+    if (create) {
+      this.match.setCustomSource('create');
+    }
+  }
 
   swatch(color: PlayerColor): string {
     return PLAYER_SWATCH[color];
@@ -237,5 +353,36 @@ export class LocalMatchPage {
 
   homeLabel(): string {
     return this.auth.user() ? 'Lobby' : 'Sign in';
+  }
+
+  playTitle(): string {
+    return gameTypeLabel(this.match.gameType());
+  }
+
+  private async loadBoards(): Promise<void> {
+    this.boardsLoading.set(true);
+    this.boardsError.set(null);
+    try {
+      this.customBoards.set(await this.api.snakesBoards());
+      this.ensureSavedBoardSelected();
+    } catch (error) {
+      this.boardsError.set(httpErrorMessage(error));
+    } finally {
+      this.boardsLoading.set(false);
+    }
+  }
+
+  private ensureSavedBoardSelected(): void {
+    if (
+      this.match.snakesLevelId() !== SnakesLevelId.CUSTOM ||
+      this.match.customSource() !== 'library' ||
+      this.match.selectedCustomBoardId()
+    ) {
+      return;
+    }
+    const first = this.customBoards()[0];
+    if (first) {
+      this.match.selectSavedBoard(first.id, first.layout);
+    }
   }
 }

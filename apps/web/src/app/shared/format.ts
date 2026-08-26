@@ -50,3 +50,40 @@ export function httpErrorMessage(error: unknown): string {
   }
   return 'Request failed';
 }
+
+export function formatGameEvents(types: string[]): string {
+  if (types.includes('LANDED_ON_SNAKE')) {
+    return 'Slid down a snake';
+  }
+  if (types.includes('LANDED_ON_LADDER')) {
+    return 'Climbed a ladder';
+  }
+  if (types.includes('PLAYER_FINISHED') || types.includes('MATCH_FINISHED')) {
+    return 'Reached 100';
+  }
+  if (types.includes('PIECE_CAPTURED')) {
+    return 'Sent a token back to GO';
+  }
+  if (types.includes('NO_VALID_MOVES')) {
+    return 'Need a 6 to leave GO';
+  }
+  if (types.includes('EXTRA_TURN')) {
+    return 'Six — roll again';
+  }
+  if (types.includes('PIECE_ENTERED_BOARD')) {
+    return 'Entered the board';
+  }
+  if (types.includes('CONSECUTIVE_SIXES_FORFEIT')) {
+    return 'Three sixes — turn skipped';
+  }
+  if (types.includes('PIECE_MOVED')) {
+    return 'On the move';
+  }
+  if (types.includes('TURN_CHANGED')) {
+    return 'Next player';
+  }
+  if (types.includes('DICE_ROLLED')) {
+    return 'Dice rolled';
+  }
+  return types.join(' · ');
+}

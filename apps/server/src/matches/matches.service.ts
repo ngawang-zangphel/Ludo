@@ -22,7 +22,7 @@ import {
   MatchSummaryDto,
   maxMarriagePlayers,
   ParticipantStatus,
-  PLAYER_COLOR_ORDER,
+  defaultSeatColors,
   ServerToClientEvents,
   SnakesGameState,
   GameEngineError,
@@ -208,7 +208,9 @@ export class MatchesService implements OnModuleInit {
     }
     await this.assertPlayersAvailable(toObjectIdString(match.tournamentId), dto.playerUserIds, matchId);
     const colors =
-      gameType === GameType.MARRIAGE ? [...MARRIAGE_SEAT_COLORS] : [...PLAYER_COLOR_ORDER];
+      gameType === GameType.MARRIAGE
+        ? [...MARRIAGE_SEAT_COLORS]
+        : defaultSeatColors(dto.playerUserIds.length);
     const players = [];
     for (let index = 0; index < dto.playerUserIds.length; index += 1) {
       const userId = dto.playerUserIds[index];

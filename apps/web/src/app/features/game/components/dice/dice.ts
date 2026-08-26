@@ -16,11 +16,12 @@ import { DiceUiState } from '../../models/dice';
   selector: 'ludo-dice',
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <div class="flex flex-col items-center gap-1.5">
+    <div class="dice-shell" [class.is-compact]="compact()">
       <button
         type="button"
         class="dice-scene"
         [class.is-clickable]="canRoll()"
+        [class.is-compact]="compact()"
         [disabled]="!canRoll()"
         [attr.aria-label]="canRoll() ? 'Roll dice' : 'Dice'"
         (click)="requestRoll()"
@@ -46,17 +47,19 @@ import { DiceUiState } from '../../models/dice';
           <span class="dice-countdown" aria-live="polite">{{ seconds }}</span>
         }
       </button>
-      @if (state() === 'RESULT' && value(); as rolled) {
+      @if (!compact() && state() === 'RESULT' && value(); as rolled) {
         <p class="dice-result-label" aria-live="polite">{{ rolled }}</p>
       }
-      <button
-        type="button"
-        class="rounded-full bg-arena-gold px-4 py-1.5 font-display text-xs font-semibold text-arena-ink disabled:cursor-not-allowed disabled:opacity-40"
-        [disabled]="!canRoll()"
-        (click)="requestRoll()"
-      >
-        {{ label() }}
-      </button>
+      @if (!compact()) {
+        <button
+          type="button"
+          class="dice-roll-btn"
+          [disabled]="!canRoll()"
+          (click)="requestRoll()"
+        >
+          {{ label() }}
+        </button>
+      }
     </div>
   `,
 })
@@ -70,6 +73,7 @@ export class DiceComponent {
   readonly canRoll = input(false);
   /** Shared deadline from match state so every viewer sees the same countdown. */
   readonly rollDeadlineAt = input<string | null>(null);
+  readonly compact = input(false);
   readonly roll = output<void>();
   readonly faces = DICE_FACES;
   readonly countdown = signal<number | null>(null);

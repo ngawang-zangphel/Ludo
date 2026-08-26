@@ -3,13 +3,16 @@ import {
   BoardCoordinate,
   cloneSnakesLayout,
   CreateMatchPlayer,
+  emptySnakesLayout,
   GameEngineError,
   GameState,
   GameType,
   isLudoState,
   isSnakesState,
   PLAYER_COLOR_ORDER,
+  PLAYER_COLOR_OPPOSITE,
   PlayerColor,
+  defaultSeatColors,
   resolveSnakesRules,
   SnakesBoardLayout,
   SnakesLevelId,
@@ -26,19 +29,26 @@ import {
   getSnakesSquareCoordinate,
 } from '@ludo-game/game-engine';
 import { DiceUiState } from '../models/dice';
-import { PIECE_STEP_MS } from '../models/motion';
+import { DICE_REVEAL_MS, DICE_TUMBLE_MS, PIECE_STEP_MS } from '../models/motion';
+import { formatGameEvents } from '../../../shared/format';
 
 export interface HotSeatPlayerSlot {
   name: string;
   color: PlayerColor;
 }
 
+export type HotSeatCustomSource = 'library' | 'create';
+
 @Injectable()
 export class LocalMatchService {
   readonly phase = signal<'setup' | 'playing'>('setup');
   readonly gameType = signal<GameType>(GameType.LUDO);
   readonly snakesLevelId = signal<SnakesLevelId>(SnakesLevelId.CLASSIC);
+  readonly customSource = signal<HotSeatCustomSource>('library');
+  readonly selectedCustomBoardId = signal<string | null>(null);
   readonly customLayout = signal<SnakesBoardLayout>(cloneSnakesLayout(resolveSnakesRules().layout));
+  readonly createDraft = signal<SnakesBoardLayout>(emptySnakesLayout());
+  private libraryLayout: SnakesBoardLayout | null = null;
   readonly playerCount = signal(4);
   readonly playerSlots = signal<HotSeatPlayerSlot[]>(defaultSlots(4));
   readonly state = signal<GameState | null>(null);
@@ -49,6 +59,7 @@ export class LocalMatchService {
   readonly displayCoords = signal<Record<string, BoardCoordinate>>({});
   readonly errorMessage = signal<string | null>(null);
   readonly lastEvent = signal<string | null>(null);
+  private actionGen = 0;
 
   readonly currentPlayer = computed(() => {
     const match = this.state();
@@ -91,8 +102,26 @@ export class LocalMatchService {
 
   readonly allowedPlayerCounts = computed(() => [2, 3, 4]);
 
-  readonly setupReady = computed(() =>
-    this.playerSlots().every((slot) => slot.name.trim().length > 0)
+  readonly setupReady = computed(() => {
+    if (!this.playerSlots().every((slot) => slot.name.trim().length > 0)) {
+      return false;
+    }
+    if (
+      this.gameType() === GameType.SNAKES &&
+      this.snakesLevelId() === SnakesLevelId.CUSTOM &&
+      this.customSource() === 'library' &&
+      !this.selectedCustomBoardId()
+    ) {
+      return false;
+    }
+    return true;
+  });
+
+  readonly editingOwnBoard = computed(
+    () =>
+      this.gameType() === GameType.SNAKES &&
+      this.snakesLevelId() === SnakesLevelId.CUSTOM &&
+      this.customSource() === 'create'
   );
 
   setGameType(type: GameType): void {
@@ -112,7 +141,35 @@ export class LocalMatchService {
     this.snakesLevelId.set(levelId);
     if (levelId !== SnakesLevelId.CUSTOM) {
       this.customLayout.set(cloneSnakesLayout(resolveSnakesRules({ levelId }).layout));
+    } else if (this.customSource() === 'create') {
+      this.customLayout.set(cloneSnakesLayout(this.createDraft()));
+    } else if (this.libraryLayout) {
+      this.customLayout.set(cloneSnakesLayout(this.libraryLayout));
     }
+    if (this.phase() === 'playing') {
+      this.backToSetup();
+    }
+  }
+
+  setCustomSource(source: HotSeatCustomSource): void {
+    this.customSource.set(source);
+    this.snakesLevelId.set(SnakesLevelId.CUSTOM);
+    if (source === 'create') {
+      this.customLayout.set(cloneSnakesLayout(this.createDraft()));
+    } else if (this.libraryLayout) {
+      this.customLayout.set(cloneSnakesLayout(this.libraryLayout));
+    }
+    if (this.phase() === 'playing') {
+      this.backToSetup();
+    }
+  }
+
+  selectSavedBoard(id: string, layout: SnakesBoardLayout): void {
+    this.snakesLevelId.set(SnakesLevelId.CUSTOM);
+    this.customSource.set('library');
+    this.selectedCustomBoardId.set(id);
+    this.libraryLayout = cloneSnakesLayout(layout);
+    this.customLayout.set(cloneSnakesLayout(layout));
     if (this.phase() === 'playing') {
       this.backToSetup();
     }
@@ -120,6 +177,9 @@ export class LocalMatchService {
 
   setCustomLayout(layout: SnakesBoardLayout): void {
     this.customLayout.set(cloneSnakesLayout(layout));
+    if (this.customSource() === 'create') {
+      this.createDraft.set(cloneSnakesLayout(layout));
+    }
     if (this.phase() !== 'playing') {
       return;
     }
@@ -138,18 +198,29 @@ export class LocalMatchService {
 
   setPlayerCount(count: number): void {
     const next = Math.min(4, Math.max(2, Math.floor(count)));
-    const slots = [...this.playerSlots()];
-    if (next < slots.length) {
-      slots.length = next;
+    const names = this.playerSlots().map((slot) => slot.name);
+    if (next === 2) {
+      this.playerCount.set(2);
+      this.playerSlots.set(
+        defaultSeatColors(2).map((color, index) => ({
+          color,
+          name: names[index] ?? '',
+        }))
+      );
     } else {
-      while (slots.length < next) {
-        const used = new Set(slots.map((slot) => slot.color));
-        const color = PLAYER_COLOR_ORDER.find((item) => !used.has(item)) ?? PlayerColor.RED;
-        slots.push({ name: '', color });
+      const slots = [...this.playerSlots()];
+      if (next < slots.length) {
+        slots.length = next;
+      } else {
+        while (slots.length < next) {
+          const used = new Set(slots.map((slot) => slot.color));
+          const color = PLAYER_COLOR_ORDER.find((item) => !used.has(item)) ?? PlayerColor.RED;
+          slots.push({ name: names[slots.length] ?? '', color });
+        }
       }
+      this.playerCount.set(next);
+      this.playerSlots.set(slots);
     }
-    this.playerCount.set(next);
-    this.playerSlots.set(slots);
     if (this.phase() === 'playing') {
       this.backToSetup();
     }
@@ -167,6 +238,15 @@ export class LocalMatchService {
       const current = next[index];
       if (!current || current.color === color) {
         return slots;
+      }
+      if (next.length === 2) {
+        const other = index === 0 ? 1 : 0;
+        next[index] = { ...current, color };
+        const partner = next[other];
+        if (partner) {
+          next[other] = { ...partner, color: PLAYER_COLOR_OPPOSITE[color] };
+        }
+        return next;
       }
       const taken = next.findIndex((slot, i) => i !== index && slot.color === color);
       if (taken >= 0 && next[taken]) {
@@ -186,6 +266,7 @@ export class LocalMatchService {
       return;
     }
     try {
+      this.actionGen += 1;
       const next = this.buildMatch();
       this.state.set(next);
       this.phase.set('playing');
@@ -202,6 +283,7 @@ export class LocalMatchService {
   }
 
   backToSetup(): void {
+    this.actionGen += 1;
     this.phase.set('setup');
     this.state.set(null);
     this.diceUi.set('WAITING');
@@ -222,6 +304,7 @@ export class LocalMatchService {
       return;
     }
 
+    const gen = ++this.actionGen;
     this.errorMessage.set(null);
     this.diceUi.set('ROLLING');
     const startedAt = Date.now();
@@ -239,16 +322,44 @@ export class LocalMatchService {
       if (!result) {
         return;
       }
-      const wait = Math.max(0, 650 - (Date.now() - startedAt));
-      await delay(wait);
-      this.state.set(result.state);
+      const tumbleWait = Math.max(0, DICE_TUMBLE_MS - (Date.now() - startedAt));
+      await delay(tumbleWait);
+      if (gen !== this.actionGen) {
+        return;
+      }
+
+      const value = result.state.dice.value;
+      this.animating.set(true);
+      this.state.set({
+        ...current,
+        dice: { value, rolled: true },
+        turnPhase: TurnPhase.WAITING_FOR_MOVE,
+        validPieceIds: [],
+        rollDeadlineAt: null,
+      });
       this.diceUi.set('RESULT');
+      this.lastEvent.set(value != null ? `Rolled ${value}` : 'Dice rolled');
+
+      await delay(DICE_REVEAL_MS);
+      if (gen !== this.actionGen) {
+        return;
+      }
+
+      this.state.set(result.state);
       this.lastEvent.set(summarize(result.events.map((event) => event.type)));
+      this.animating.set(false);
+
       const tokenId = result.validPieceIds[0];
       if (isSnakesState(result.state) && tokenId) {
         await this.move(tokenId);
+      } else if (result.state.turnPhase === TurnPhase.WAITING_FOR_ROLL) {
+        this.diceUi.set('WAITING');
       }
     } catch (error) {
+      if (gen !== this.actionGen) {
+        return;
+      }
+      this.animating.set(false);
       this.diceUi.set('WAITING');
       this.errorMessage.set(toMessage(error));
     }
@@ -358,7 +469,7 @@ export class LocalMatchService {
 }
 
 function defaultSlots(count: number): HotSeatPlayerSlot[] {
-  return PLAYER_COLOR_ORDER.slice(0, count).map((color) => ({
+  return defaultSeatColors(count).map((color) => ({
     color,
     name: '',
   }));
@@ -379,5 +490,5 @@ function toMessage(error: unknown): string {
 }
 
 function summarize(types: string[]): string {
-  return types.join(' → ');
+  return formatGameEvents(types);
 }

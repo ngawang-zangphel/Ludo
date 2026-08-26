@@ -23,6 +23,12 @@ export interface SnakeSpot {
   width: number;
 }
 
+export interface SnakePalette {
+  fill: string;
+  spot: string;
+  stroke: string;
+}
+
 export interface SnakeGraphic {
   from: number;
   to: number;
@@ -30,7 +36,16 @@ export interface SnakeGraphic {
   spots: SnakeSpot[];
   head: Point;
   angle: number;
+  palette: SnakePalette;
 }
+
+const SNAKE_PALETTES: SnakePalette[] = [
+  { fill: '#7ee35a', spot: '#1f7a32', stroke: '#14532d' },
+  { fill: '#2dd4bf', spot: '#0f766e', stroke: '#134e4a' },
+  { fill: '#f5b942', spot: '#b45309', stroke: '#7c2d12' },
+  { fill: '#fb7185', spot: '#9f1239', stroke: '#4c0519' },
+  { fill: '#c084fc', spot: '#6d28d9', stroke: '#3b0764' },
+];
 
 export type TravelDir = 'left' | 'right' | 'up';
 export type SquareKind = 'normal' | 'start' | 'finish' | 'ladder' | 'snake';
@@ -42,6 +57,7 @@ export interface BoardSquare {
   dir: TravelDir;
   checkerDark: boolean;
   kind: SquareKind;
+  band: number;
 }
 
 export function cellCenter(square: number): Point {
@@ -65,6 +81,7 @@ export function buildSquares(layout: SnakesBoardLayout): BoardSquare[] {
       dir: travelDir(number),
       checkerDark: (Math.round(cell.row) + Math.round(cell.col)) % 2 === 1,
       kind: squareKind(number, ladderSquares, snakeSquares),
+      band: Math.floor((number - 1) / 10) % 5,
     });
   }
   return squares.sort((left, right) => left.row - right.row || left.col - right.col);
@@ -164,6 +181,7 @@ export function buildSnakeGraphic(from: number, to: number, index: number): Snak
     spots,
     head,
     angle: (Math.atan2(tangent.y, tangent.x) * 180) / Math.PI + 180,
+    palette: SNAKE_PALETTES[index % SNAKE_PALETTES.length] as SnakePalette,
   };
 }
 

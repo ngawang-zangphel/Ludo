@@ -127,28 +127,28 @@ export const CENTER_COORDINATE: BoardCoordinate = { row: 7, col: 7 };
 
 export const YARD_SLOTS: Record<PlayerColor, readonly BoardCoordinate[]> = {
   [PlayerColor.RED]: [
-    { row: 11, col: 2 },
-    { row: 11, col: 3 },
-    { row: 12, col: 2 },
-    { row: 12, col: 3 },
+    { row: 10, col: 1 },
+    { row: 10, col: 4 },
+    { row: 13, col: 1 },
+    { row: 13, col: 4 },
   ],
   [PlayerColor.GREEN]: [
-    { row: 2, col: 2 },
-    { row: 2, col: 3 },
-    { row: 3, col: 2 },
-    { row: 3, col: 3 },
+    { row: 1, col: 1 },
+    { row: 1, col: 4 },
+    { row: 4, col: 1 },
+    { row: 4, col: 4 },
   ],
   [PlayerColor.YELLOW]: [
-    { row: 2, col: 11 },
-    { row: 2, col: 12 },
-    { row: 3, col: 11 },
-    { row: 3, col: 12 },
+    { row: 1, col: 10 },
+    { row: 1, col: 13 },
+    { row: 4, col: 10 },
+    { row: 4, col: 13 },
   ],
   [PlayerColor.BLUE]: [
-    { row: 11, col: 11 },
-    { row: 11, col: 12 },
-    { row: 12, col: 11 },
-    { row: 12, col: 12 },
+    { row: 10, col: 10 },
+    { row: 10, col: 13 },
+    { row: 13, col: 10 },
+    { row: 13, col: 13 },
   ],
 };
 

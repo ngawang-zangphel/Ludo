@@ -9,12 +9,12 @@ import { PLAYER_SWATCH } from '../../models/theme';
     <div class="flex items-center gap-1.5">
       @for (filled of steps(); track $index) {
         <span
-          class="h-2.5 w-2.5 rounded-full"
-          [class.opacity-30]="!filled"
+          class="h-2.5 w-2.5 rounded-full ring-1 ring-white/10"
+          [class.opacity-25]="!filled"
           [style.background]="PLAYER_SWATCH[player().color]"
         ></span>
       }
-      <span class="ml-1 text-[11px] uppercase tracking-wider text-arena-mist/60">
+      <span class="ml-1 text-[11px] uppercase tracking-wider text-arena-mist/55">
         {{ homeCount() }}/4 home
       </span>
     </div>

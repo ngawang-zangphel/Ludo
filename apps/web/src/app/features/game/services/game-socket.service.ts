@@ -36,6 +36,7 @@ import {
   MATCH_START_COUNTDOWN_TICK_MS,
   PIECE_STEP_MS,
 } from '../models/motion';
+import { formatGameEvents } from '../../../shared/format';
 
 export type GameAttachMode = 'player' | 'spectator' | 'broadcast';
 
@@ -452,7 +453,7 @@ export class GameSocketService {
     }
     this.applyState(payload.state);
     this.diceUi.set('WAITING');
-    this.lastEvent.set(payload.events.map((event) => event.type).join(' → '));
+    this.lastEvent.set(formatGameEvents(payload.events.map((event) => event.type)));
   }
 
   private applyState(state: GameState): void {

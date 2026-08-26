@@ -35,29 +35,36 @@ import { SnakesPlayerPanelComponent } from '../snakes-player-panel/snakes-player
   ],
   template: `
     @if (ludo(); as ludo) {
-      <div class="mx-auto grid max-w-7xl gap-2 lg:grid-cols-[minmax(160px,0.85fr)_auto_minmax(160px,0.85fr)] lg:items-center lg:gap-3">
-        <div class="space-y-2">
+      <div class="arena-table ludo-table">
+        <div class="ludo-table-green">
           @if (ludoPlayer(ludo, PlayerColor.GREEN); as green) {
             <ludo-player-panel
               [player]="green"
               [active]="isActive(green.id)"
-              [validPieceIds]="validFor(green.id)"
-              [hiddenPieceId]="movingPieceId()"
-              (pieceSelect)="pieceSelect.emit($event)"
+              [align]="'start'"
+              [diceValue]="state().dice.value"
+              [diceUi]="diceUi()"
+              [canRoll]="canRoll()"
+              [rollDeadlineAt]="rollDeadlineAt()"
+              (roll)="roll.emit()"
             />
           }
+        </div>
+        <div class="ludo-table-red">
           @if (ludoPlayer(ludo, PlayerColor.RED); as red) {
             <ludo-player-panel
               [player]="red"
               [active]="isActive(red.id)"
-              [validPieceIds]="validFor(red.id)"
-              [hiddenPieceId]="movingPieceId()"
-              (pieceSelect)="pieceSelect.emit($event)"
+              [align]="'start'"
+              [diceValue]="state().dice.value"
+              [diceUi]="diceUi()"
+              [canRoll]="canRoll()"
+              [rollDeadlineAt]="rollDeadlineAt()"
+              (roll)="roll.emit()"
             />
           }
         </div>
-
-        <div class="flex flex-col items-center gap-2">
+        <div class="ludo-table-board">
           <ludo-board
             [state]="ludo"
             [displayCoords]="displayCoords()"
@@ -68,39 +75,56 @@ import { SnakesPlayerPanelComponent } from '../snakes-player-panel/snakes-player
             (pieceSelect)="pieceSelect.emit($event)"
           />
         </div>
-
-        <div class="space-y-2">
+        <div class="ludo-table-yellow">
           @if (ludoPlayer(ludo, PlayerColor.YELLOW); as yellow) {
             <ludo-player-panel
               [player]="yellow"
               [active]="isActive(yellow.id)"
-              [validPieceIds]="validFor(yellow.id)"
-              [hiddenPieceId]="movingPieceId()"
-              (pieceSelect)="pieceSelect.emit($event)"
+              [align]="'end'"
+              [diceValue]="state().dice.value"
+              [diceUi]="diceUi()"
+              [canRoll]="canRoll()"
+              [rollDeadlineAt]="rollDeadlineAt()"
+              (roll)="roll.emit()"
             />
           }
+        </div>
+        <div class="ludo-table-blue">
           @if (ludoPlayer(ludo, PlayerColor.BLUE); as blue) {
             <ludo-player-panel
               [player]="blue"
               [active]="isActive(blue.id)"
-              [validPieceIds]="validFor(blue.id)"
-              [hiddenPieceId]="movingPieceId()"
-              (pieceSelect)="pieceSelect.emit($event)"
+              [align]="'end'"
+              [diceValue]="state().dice.value"
+              [diceUi]="diceUi()"
+              [canRoll]="canRoll()"
+              [rollDeadlineAt]="rollDeadlineAt()"
+              (roll)="roll.emit()"
             />
           }
         </div>
       </div>
     } @else if (snakes(); as snakes) {
-      <div class="mx-auto grid max-w-7xl gap-2 lg:grid-cols-[minmax(160px,0.85fr)_auto_minmax(160px,0.85fr)] lg:items-center lg:gap-3">
-        <div class="space-y-2">
+      <div class="arena-table ludo-table">
+        <div class="ludo-table-green">
           @if (snakesPlayer(snakes, PlayerColor.GREEN); as green) {
-            <arena-snakes-player-panel [player]="green" [active]="isActive(green.id)" />
-          }
-          @if (snakesPlayer(snakes, PlayerColor.RED); as red) {
-            <arena-snakes-player-panel [player]="red" [active]="isActive(red.id)" />
+            <arena-snakes-player-panel
+              [player]="green"
+              [active]="isActive(green.id)"
+              [align]="'start'"
+            />
           }
         </div>
-        <div class="flex flex-col items-center gap-2">
+        <div class="ludo-table-red">
+          @if (snakesPlayer(snakes, PlayerColor.RED); as red) {
+            <arena-snakes-player-panel
+              [player]="red"
+              [active]="isActive(red.id)"
+              [align]="'start'"
+            />
+          }
+        </div>
+        <div class="ludo-table-board">
           <arena-snakes-board
             [state]="snakes"
             [displayCoords]="displayCoords()"
@@ -111,35 +135,56 @@ import { SnakesPlayerPanelComponent } from '../snakes-player-panel/snakes-player
             (squareSelect)="squareSelect.emit($event)"
           />
         </div>
-        <div class="space-y-2">
+        <div class="ludo-table-yellow">
           @if (snakesPlayer(snakes, PlayerColor.YELLOW); as yellow) {
-            <arena-snakes-player-panel [player]="yellow" [active]="isActive(yellow.id)" />
+            <arena-snakes-player-panel
+              [player]="yellow"
+              [active]="isActive(yellow.id)"
+              [align]="'end'"
+            />
           }
+        </div>
+        <div class="ludo-table-blue">
           @if (snakesPlayer(snakes, PlayerColor.BLUE); as blue) {
-            <arena-snakes-player-panel [player]="blue" [active]="isActive(blue.id)" />
+            <arena-snakes-player-panel
+              [player]="blue"
+              [active]="isActive(blue.id)"
+              [align]="'end'"
+            />
           }
         </div>
       </div>
     }
 
-    <footer class="mx-auto mt-2 grid max-w-4xl gap-2 md:grid-cols-[1fr_auto_1fr] md:items-center">
+    <footer class="arena-hud mx-auto mt-3 grid max-w-4xl gap-3 md:grid-cols-[1fr_auto_1fr] md:items-center">
       <ludo-turn-indicator
         [player]="currentPlayer()"
         [phase]="state().turnPhase"
-        [hint]="snakes() ? 'Roll a 6 to enter, then race to 100' : 'Choose a highlighted piece'"
+        [hint]="snakes() ? 'Roll a 6 to leave GO, then race to 100' : 'Tap a highlighted piece'"
       />
-      <ludo-dice
-        [value]="state().dice.value"
-        [state]="diceUi()"
-        [canRoll]="canRoll()"
-        [rollDeadlineAt]="rollDeadlineAt()"
-        (roll)="roll.emit()"
-      />
-      <div class="rounded-xl border border-arena-line bg-arena-navy/70 px-3 py-2 text-xs text-arena-mist/70">
-        <p>Turn {{ state().turnNumber }} · version {{ state().version }}</p>
-        <p class="mt-0.5 line-clamp-2">{{ lastEvent() || hint() }}</p>
+      @if (snakes()) {
+        <ludo-dice
+          [value]="state().dice.value"
+          [state]="diceUi()"
+          [canRoll]="canRoll()"
+          [rollDeadlineAt]="rollDeadlineAt()"
+          (roll)="roll.emit()"
+        />
+      } @else {
+        <button
+          type="button"
+          class="dice-roll-btn justify-self-center"
+          [disabled]="!canRoll()"
+          (click)="roll.emit()"
+        >
+          {{ canRoll() ? 'Roll dice' : 'Waiting' }}
+        </button>
+      }
+      <div class="arena-event px-2 py-1 text-sm">
+        <p class="text-[0.65rem] uppercase tracking-[0.22em] text-arena-gold/80">Turn {{ state().turnNumber }}</p>
+        <p class="mt-1 font-display text-base leading-snug text-white">{{ lastEvent() || hint() }}</p>
         @if (errorMessage(); as error) {
-          <p class="mt-1 text-piece-red">{{ error }}</p>
+          <p class="mt-1 text-sm text-piece-red">{{ error }}</p>
         }
       </div>
     </footer>
@@ -203,7 +248,7 @@ export class GameTableComponent {
 
   readonly hint = computed(() =>
     this.snakes()
-      ? 'Race to 100. Roll a 6 to enter. Land on a player and they go back to 1.'
+      ? 'Race to 100. Roll a 6 to leave GO.'
       : 'Roll a 6 to leave the yard.'
   );
 
@@ -217,12 +262,5 @@ export class GameTableComponent {
 
   isActive(playerId: string): boolean {
     return this.state().currentPlayerId === playerId;
-  }
-
-  validFor(playerId: string): string[] {
-    if (!this.highlightValid() || this.state().currentPlayerId !== playerId) {
-      return [];
-    }
-    return this.state().validPieceIds;
   }
 }

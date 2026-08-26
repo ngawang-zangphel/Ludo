@@ -7,23 +7,23 @@ import { CreateSnakesBoardDto, UpdateSnakesBoardDto } from './dto/snakes-board.d
 import { SnakesBoardsService } from './snakes-boards.service';
 
 @Controller('snakes-boards')
-@UseGuards(AuthGuard, RolesGuard)
 export class SnakesBoardsController {
   constructor(private readonly boards: SnakesBoardsService) {}
 
   @Get()
-  @Roles(UserRole.ADMIN)
   list(): Promise<SnakesCustomBoardDto[]> {
     return this.boards.list();
   }
 
   @Post()
+  @UseGuards(AuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN)
   create(@Body() dto: CreateSnakesBoardDto): Promise<SnakesCustomBoardDto> {
     return this.boards.create(dto);
   }
 
   @Patch(':id')
+  @UseGuards(AuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN)
   update(
     @Param('id') id: string,
@@ -33,6 +33,7 @@ export class SnakesBoardsController {
   }
 
   @Delete(':id')
+  @UseGuards(AuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN)
   async remove(@Param('id') id: string): Promise<{ ok: true }> {
     await this.boards.remove(id);

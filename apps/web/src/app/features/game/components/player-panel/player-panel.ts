@@ -1,50 +1,42 @@
-import { ChangeDetectionStrategy, Component, computed, input, output } from '@angular/core';
+import { ChangeDetectionStrategy, Component, input, output } from '@angular/core';
 import { LudoPlayer } from '@ludo-game/shared-types';
 import { PLAYER_SWATCH } from '../../models/theme';
-import { PlayerYardComponent } from '../player-yard/player-yard';
-import { HomePathComponent } from '../home-path/home-path';
+import { DiceUiState } from '../../models/dice';
+import { DiceComponent } from '../dice/dice';
 
 @Component({
   selector: 'ludo-player-panel',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [PlayerYardComponent, HomePathComponent],
+  imports: [DiceComponent],
+  host: { class: 'inline-flex' },
   template: `
     <section
-      class="rounded-2xl border px-3 py-2.5 shadow-lg backdrop-blur"
-      [class.border-arena-gold]="active()"
-      [class.bg-arena-panel/90]="true"
-      [class.ring-2]="active()"
-      [class.ring-arena-gold]="active()"
+      class="king-badge"
+      [class.is-active]="active()"
+      [class.is-end]="align() === 'end'"
       [class.opacity-50]="player().eliminated"
+      [style.--seat-color]="PLAYER_SWATCH[player().color]"
     >
-      <div class="mb-1.5 flex items-center justify-between gap-2">
-        <div>
-          <p class="text-[0.65rem] uppercase tracking-[0.2em] text-arena-mist/50">{{ player().color }}</p>
-          <h3 class="font-display text-sm font-semibold leading-tight">{{ player().name }}</h3>
-        </div>
-        <span
-          class="h-3 w-3 rounded-full"
-          [style.background]="PLAYER_SWATCH[player().color]"
-        ></span>
-      </div>
-      <p class="mb-1.5 text-[0.65rem] text-arena-mist/60">
-        @if (player().eliminated) {
-          Removed
-        } @else {
-          {{ player().connected ? 'Connected' : 'Reconnecting…' }}
-          @if (player().finishedPosition) {
-            · Finished {{ ordinal() }}
-          }
+      <span class="king-pin" aria-hidden="true">
+        <svg viewBox="0 0 32 42">
+          <path
+            fill="currentColor"
+            d="M16 1.5c-7.2 0-13 5.7-13 12.7 0 9.3 13 26.3 13 26.3s13-17 13-26.3C29 7.2 23.2 1.5 16 1.5Z"
+          />
+          <circle cx="16" cy="14" r="5.2" fill="#fff" opacity="0.95" />
+        </svg>
+      </span>
+      <div class="king-well" [class.is-live]="active()">
+        @if (active() && !player().eliminated) {
+          <ludo-dice
+            [value]="diceValue()"
+            [state]="diceUi()"
+            [canRoll]="canRoll()"
+            [rollDeadlineAt]="rollDeadlineAt()"
+            [compact]="true"
+            (roll)="roll.emit()"
+          />
         }
-      </p>
-      <ludo-home-path [player]="player()" />
-      <div class="mt-1.5">
-        <ludo-player-yard
-          [player]="player()"
-          [validPieceIds]="validPieceIds()"
-          [hiddenPieceId]="hiddenPieceId()"
-          (pieceSelect)="pieceSelect.emit($event)"
-        />
       </div>
     </section>
   `,
@@ -53,16 +45,10 @@ export class PlayerPanelComponent {
   readonly PLAYER_SWATCH = PLAYER_SWATCH;
   readonly player = input.required<LudoPlayer>();
   readonly active = input(false);
-  readonly validPieceIds = input<string[]>([]);
-  readonly hiddenPieceId = input<string | null>(null);
-  readonly pieceSelect = output<string>();
-
-  readonly ordinal = computed(() => {
-    const place = this.player().finishedPosition;
-    if (place === 1) return '1st';
-    if (place === 2) return '2nd';
-    if (place === 3) return '3rd';
-    if (place === 4) return '4th';
-    return '';
-  });
+  readonly align = input<'start' | 'end'>('start');
+  readonly diceValue = input<number | null>(null);
+  readonly diceUi = input<DiceUiState>('WAITING');
+  readonly canRoll = input(false);
+  readonly rollDeadlineAt = input<string | null>(null);
+  readonly roll = output<void>();
 }
