@@ -87,11 +87,12 @@ export interface MarriagePlayer {
    */
   holdCardIds: string[];
   /**
-   * Three pure sequences used to qualify for seeing maal (display grouping; editable).
+   * Up to three pure sequences/tunnels used to qualify for seeing maal.
+   * Each entry is a meld of 3+ card ids (tunnels stay length 3; sequences may be longer).
    */
-  maalSequences: Array<[string, string, string]>;
+  maalSequences: string[][];
   /**
-   * Card ids that cannot be discarded after seeing maal (the nine cards that qualified).
+   * Card ids that cannot be discarded after seeing maal (the cards that qualified).
    * Survives rearranging trays until the player opens.
    */
   maalProtectIds: string[];

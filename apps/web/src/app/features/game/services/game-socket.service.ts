@@ -25,6 +25,7 @@ import {
   marriageCanShow,
   marriageReadyToSeeMaal,
   marriageSuggestOpen,
+  validateMaalMelds,
 } from '@ludo-game/game-engine';
 import { SocketService } from '../../../core/socket/socket.service';
 import { AuthService } from '../../../core/auth/auth.service';
@@ -68,6 +69,7 @@ export class GameSocketService {
   readonly displayCoords = signal<Record<string, BoardCoordinate>>({});
   readonly errorMessage = signal<string | null>(null);
   readonly lastEvent = signal<string | null>(null);
+  private errorClearTimer: ReturnType<typeof setTimeout> | null = null;
   readonly status = signal<MatchStatus | null>(null);
   readonly roster = signal<MatchPlayerDto[]>([]);
   readonly selectedCardId = signal<string | null>(null);
@@ -110,6 +112,18 @@ export class GameSocketService {
     const match = this.state();
     const userId = this.auth.user()?.id;
     if (!match || !userId || !isMarriageState(match) || !this.isMyTurn()) {
+      return false;
+    }
+    const me = match.players.find((player) => player.id === userId);
+    // Open only after three valid melds are parked in the maal sequences tray.
+    if (
+      !me ||
+      !validateMaalMelds(
+        (me.maalSequences ?? []).filter((ids) => ids.length > 0),
+        me.hand,
+        null
+      )
+    ) {
       return false;
     }
     return marriageSuggestOpen(match, userId) != null;
@@ -165,7 +179,7 @@ export class GameSocketService {
       if (/already been rolled/i.test(payload.message)) {
         return;
       }
-      this.errorMessage.set(payload.message);
+      this.flashError(payload.message);
     });
     this.listen('match-started', (payload: MatchStatusPayload) => {
       if (payload.matchId === this.matchId()) {
@@ -223,6 +237,18 @@ export class GameSocketService {
     this.roster.set(players);
   }
 
+  /** Show a short-lived error snackbar message. */
+  flashError(message: string): void {
+    this.errorMessage.set(message);
+    if (this.errorClearTimer) {
+      clearTimeout(this.errorClearTimer);
+    }
+    this.errorClearTimer = setTimeout(() => {
+      this.errorMessage.set(null);
+      this.errorClearTimer = null;
+    }, 4000);
+  }
+
   detach(): void {
     const socket = this.sockets.client;
     const matchId = this.matchId();
@@ -235,6 +261,10 @@ export class GameSocketService {
       unsub();
     }
     this.unsubs = [];
+    if (this.errorClearTimer) {
+      clearTimeout(this.errorClearTimer);
+      this.errorClearTimer = null;
+    }
     this.matchId.set(null);
     this.state.set(null);
     this.roster.set([]);
@@ -317,7 +347,7 @@ export class GameSocketService {
   marriageReorder(layout: {
     freeCardIds: string[];
     holdCardIds: string[];
-    maalSequences: Array<[string, string, string]>;
+    maalSequences: string[][];
   }): void {
     const matchId = this.matchId();
     const match = this.state();
@@ -355,6 +385,14 @@ export class GameSocketService {
       ),
     });
     this.sockets.client.emit('marriage-reorder', { matchId, ...layout });
+    // Parking three pure opens should reveal maal (server confirms on reorder / ensure).
+    if (layout.maalSequences.length === 3) {
+      this.maalEnsureRequestedFor = null;
+      const next = this.state();
+      if (next) {
+        this.maybeRequestMaalReveal(next);
+      }
+    }
   }
 
   marriageExtendMeld(cardId: string, meldIndex: number): void {
@@ -386,6 +424,16 @@ export class GameSocketService {
     }
     this.errorMessage.set(null);
     this.sockets.client.emit('marriage-remove-meld-card', { matchId, cardId, meldIndex });
+  }
+
+  marriageAddMeld(cardIds: string[]): void {
+    const matchId = this.matchId();
+    const match = this.state();
+    if (!matchId || !match || !isMarriageState(match) || !this.isMyTurn() || this.introBusy()) {
+      return;
+    }
+    this.errorMessage.set(null);
+    this.sockets.client.emit('marriage-add-meld', { matchId, cardIds });
   }
 
   private listen<T>(event: string, handler: (payload: T) => void): void {
@@ -426,7 +474,7 @@ export class GameSocketService {
     this.maybeRequestMaalReveal(state);
   }
 
-  /** If you can open and maal is still hidden on your draw turn, ask the server to cut it. */
+  /** If you parked three opens and maal is still hidden, ask the server to cut/reveal it. */
   private maybeRequestMaalReveal(state: GameState): void {
     const matchId = this.matchId();
     const userId = this.auth.user()?.id;
@@ -435,13 +483,12 @@ export class GameSocketService {
       !userId ||
       this.introBusy() ||
       !isMarriageState(state) ||
-      state.tiplu ||
       state.turnPhase !== TurnPhase.WAITING_FOR_DRAW ||
       state.currentPlayerId !== userId ||
       !!state.players.find((player) => player.id === userId)?.hasSeenMaal ||
       !marriageReadyToSeeMaal(state, userId)
     ) {
-      if (!isMarriageState(state) || state.tiplu || state.currentPlayerId !== userId) {
+      if (!isMarriageState(state) || state.currentPlayerId !== userId) {
         this.maalEnsureRequestedFor = null;
       }
       return;

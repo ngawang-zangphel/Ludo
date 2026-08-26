@@ -8,11 +8,14 @@ import { createMarriageMatchState } from './create-match';
 import {
   discardMarriageCard,
   drawMarriageCard,
+  addMarriageMeld,
+  removeMarriageMeldCard,
   marriageSuggestOpen,
   openMarriage,
   reorderMarriageHand,
 } from './actions';
-import { canPartitionHand, classifyMeld } from './melds';
+import { canPartitionHand, classifyMeld, validateMaalMelds, validateOpenMelds } from './melds';
+import { sanitizeMarriageState } from './sanitize';
 
 describe('marriage cards', () => {
   it('builds 2 and 3 decks', () => {
@@ -200,11 +203,11 @@ describe('marriage match flow', () => {
     expect(rearranged.state.players[0]!.maalProtectIds).toEqual(melds.flat());
     expect(rearranged.state.players[0]!.maalSequences).toEqual([]);
     expect(() => discardMarriageCard(rearranged.state, 'p1', 'H-2-0')).toThrow(
-      /cannot break the sequence once you see the maal/i
+      /cannot destroy the sequence once you have seen the maal/i
     );
   });
 
-  it('reveals maal before draw when the next player already has three pure opens', () => {
+  it('does not auto-reveal maal from hand alone — melds must be parked', () => {
     const state = createMarriageMatchState({
       matchId: 'maal-ready',
       seed: 2,
@@ -238,7 +241,7 @@ describe('marriage match flow', () => {
       ...state,
       tiplu: null,
       players: state.players.map((player, index) =>
-        index === 1 ? { ...player, hand: forced } : player
+        index === 1 ? { ...player, hand: forced, maalSequences: [], hasSeenMaal: false } : player
       ),
     };
 
@@ -247,7 +250,174 @@ describe('marriage match flow', () => {
     const afterDiscard = discardMarriageCard(afterDraw.state, 'p1', discardId);
     expect(afterDiscard.state.currentPlayerId).toBe('p2');
     expect(afterDiscard.state.turnPhase).toBe('WAITING_FOR_DRAW');
-    expect(afterDiscard.state.tiplu).not.toBeNull();
+    expect(afterDiscard.state.tiplu).toBeNull();
+    expect(afterDiscard.state.players[1]!.hasSeenMaal).toBe(false);
+
+    const melds: string[][] = [
+      ['H-2-0', 'H-3-0', 'H-4-0'],
+      ['D-2-0', 'D-3-0', 'D-4-0'],
+      ['C-2-0', 'C-3-0', 'C-4-0'],
+    ];
+    const locked = new Set(melds.flat());
+    const free = forced.filter((card) => !locked.has(card.id)).map((card) => card.id);
+    const afterPark = reorderMarriageHand(afterDiscard.state, 'p2', {
+      freeCardIds: free,
+      holdCardIds: [],
+      maalSequences: melds,
+    });
+    expect(afterPark.state.tiplu).not.toBeNull();
+    expect(afterPark.state.players[1]!.hasSeenMaal).toBe(true);
+    expect(afterPark.state.players[1]!.maalSequences).toEqual([]);
+    expect(afterPark.state.players[1]!.maalProtectIds).toEqual(melds.flat());
+  });
+
+  it('reveals maal for player 2 when they park tunnel + sequence mix after tiplu was cut', () => {
+    const state = createMarriageMatchState({
+      matchId: 'tunnel-mix',
+      seed: 5,
+      rules: { deckCount: 3 },
+      players: [
+        { id: 'p1', userId: 'u1', name: 'A', color: 'RED' },
+        { id: 'p2', userId: 'u2', name: 'B', color: 'GREEN' },
+      ],
+    });
+
+    const forced: MarriageCard[] = [
+      { id: 'H-2-0', suit: 'H', rank: '2', deck: 0 },
+      { id: 'H-3-0', suit: 'H', rank: '3', deck: 0 },
+      { id: 'H-4-0', suit: 'H', rank: '4', deck: 0 },
+      { id: 'D-7-0', suit: 'D', rank: '7', deck: 0 },
+      { id: 'D-8-0', suit: 'D', rank: '8', deck: 0 },
+      { id: 'D-9-0', suit: 'D', rank: '9', deck: 0 },
+      { id: 'C-5-0', suit: 'C', rank: '5', deck: 0 },
+      { id: 'C-5-1', suit: 'C', rank: '5', deck: 1 },
+      { id: 'C-5-2', suit: 'C', rank: '5', deck: 2 },
+    ];
+    while (forced.length < 21) {
+      const n = forced.length;
+      forced.push({
+        id: `S-${n}-z`,
+        suit: 'S',
+        rank: (['6', '7', '8', '9', '10', 'J', 'Q', 'K', 'A', '2', '3', '4'] as const)[n - 9] ?? '6',
+        deck: 0,
+      });
+    }
+
+    const melds: Array<[string, string, string]> = [
+      ['H-2-0', 'H-3-0', 'H-4-0'],
+      ['D-7-0', 'D-8-0', 'D-9-0'],
+      ['C-5-0', 'C-5-1', 'C-5-2'],
+    ];
+    const locked = new Set(melds.flat());
+    const free = forced.filter((card) => !locked.has(card.id)).map((card) => card.id);
+
+    const withSeenByP1 = {
+      ...state,
+      tiplu: { id: 'S-A-0', suit: 'S' as const, rank: 'A' as const, deck: 0 },
+      turnPhase: TurnPhase.WAITING_FOR_DRAW,
+      currentPlayerId: 'p2',
+      players: state.players.map((player, index) =>
+        index === 0
+          ? { ...player, hasSeenMaal: true }
+          : index === 1
+            ? {
+                ...player,
+                hand: forced,
+                hasSeenMaal: false,
+                maalSequences: [],
+                holdCardIds: [],
+              }
+            : player
+      ),
+    };
+
+    expect(validateMaalMelds(melds, forced, null)?.map((m) => m.type)).toEqual([
+      'SEQUENCE',
+      'SEQUENCE',
+      'TUNNEL',
+    ]);
+
+    const afterPark = reorderMarriageHand(withSeenByP1, 'p2', {
+      freeCardIds: free,
+      holdCardIds: [],
+      maalSequences: melds,
+    });
+
+    expect(afterPark.state.players[1]!.hasSeenMaal).toBe(true);
+    expect(afterPark.state.tiplu).toEqual(withSeenByP1.tiplu);
+    expect(afterPark.state.players[1]!.maalSequences).toEqual([]);
+    expect(afterPark.state.players[1]!.maalProtectIds).toEqual(melds.flat());
+
+    const forP2 = sanitizeMarriageState(afterPark.state, 'p2');
+    expect(forP2.tiplu).not.toBeNull();
+  });
+
+  it('allows a maal sequence longer than three cards', () => {
+    const state = createMarriageMatchState({
+      matchId: 'long-seq',
+      seed: 6,
+      rules: { deckCount: 3 },
+      players: [
+        { id: 'p1', userId: 'u1', name: 'A', color: 'RED' },
+        { id: 'p2', userId: 'u2', name: 'B', color: 'GREEN' },
+      ],
+    });
+
+    const forced: MarriageCard[] = [
+      { id: 'H-2-0', suit: 'H', rank: '2', deck: 0 },
+      { id: 'H-3-0', suit: 'H', rank: '3', deck: 0 },
+      { id: 'H-4-0', suit: 'H', rank: '4', deck: 0 },
+      { id: 'H-5-0', suit: 'H', rank: '5', deck: 0 },
+      { id: 'D-7-0', suit: 'D', rank: '7', deck: 0 },
+      { id: 'D-8-0', suit: 'D', rank: '8', deck: 0 },
+      { id: 'D-9-0', suit: 'D', rank: '9', deck: 0 },
+      { id: 'C-5-0', suit: 'C', rank: '5', deck: 0 },
+      { id: 'C-5-1', suit: 'C', rank: '5', deck: 1 },
+      { id: 'C-5-2', suit: 'C', rank: '5', deck: 2 },
+    ];
+    while (forced.length < 21) {
+      const n = forced.length;
+      forced.push({
+        id: `S-${n}-w`,
+        suit: 'S',
+        rank: (['6', '7', '8', '9', '10', 'J', 'Q', 'K', 'A', '2', '3'] as const)[n - 10] ?? '6',
+        deck: 0,
+      });
+    }
+
+    const melds: string[][] = [
+      ['H-2-0', 'H-3-0', 'H-4-0', 'H-5-0'],
+      ['D-7-0', 'D-8-0', 'D-9-0'],
+      ['C-5-0', 'C-5-1', 'C-5-2'],
+    ];
+    expect(validateMaalMelds(melds, forced, null)?.map((m) => [m.type, m.cardIds.length])).toEqual([
+      ['SEQUENCE', 4],
+      ['SEQUENCE', 3],
+      ['TUNNEL', 3],
+    ]);
+
+    const locked = new Set(melds.flat());
+    const free = forced.filter((card) => !locked.has(card.id)).map((card) => card.id);
+    const withHand = {
+      ...state,
+      turnPhase: TurnPhase.WAITING_FOR_DRAW,
+      currentPlayerId: 'p1',
+      players: state.players.map((player, index) =>
+        index === 0
+          ? { ...player, hand: forced, hasSeenMaal: false, maalSequences: [], holdCardIds: [] }
+          : player
+      ),
+    };
+
+    const result = reorderMarriageHand(withHand, 'p1', {
+      freeCardIds: free,
+      holdCardIds: [],
+      maalSequences: melds,
+    });
+    expect(result.state.players[0]!.hasSeenMaal).toBe(true);
+    expect(result.state.players[0]!.maalSequences).toEqual([]);
+    expect(result.state.players[0]!.maalProtectIds).toEqual(melds.flat());
+    expect(result.state.players[0]!.maalProtectIds).toHaveLength(10);
   });
 
   it('opens when three pure melds exist and sets tiplu', () => {
@@ -295,6 +465,79 @@ describe('marriage match flow', () => {
     expect(opened.state.players[0]?.hasOpened).toBe(true);
     expect(opened.state.tiplu).not.toBeNull();
     expect(opened.state.players[0]?.openMelds).toHaveLength(3);
+  });
+
+  it('adds and removes open melds after opening', () => {
+    const state = createMarriageMatchState({
+      matchId: 'edit-melds',
+      seed: 2,
+      rules: { deckCount: 3 },
+      players: [
+        { id: 'p1', userId: 'u1', name: 'A', color: 'RED' },
+        { id: 'p2', userId: 'u2', name: 'B', color: 'GREEN' },
+      ],
+    });
+    const tiplu: MarriageCard = { id: 'S-A-0', suit: 'S', rank: 'A', deck: 0 };
+    const openMelds = [
+      {
+        type: 'SEQUENCE' as const,
+        cardIds: ['H-2-0', 'H-3-0', 'H-4-0', 'H-5-0'],
+        pure: true,
+      },
+      {
+        type: 'SEQUENCE' as const,
+        cardIds: ['D-5-0', 'D-6-0', 'D-7-0'],
+        pure: true,
+      },
+      {
+        type: 'TUNNEL' as const,
+        cardIds: ['C-9-0', 'C-9-1', 'C-9-2'],
+        pure: true,
+      },
+    ];
+    const hand: MarriageCard[] = [
+      { id: 'H-6-0', suit: 'H', rank: '6', deck: 0 },
+      { id: 'H-7-0', suit: 'H', rank: '7', deck: 0 },
+      { id: 'H-8-0', suit: 'H', rank: '8', deck: 0 },
+      { id: 'S-2-0', suit: 'S', rank: '2', deck: 0 },
+    ];
+    const opened = {
+      ...state,
+      tiplu,
+      turnPhase: TurnPhase.WAITING_FOR_DRAW,
+      currentPlayerId: 'p1',
+      players: state.players.map((player, index) =>
+        index === 0
+          ? {
+              ...player,
+              hand,
+              hasOpened: true,
+              hasSeenMaal: true,
+              openMelds,
+              holdCardIds: [],
+              maalSequences: [],
+            }
+          : player
+      ),
+    };
+
+    const added = addMarriageMeld(opened, 'p1', ['H-6-0', 'H-7-0', 'H-8-0']);
+    expect(added.state.players[0]!.openMelds).toHaveLength(4);
+    expect(added.state.players[0]!.hand.map((c) => c.id)).toEqual(['S-2-0']);
+
+    const trimmed = removeMarriageMeldCard(added.state, 'p1', 0, 'H-5-0');
+    expect(trimmed.state.players[0]!.openMelds[0]!.cardIds).toEqual(['H-2-0', 'H-3-0', 'H-4-0']);
+    expect(trimmed.state.players[0]!.hand.map((c) => c.id)).toContain('H-5-0');
+
+    const dissolved = removeMarriageMeldCard(trimmed.state, 'p1', 2, 'C-9-0');
+    expect(dissolved.state.players[0]!.openMelds).toHaveLength(3);
+    expect(dissolved.state.players[0]!.hand.map((c) => c.id)).toEqual(
+      expect.arrayContaining(['C-9-0', 'C-9-1', 'C-9-2'])
+    );
+
+    expect(() => removeMarriageMeldCard(dissolved.state, 'p1', 0, 'H-2-0')).toThrow(
+      /cannot destroy the sequence once you have seen the maal/i
+    );
   });
 });
 

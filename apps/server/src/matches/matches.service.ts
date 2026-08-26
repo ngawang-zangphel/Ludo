@@ -42,6 +42,7 @@ import {
   extendMarriageMeld,
   joinMarriageMelds,
   removeMarriageMeldCard,
+  addMarriageMeld,
   marriageCanShow,
   marriageSuggestOpen,
   openMarriage,
@@ -630,7 +631,7 @@ export class MatchesService implements OnModuleInit {
     layout: {
       freeCardIds: string[];
       holdCardIds: string[];
-      maalSequences: Array<[string, string, string]>;
+      maalSequences: string[][];
     }
   ) {
     return this.enqueue(matchId, async () => {
@@ -731,6 +732,23 @@ export class MatchesService implements OnModuleInit {
       const saved = await this.state.updateMatchState(matchId, result.state);
       await this.recordEngineEvents(saved, result.events, userId);
       logEvent('Marriage remove meld card', { matchId, userId, meldIndex, cardId });
+      await this.emitGameState(matchId, 'match-state-updated', result.state);
+      await this.publishAdmin();
+      return result;
+    });
+  }
+
+  async marriageAddMeld(matchId: string, userId: string, cardIds: string[]) {
+    return this.enqueue(matchId, async () => {
+      const match = await this.state.loadMatch(matchId);
+      this.assertPlayer(match, userId);
+      if (!match.gameState || match.status !== MatchStatus.LIVE || !isMarriageState(match.gameState)) {
+        throw new BadRequestException('Marriage match is not live');
+      }
+      const result = addMarriageMeld(match.gameState, userId, cardIds);
+      const saved = await this.state.updateMatchState(matchId, result.state);
+      await this.recordEngineEvents(saved, result.events, userId);
+      logEvent('Marriage add meld', { matchId, userId, cardCount: cardIds.length });
       await this.emitGameState(matchId, 'match-state-updated', result.state);
       await this.publishAdmin();
       return result;

@@ -2,12 +2,15 @@ import {
   ChangeDetectionStrategy,
   Component,
   computed,
+  effect,
   input,
   output,
   signal,
 } from '@angular/core';
 import {
   cardLabel,
+  classifyMeld,
+  classifyOpenSequence,
   parseMarriageCardId,
 } from '@ludo-game/game-engine';
 import {
@@ -22,13 +25,13 @@ import {
 import { MarriageDealProgress } from '../../services/game-socket.service';
 import { PlayingCardComponent } from '../playing-card/playing-card';
 
-type DragSource = 'hand' | 'stock' | 'discard' | 'open-meld' | 'open-meld-card';
+type DragSource = 'hand' | 'stock' | 'discard' | 'open-meld' | 'open-meld-card' | 'new-meld-card';
 type HandZone = 'main' | 'hold' | 'maal';
 
 export interface MarriageHandLayout {
   freeCardIds: string[];
   holdCardIds: string[];
-  maalSequences: Array<[string, string, string]>;
+  maalSequences: string[][];
 }
 
 @Component({
@@ -56,6 +59,20 @@ export interface MarriageHandLayout {
         opacity: 1;
       }
     }
+    @keyframes marriage-card-flip {
+      0% {
+        transform: rotateY(90deg) scale(0.92);
+        opacity: 0.35;
+      }
+      100% {
+        transform: rotateY(0deg) scale(1);
+        opacity: 1;
+      }
+    }
+    .marriage-drawn-flip {
+      animation: marriage-card-flip 0.45s ease-out;
+      transform-style: preserve-3d;
+    }
   `,
   template: `
     <div class="mx-auto max-w-6xl space-y-4">
@@ -75,7 +92,7 @@ export interface MarriageHandLayout {
               · wilds = all {{ tiplu.rank }}s · jhiplu/poplu same suit
             </p>
           } @else {
-            <p>Maal hidden for you — qualify with three pure sequences to see it</p>
+            <p>Maal hidden for you — drop three pure sequences or tunnels into Maal sequences to reveal it</p>
           }
         </div>
       </div>
@@ -135,7 +152,17 @@ export interface MarriageHandLayout {
         }
       </div>
 
-      <div class="relative flex flex-wrap items-center justify-center gap-6 rounded-3xl border border-arena-line bg-gradient-to-br from-emerald-950/80 to-arena-navy px-4 py-8">
+      <div
+        class="relative flex flex-wrap items-center justify-center gap-6 rounded-3xl border bg-gradient-to-br from-emerald-950/80 to-arena-navy px-4 py-8 transition"
+        [class.border-arena-line]="!discardDropActive()"
+        [class.border-arena-gold]="discardDropActive()"
+        [class.ring-2]="discardDropActive()"
+        [class.ring-arena-gold]="discardDropActive()"
+        [class.from-emerald-800/90]="discardDropActive()"
+        (dragover)="onCenterTableDragOver($event)"
+        (dragleave)="onCenterTableDragLeave($event)"
+        (drop)="onCenterTableDrop($event)"
+      >
         @if (deal()?.flyingToPlayerId) {
           <div
             class="pointer-events-none absolute left-1/2 top-1/2 z-10 flex h-16 w-12 -translate-x-1/2 -translate-y-1/2 flex-col items-center justify-center rounded-lg border-2 border-arena-gold bg-white shadow-2xl"
@@ -143,6 +170,13 @@ export interface MarriageHandLayout {
           >
             <span class="text-[10px] font-semibold text-arena-ink">•••</span>
           </div>
+        }
+        @if (canDiscard() && dragSource() === 'hand') {
+          <p
+            class="pointer-events-none absolute inset-x-0 top-2 text-center text-[10px] uppercase tracking-[0.2em] text-arena-gold"
+          >
+            Drop here to discard
+          </p>
         }
         <button
           type="button"
@@ -152,6 +186,7 @@ export interface MarriageHandLayout {
           [class.ring-arena-gold]="handDropActive() && dragSource() === 'stock'"
           [class.cursor-grab]="canDraw()"
           [class.active:cursor-grabbing]="canDraw()"
+          [class.pointer-events-none]="canDiscard() && dragSource() === 'hand'"
           [attr.draggable]="canDraw()"
           [disabled]="!canDraw()"
           (click)="drawStock.emit()"
@@ -172,6 +207,7 @@ export interface MarriageHandLayout {
           [class.border-dashed]="!state().tiplu"
           [class.border-arena-mist/40]="!state().tiplu"
           [class.bg-black/20]="!state().tiplu"
+          [class.pointer-events-none]="canDiscard() && dragSource() === 'hand'"
         >
           @if (state().tiplu; as maal) {
             <arena-playing-card [card]="maal" [width]="56" [height]="80" [highlight]="true" caption="Maal" />
@@ -181,8 +217,9 @@ export interface MarriageHandLayout {
           }
         </div>
 
-        <button
-          type="button"
+        <div
+          role="button"
+          tabindex="0"
           class="relative flex h-28 w-20 flex-col items-center justify-center rounded-xl border-2 bg-transparent shadow-lg transition"
           [class.border-arena-line]="!discardDropActive()"
           [class.border-arena-gold]="discardDropActive() || (handDropActive() && dragSource() === 'discard')"
@@ -192,10 +229,10 @@ export interface MarriageHandLayout {
           [class.hover:border-arena-gold]="canDraw()"
           [class.opacity-40]="!canDraw() && !canDiscard()"
           [class.cursor-grab]="canDraw()"
-          [class.active:cursor-grabbing]="canDraw()"
-          [attr.draggable]="canDraw()"
-          [disabled]="!canDraw() && !canDiscard()"
+          [class.cursor-pointer]="canDiscard() && dragSource() !== 'hand'"
+          [attr.draggable]="canDraw() ? true : null"
           (click)="onDiscardPileClick()"
+          (keydown.enter)="onDiscardPileClick()"
           (dragstart)="onPileDragStart($event, 'discard')"
           (dragover)="onDiscardPileDragOver($event)"
           (dragleave)="onDiscardPileDragLeave()"
@@ -221,11 +258,20 @@ export interface MarriageHandLayout {
               {{ deal() && !deal()?.showDiscard ? 'Dealing…' : canDiscard() && dragSource() === 'hand' ? 'Drop to discard' : 'Empty' }}
             </span>
           }
-        </button>
+        </div>
       </div>
 
       @if (!showAllHands() && current(); as me) {
-        <div class="rounded-3xl border border-arena-line bg-arena-navy/80 p-4">
+        <div
+          class="rounded-3xl border bg-arena-navy/80 p-4 transition"
+          [class.border-arena-line]="!handDropActive() || dragSource() === 'hand'"
+          [class.border-arena-gold]="handDropActive() && (dragSource() === 'stock' || dragSource() === 'discard')"
+          [class.ring-2]="handDropActive() && (dragSource() === 'stock' || dragSource() === 'discard')"
+          [class.ring-arena-gold]="handDropActive() && (dragSource() === 'stock' || dragSource() === 'discard')"
+          (dragover)="onYourHandPanelDragOver($event)"
+          (dragleave)="onYourHandPanelDragLeave($event)"
+          (drop)="onYourHandPanelDrop($event)"
+        >
           <div class="mb-3 flex flex-wrap items-end justify-between gap-2">
             <div>
               <p class="text-xs uppercase tracking-[0.25em] text-arena-gold/80">
@@ -239,12 +285,14 @@ export interface MarriageHandLayout {
                   Drag cards to organize · park sequences below
                   } @else if (state().turnPhase === TurnPhase.WAITING_FOR_DRAW) {
                   @if (state().tiplu) {
-                    Maal is visible · drag stock or discard onto your hand
+                    Maal is visible · drag stock or discard onto this hand to draw{{
+                      canEditMelds() ? ' · or drag open-meld cards back to hand' : ''
+                    }}
                   } @else {
-                    Draw from stock or discard · park sequences below
+                    Drag stock or discard onto this hand to draw · park sequences below
                   }
                 } @else if (state().turnPhase === TurnPhase.WAITING_FOR_DISCARD) {
-                  Drag a card onto Discard{{ canEditMelds() ? ' · drop onto open melds to extend' : '' }}{{
+                  Drag a card onto the green table to discard{{ canEditMelds() ? ' · drop onto open melds to extend' : '' }}{{
                     canOpen() ? ', or open' : ''
                   }}{{ canShow() ? ', or show to win' : '' }}
                 } @else if (state().turnPhase === TurnPhase.MATCH_OVER) {
@@ -297,11 +345,13 @@ export interface MarriageHandLayout {
           >
             <p class="mb-2 text-[10px] uppercase tracking-wider text-arena-mist/50">
               {{
-                handDropActive()
-                  ? dragSource() === 'open-meld-card'
-                    ? 'Drop to remove from meld'
-                    : 'Drop to draw'
-                  : 'Hand'
+                handDropActive() && (dragSource() === 'stock' || dragSource() === 'discard')
+                  ? 'Drawing…'
+                  : handDropActive()
+                    ? dragSource() === 'open-meld-card'
+                      ? 'Drop to remove from meld'
+                      : 'Drop here'
+                    : 'Hand'
               }}
             </p>
             <div class="flex flex-wrap gap-2">
@@ -311,6 +361,7 @@ export interface MarriageHandLayout {
                   draggable="true"
                   class="cursor-grab rounded-lg p-0 transition active:cursor-grabbing"
                   [class.opacity-40]="isDraggingCard(card.id)"
+                  [class.marriage-drawn-flip]="isJustDrawn(card.id)"
                   (dragstart)="onCardDragStart($event, 'main', index, card.id)"
                   (dragover)="onCardDragOver($event, 'main', index)"
                   (dragleave)="onCardDragLeave('main', index)"
@@ -322,12 +373,12 @@ export interface MarriageHandLayout {
                     [card]="card"
                     [width]="48"
                     [height]="68"
-                    [highlight]="selectedCardId() === card.id || isCardHighlight('main', index)"
+                    [highlight]="selectedCardId() === card.id || isJustDrawn(card.id) || isCardHighlight('main', index)"
                   />
                 </button>
               } @empty {
                 <p class="py-4 text-sm text-arena-mist/40">
-                  {{ canDraw() ? 'Drop stock or discard here' : 'No cards in hand tray' }}
+                  {{ canDraw() ? 'Drag stock or discard here to draw' : 'No cards in hand tray' }}
                 </p>
               }
             </div>
@@ -380,69 +431,79 @@ export interface MarriageHandLayout {
             </div>
           </div>
 
-          <div
-            class="mt-4 min-h-24 rounded-2xl border border-dashed p-3 transition"
-            [class.border-arena-gold]="maalDropActive()"
-            [class.bg-arena-gold/10]="maalDropActive()"
-            [class.border-amber-500/50]="!maalDropActive()"
-            [class.bg-amber-950/20]="!maalDropActive()"
-            (dragover)="onZoneDragOver($event, 'maal')"
-            (dragleave)="onZoneDragLeave('maal')"
-            (drop)="onZoneDrop($event, 'maal')"
-          >
-            <div class="mb-2 flex items-center justify-between gap-2">
-              <p class="text-[10px] uppercase tracking-wider text-amber-300/90">
-                Maal sequences · used to see maal
-              </p>
-              <p class="text-[10px] text-arena-mist/50">
-                @if (current()?.hasSeenMaal) {
-                  Sequence cards can't be discarded · rearrange freely
-                } @else {
-                  Park three pure sequences here to qualify
-                }
-              </p>
-            </div>
-            <div class="flex flex-wrap gap-3">
-              @for (group of maalSequenceCards(); track $index; let groupIndex = $index) {
-                <div class="flex flex-wrap gap-1.5 rounded-xl border border-amber-500/30 bg-black/20 p-2">
-                  @for (card of group; track card.id; let index = $index) {
-                    <button
-                      type="button"
-                      draggable="true"
-                      class="cursor-grab rounded-lg p-0 transition active:cursor-grabbing"
-                      [class.opacity-40]="isDraggingCard(card.id)"
-                      (dragstart)="onCardDragStart($event, 'maal', groupIndex * 3 + index, card.id)"
-                      (dragover)="onCardDragOver($event, 'maal', groupIndex * 3 + index)"
-                      (dragleave)="onCardDragLeave('maal', groupIndex * 3 + index)"
-                      (drop)="onCardDrop($event, 'maal', groupIndex * 3 + index)"
-                      (dragend)="onDragEnd()"
-                      (click)="toggleSelect(card.id)"
-                    >
-                      <arena-playing-card
-                        [card]="card"
-                        [width]="48"
-                        [height]="68"
-                        [highlight]="selectedCardId() === card.id || isCardHighlight('maal', groupIndex * 3 + index)"
-                      />
-                    </button>
-                  }
-                </div>
-              } @empty {
-                <p class="py-5 text-sm text-arena-mist/40">
-                  Drop three pure sequences here · those cards can't be discarded after you see the maal
+          @if (!me.hasSeenMaal) {
+            <div
+              class="mt-4 min-h-24 rounded-2xl border border-dashed p-3 transition"
+              [class.border-arena-gold]="maalDropActive()"
+              [class.bg-arena-gold/10]="maalDropActive()"
+              [class.border-amber-500/50]="!maalDropActive()"
+              [class.bg-amber-950/20]="!maalDropActive()"
+              (dragover)="onZoneDragOver($event, 'maal')"
+              (dragleave)="onZoneDragLeave('maal')"
+              (drop)="onZoneDrop($event, 'maal')"
+            >
+              <div class="mb-2 flex items-center justify-between gap-2">
+                <p class="text-[10px] uppercase tracking-wider text-amber-300/90">
+                  Maal sequences · used to see maal
                 </p>
-              }
+                <p class="text-[10px] text-arena-mist/50">
+                  Park three pure sequences or tunnels here to qualify
+                </p>
+              </div>
+              <div class="flex flex-wrap gap-3">
+                @for (slot of [0, 1, 2]; track slot) {
+                  <div
+                    class="flex min-h-[4.5rem] min-w-[9rem] flex-1 flex-wrap gap-1.5 rounded-xl border border-dashed border-amber-500/30 bg-black/20 p-2 transition"
+                    [class.border-arena-gold]="maalDropGroup() === slot"
+                    [class.bg-arena-gold/15]="maalDropGroup() === slot"
+                    [class.border-solid]="maalSequenceCards()[slot].length > 0"
+                    (dragover)="onMaalGroupDragOver($event, slot)"
+                    (dragleave)="onMaalGroupDragLeave(slot)"
+                    (drop)="onMaalGroupDrop($event, slot)"
+                  >
+                    @if (maalSequenceCards()[slot].length) {
+                      @for (card of maalSequenceCards()[slot]; track card.id; let index = $index) {
+                        <button
+                          type="button"
+                          draggable="true"
+                          class="cursor-grab rounded-lg p-0 transition active:cursor-grabbing"
+                          [class.opacity-40]="isDraggingCard(card.id)"
+                          (dragstart)="onCardDragStart($event, 'maal', maalFlatIndex(slot, index), card.id)"
+                          (dragover)="onCardDragOver($event, 'maal', maalFlatIndex(slot, index))"
+                          (dragleave)="onCardDragLeave('maal', maalFlatIndex(slot, index))"
+                          (drop)="onMaalCardDrop($event, slot, index)"
+                          (dragend)="onDragEnd()"
+                          (click)="toggleSelect(card.id)"
+                        >
+                          <arena-playing-card
+                            [card]="card"
+                            [width]="48"
+                            [height]="68"
+                            [highlight]="selectedCardId() === card.id || isCardHighlight('maal', maalFlatIndex(slot, index))"
+                          />
+                        </button>
+                      }
+                    } @else {
+                      <p class="w-full self-center py-3 text-center text-[10px] uppercase tracking-wider text-arena-mist/40">
+                        Sequence {{ slot + 1 }}
+                      </p>
+                    }
+                  </div>
+                }
+              </div>
             </div>
-          </div>
+          }
 
-          @if (me.openMelds.length) {
+          @if (me.hasOpened) {
             <div class="mt-4 border-t border-arena-line/60 pt-3">
               <div class="mb-2 flex flex-wrap items-end justify-between gap-2">
                 <p class="text-xs uppercase tracking-wider text-arena-mist/50">Open melds</p>
                 @if (canEditMelds()) {
                   <p class="text-[10px] text-arena-mist/50">
-                    Drag a hand card onto a sequence to extend · drag a meld card back to hand to remove · drag one sequence onto another to join
+                    Keep at least 3 melds · drag a card to hand to free it · drop to extend · New meld to lay another
                   </p>
+                } @else if (!isViewerTurn()) {
+                  <p class="text-[10px] text-arena-mist/40">Edit on your turn</p>
                 } @else if (!state().tiplu) {
                   <p class="text-[10px] text-arena-mist/40">Edit after maal is cut</p>
                 }
@@ -468,11 +529,10 @@ export interface MarriageHandLayout {
                     </p>
                     <div class="flex flex-wrap gap-1.5">
                       @for (card of meldCards(meld); track card.id) {
-                        <button
-                          type="button"
-                          class="cursor-grab rounded p-0 active:cursor-grabbing disabled:cursor-default"
-                          [attr.draggable]="canEditMelds() && meld.type === 'SEQUENCE'"
-                          [disabled]="!canEditMelds() || meld.type !== 'SEQUENCE'"
+                        <div
+                          class="rounded p-0"
+                          [class.cursor-grab]="canEditMelds()"
+                          [attr.draggable]="canEditMelds() ? true : null"
                           (dragstart)="onOpenMeldCardDragStart($event, meldIndex, card.id)"
                           (dragend)="onDragEnd()"
                         >
@@ -482,7 +542,37 @@ export interface MarriageHandLayout {
                             [height]="56"
                             [dimmed]="dragSource() === 'open-meld-card' && dragCardId() === card.id"
                           />
+                        </div>
+                      }
+                    </div>
+                  </div>
+                }
+
+                @if (canEditMelds()) {
+                  <div
+                    class="min-w-[9rem] rounded-xl border border-dashed px-3 py-2 transition"
+                    [class.border-arena-gold]="newMeldDropActive()"
+                    [class.bg-arena-gold/15]="newMeldDropActive()"
+                    [class.border-arena-line/60]="!newMeldDropActive()"
+                    [class.bg-black/10]="!newMeldDropActive()"
+                    (dragover)="onNewMeldDragOver($event)"
+                    (dragleave)="onNewMeldDragLeave()"
+                    (drop)="onNewMeldDrop($event)"
+                  >
+                    <p class="mb-1.5 text-[9px] uppercase tracking-wider text-arena-mist/50">New meld</p>
+                    <div class="flex flex-wrap gap-1.5">
+                      @for (card of newMeldCards(); track card.id) {
+                        <button
+                          type="button"
+                          class="cursor-grab rounded p-0"
+                          draggable="true"
+                          (dragstart)="onNewMeldCardDragStart($event, card.id)"
+                          (dragend)="onDragEnd()"
+                        >
+                          <arena-playing-card [card]="card" [width]="40" [height]="56" />
                         </button>
+                      } @empty {
+                        <p class="py-3 text-[10px] text-arena-mist/40">Drop 3+ cards</p>
                       }
                     </div>
                   </div>
@@ -519,6 +609,7 @@ export class MarriageTableComponent {
   readonly extendMeld = output<{ cardId: string; meldIndex: number }>();
   readonly joinMelds = output<{ meldIndexA: number; meldIndexB: number }>();
   readonly meldCardRemove = output<{ cardId: string; meldIndex: number }>();
+  readonly addMeld = output<string[]>();
   readonly layoutError = output<string>();
 
   readonly dragSource = signal<DragSource | null>(null);
@@ -532,7 +623,13 @@ export class MarriageTableComponent {
   readonly handDropActive = signal(false);
   readonly stagedDropActive = signal(false);
   readonly maalDropActive = signal(false);
+  /** Prevents double-draw while a stock/discard drag stays over the hand. */
+  readonly drawTouchCommitted = signal(false);
+  readonly maalDropGroup = signal<number | null>(null);
   readonly meldDropIndex = signal<number | null>(null);
+  readonly newMeldDropActive = signal(false);
+  /** Local staging for laying an additional open meld. */
+  readonly newMeldCardIds = signal<string[]>([]);
 
   readonly current = computed(() => {
     const state = this.state();
@@ -563,7 +660,9 @@ export class MarriageTableComponent {
     }
     const reserved = new Set([
       ...(me.holdCardIds ?? []),
-      ...(me.maalSequences ?? []).flat(),
+      // After maal is seen the tray is hidden — fold those cards into the free hand UI.
+      ...(me.hasSeenMaal ? [] : (me.maalSequences ?? []).flat()),
+      ...this.newMeldCardIds(),
     ]);
     return this.visibleHandFor(me).filter((card) => !reserved.has(card.id));
   });
@@ -573,27 +672,43 @@ export class MarriageTableComponent {
     if (!me) {
       return [] as MarriageCard[];
     }
+    const staged = new Set(this.newMeldCardIds());
     const visible = new Set(this.visibleHandFor(me).map((card) => card.id));
     const byId = new Map(me.hand.map((card) => [card.id, card]));
     return (me.holdCardIds ?? [])
-      .filter((id) => visible.has(id))
+      .filter((id) => visible.has(id) && !staged.has(id))
       .map((id) => byId.get(id))
       .filter((card): card is MarriageCard => !!card);
   });
 
   readonly maalSequenceCards = computed(() => {
     const me = this.current();
+    const empty: MarriageCard[][] = [[], [], []];
     if (!me) {
-      return [] as MarriageCard[][];
+      return empty;
     }
+    const staged = new Set(this.newMeldCardIds());
     const byId = new Map(me.hand.map((card) => [card.id, card]));
-    return (me.maalSequences ?? []).map((ids) =>
-      ids.map((id) => byId.get(id)).filter((card): card is MarriageCard => !!card)
-    );
+    const slots: MarriageCard[][] = [0, 1, 2].map((i) => {
+      const ids = me.maalSequences?.[i] ?? [];
+      return ids
+        .filter((id) => !staged.has(id))
+        .map((id) => byId.get(id))
+        .filter((card): card is MarriageCard => !!card);
+    });
+    return slots;
   });
 
   constructor() {
-    // Layout is persisted on the player; no local-only staging.
+    effect(() => {
+      const me = this.current();
+      const handIds = new Set((me?.hand ?? []).map((card) => card.id));
+      const staged = this.newMeldCardIds();
+      const next = staged.filter((id) => handIds.has(id));
+      if (next.length !== staged.length) {
+        this.newMeldCardIds.set(next);
+      }
+    });
   }
 
   canDraw(): boolean {
@@ -637,16 +752,30 @@ export class MarriageTableComponent {
     return this.discardTop();
   }
 
-  /** Edit/join open sequences only after maal (tiplu) is visible. */
+  /** Edit open melds on your turn once opened (draw or discard phase). */
   canEditMelds(): boolean {
     const me = this.current();
+    const phase = this.state().turnPhase;
     return (
-      this.canDiscard() &&
-      !!me?.hasSeenMaal &&
-      !!this.state().tiplu &&
+      this.interactive() &&
+      !this.deal() &&
+      this.isViewerTurn() &&
+      this.state().status === MatchStatus.LIVE &&
+      (phase === TurnPhase.WAITING_FOR_DRAW || phase === TurnPhase.WAITING_FOR_DISCARD) &&
       !!me?.hasOpened &&
-      me.openMelds.length > 0
+      !!this.state().tiplu
     );
+  }
+
+  newMeldCards(): MarriageCard[] {
+    const me = this.current();
+    if (!me) {
+      return [];
+    }
+    const byId = new Map(me.hand.map((card) => [card.id, card]));
+    return this.newMeldCardIds()
+      .map((id) => byId.get(id))
+      .filter((card): card is MarriageCard => !!card);
   }
 
   meldCards(meld: MarriageMeld): MarriageCard[] {
@@ -699,7 +828,7 @@ export class MarriageTableComponent {
       return;
     }
     if (this.isProtectedCard(id)) {
-      this.layoutError.emit('you cannot break the sequence once you see the maal');
+      this.layoutError.emit('you cannot destroy the sequence once you have seen the maal');
       return;
     }
     this.discard.emit(id);
@@ -711,11 +840,16 @@ export class MarriageTableComponent {
     }
   }
 
+  isJustDrawn(cardId: string): boolean {
+    return this.state().drawnCardId === cardId;
+  }
+
   onPileDragStart(event: DragEvent, source: 'stock' | 'discard'): void {
     if (!this.canDraw()) {
       event.preventDefault();
       return;
     }
+    this.drawTouchCommitted.set(false);
     this.dragSource.set(source);
     this.dragZone.set(null);
     this.dragIndex.set(null);
@@ -746,13 +880,46 @@ export class MarriageTableComponent {
   onDiscardPileDrop(event: DragEvent): void {
     event.preventDefault();
     event.stopPropagation();
-    const cardId = this.dragCardId() ?? event.dataTransfer?.getData('application/x-card-id');
+    this.commitHandDiscard(
+      this.dragCardId() ?? event.dataTransfer?.getData('application/x-card-id') ?? null
+    );
+  }
+
+  onCenterTableDragOver(event: DragEvent): void {
+    if (!this.canDiscard() || this.dragSource() !== 'hand' || !this.dragCardId()) {
+      return;
+    }
+    event.preventDefault();
+    if (event.dataTransfer) {
+      event.dataTransfer.dropEffect = 'move';
+    }
+    this.discardDropActive.set(true);
+  }
+
+  onCenterTableDragLeave(event: DragEvent): void {
+    const next = event.relatedTarget as Node | null;
+    const current = event.currentTarget as Node | null;
+    if (current && next && current.contains(next)) {
+      return;
+    }
+    this.discardDropActive.set(false);
+  }
+
+  onCenterTableDrop(event: DragEvent): void {
+    event.preventDefault();
+    event.stopPropagation();
+    this.commitHandDiscard(
+      this.dragCardId() ?? event.dataTransfer?.getData('application/x-card-id') ?? null
+    );
+  }
+
+  private commitHandDiscard(cardId: string | null): void {
     this.clearDragUi();
     if (!cardId || !this.canDiscard()) {
       return;
     }
     if (this.isProtectedCard(cardId)) {
-      this.layoutError.emit('you cannot break the sequence once you see the maal');
+      this.layoutError.emit('you cannot destroy the sequence once you have seen the maal');
       return;
     }
     this.selectCard.emit(null);
@@ -794,6 +961,85 @@ export class MarriageTableComponent {
     if (event.dataTransfer) {
       event.dataTransfer.effectAllowed = 'move';
     }
+  }
+
+  onNewMeldDragOver(event: DragEvent): void {
+    if (!this.canEditMelds()) {
+      return;
+    }
+    const source = this.dragSource();
+    if (source !== 'hand' && source !== 'new-meld-card') {
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    this.newMeldDropActive.set(true);
+  }
+
+  onNewMeldDragLeave(): void {
+    this.newMeldDropActive.set(false);
+  }
+
+  onNewMeldDrop(event: DragEvent): void {
+    event.preventDefault();
+    event.stopPropagation();
+    const source = this.dragSource();
+    const cardId = this.dragCardId();
+    this.newMeldDropActive.set(false);
+    if (!this.canEditMelds() || !cardId) {
+      this.clearDragUi();
+      return;
+    }
+    if (source === 'hand') {
+      const fromZone = this.dragZone();
+      // Remove from hand layout first via reorder, then stage.
+      if (fromZone === 'main' || fromZone === 'hold' || fromZone === 'maal') {
+        // Stage locally; card hidden from trays via newMeldCardIds filter.
+        if (!this.newMeldCardIds().includes(cardId)) {
+          this.newMeldCardIds.update((ids) => [...ids, cardId]);
+        }
+        this.clearDragUi();
+        this.tryCommitNewMeld();
+        return;
+      }
+    }
+    this.clearDragUi();
+  }
+
+  onNewMeldCardDragStart(event: DragEvent, cardId: string): void {
+    if (!this.canEditMelds()) {
+      event.preventDefault();
+      return;
+    }
+    this.dragSource.set('new-meld-card');
+    this.dragCardId.set(cardId);
+    this.dragZone.set(null);
+    this.dragIndex.set(null);
+    event.dataTransfer?.setData('application/x-card-id', cardId);
+    event.dataTransfer?.setData('text/plain', cardId);
+    if (event.dataTransfer) {
+      event.dataTransfer.effectAllowed = 'move';
+    }
+  }
+
+  private tryCommitNewMeld(): void {
+    const me = this.current();
+    const ids = this.newMeldCardIds();
+    if (!me || ids.length < 3) {
+      return;
+    }
+    let valid = false;
+    if (ids.length === 3) {
+      valid = !!classifyMeld([ids[0]!, ids[1]!, ids[2]!], me.hand, this.state().tiplu, false);
+    } else {
+      const meld = classifyOpenSequence(ids, me.hand, this.state().tiplu);
+      valid = !!meld && meld.type === 'SEQUENCE';
+    }
+    if (!valid) {
+      return;
+    }
+    this.addMeld.emit([...ids]);
+    this.newMeldCardIds.set([]);
   }
 
   onOpenMeldDragStart(event: DragEvent, meldIndex: number): void {
@@ -861,6 +1107,11 @@ export class MarriageTableComponent {
       return;
     }
     if (source === 'open-meld' && fromMeld != null && fromMeld !== meldIndex) {
+      const me = this.current();
+      if (me && me.openMelds.length <= 3) {
+        this.layoutError.emit('you cannot destroy the sequence once you have seen the maal');
+        return;
+      }
       this.joinMelds.emit({ meldIndexA: fromMeld, meldIndexB: meldIndex });
     }
   }
@@ -907,9 +1158,19 @@ export class MarriageTableComponent {
         event.dataTransfer.dropEffect = 'move';
       }
       this.handDropActive.set(true);
+      this.tryCommitDrawFromDrag(source);
       return;
     }
     if (source === 'open-meld-card' && zone === 'main' && this.canEditMelds()) {
+      event.preventDefault();
+      event.stopPropagation();
+      if (event.dataTransfer) {
+        event.dataTransfer.dropEffect = 'move';
+      }
+      this.handDropActive.set(true);
+      return;
+    }
+    if (source === 'new-meld-card' && zone === 'main' && this.canEditMelds()) {
       event.preventDefault();
       event.stopPropagation();
       if (event.dataTransfer) {
@@ -939,6 +1200,7 @@ export class MarriageTableComponent {
       this.stagedDropActive.set(false);
     } else {
       this.maalDropActive.set(false);
+      this.maalDropGroup.set(null);
     }
   }
 
@@ -948,12 +1210,7 @@ export class MarriageTableComponent {
     const source = this.dragSource() ?? (event.dataTransfer?.getData('application/x-draw-source') as DragSource | '');
 
     if ((source === 'stock' || source === 'discard') && zone === 'main' && this.canDraw()) {
-      this.clearDragUi();
-      if (source === 'stock') {
-        this.drawStock.emit();
-      } else {
-        this.drawDiscard.emit();
-      }
+      this.tryCommitDrawFromDrag(source);
       return;
     }
 
@@ -962,18 +1219,38 @@ export class MarriageTableComponent {
       const meldIndex = this.dragMeldIndex();
       this.clearDragUi();
       if (cardId && meldIndex != null) {
+        if (this.wouldBreakMinOpenMelds(meldIndex, cardId)) {
+          this.layoutError.emit('you cannot destroy the sequence once you have seen the maal');
+          return;
+        }
         this.meldCardRemove.emit({ cardId, meldIndex });
       }
       return;
     }
 
+    if (source === 'new-meld-card' && zone === 'main' && this.canEditMelds()) {
+      const cardId = this.dragCardId();
+      this.clearDragUi();
+      if (cardId) {
+        this.newMeldCardIds.update((ids) => ids.filter((id) => id !== cardId));
+      }
+      return;
+    }
+
     if (source === 'hand' && this.canOrganize()) {
+      if (zone === 'maal') {
+        // Prefer first empty sequence slot, else append to last used.
+        const slots = this.current()?.maalSequences ?? [];
+        let slot = [0, 1, 2].find((i) => !(slots[i]?.length)) ?? 0;
+        if ([0, 1, 2].every((i) => (slots[i]?.length ?? 0) > 0)) {
+          slot = 2;
+        }
+        const len = slots[slot]?.length ?? 0;
+        this.moveHandCard('maal', this.maalFlatIndex(slot, len), slot);
+        return;
+      }
       const toIndex =
-        zone === 'main'
-          ? this.mainHand().length
-          : zone === 'hold'
-            ? this.stagedHand().length
-            : this.maalFlatIds().length;
+        zone === 'main' ? this.mainHand().length : this.stagedHand().length;
       this.moveHandCard(zone, toIndex);
       return;
     }
@@ -983,16 +1260,79 @@ export class MarriageTableComponent {
 
   onDragEnd(): void {
     this.clearDragUi();
+    this.drawTouchCommitted.set(false);
   }
 
   private maalFlatIds(): string[] {
     return (this.current()?.maalSequences ?? []).flat();
   }
 
-  private moveHandCard(toZone: HandZone, toIndex: number): void {
+  /** Flat index across variable-length maal groups. */
+  maalFlatIndex(groupIndex: number, cardIndex: number): number {
+    const groups = [0, 1, 2].map((i) => this.current()?.maalSequences?.[i] ?? []);
+    let flat = 0;
+    for (let g = 0; g < groupIndex; g += 1) {
+      flat += groups[g]?.length ?? 0;
+    }
+    return flat + cardIndex;
+  }
+
+  private flatToMaalPos(flatIndex: number): { group: number; index: number } | null {
+    const groups = [0, 1, 2].map((i) => this.current()?.maalSequences?.[i] ?? []);
+    let remaining = flatIndex;
+    for (let g = 0; g < groups.length; g += 1) {
+      const len = groups[g]?.length ?? 0;
+      if (remaining < len) {
+        return { group: g, index: remaining };
+      }
+      remaining -= len;
+    }
+    return null;
+  }
+
+  onMaalGroupDragOver(event: DragEvent, groupIndex: number): void {
+    if (this.dragSource() !== 'hand' || !this.canOrganize()) {
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    this.maalDropActive.set(true);
+    this.maalDropGroup.set(groupIndex);
+    this.dragOverZone.set('maal');
+  }
+
+  onMaalGroupDragLeave(groupIndex: number): void {
+    if (this.maalDropGroup() === groupIndex) {
+      this.maalDropGroup.set(null);
+    }
+  }
+
+  onMaalGroupDrop(event: DragEvent, groupIndex: number): void {
+    event.preventDefault();
+    event.stopPropagation();
+    if (this.dragSource() !== 'hand' || !this.canOrganize()) {
+      this.clearDragUi();
+      return;
+    }
+    const groupLen = this.current()?.maalSequences?.[groupIndex]?.length ?? 0;
+    this.moveHandCard('maal', this.maalFlatIndex(groupIndex, groupLen), groupIndex);
+  }
+
+  onMaalCardDrop(event: DragEvent, groupIndex: number, cardIndex: number): void {
+    event.preventDefault();
+    event.stopPropagation();
+    if (this.dragSource() === 'hand') {
+      this.moveHandCard('maal', this.maalFlatIndex(groupIndex, cardIndex), groupIndex);
+      return;
+    }
+    this.onZoneDrop(event, 'maal');
+  }
+
+  private moveHandCard(toZone: HandZone, toIndex: number, toMaalGroup?: number | null): void {
     const fromZone = this.dragZone();
     const fromIndex = this.dragIndex();
     const cardId = this.dragCardId();
+    const targetGroup = toMaalGroup ?? this.maalDropGroup();
     this.clearDragUi();
     const me = this.current();
     if (!cardId || fromZone == null || fromIndex == null || !me || !this.canOrganize()) {
@@ -1001,43 +1341,145 @@ export class MarriageTableComponent {
 
     const mainIds = this.mainHand().map((card) => card.id);
     const holdIds = this.stagedHand().map((card) => card.id);
-    const maalIds = this.maalFlatIds();
+    // Keep three slot arrays so Sequence 1/2/3 drop targets stay stable.
+    const groups: string[][] = [0, 1, 2].map((i) => [...(me.maalSequences?.[i] ?? [])]);
+    let fromGroup: number | null = null;
+    let fromLocal: number | null = null;
 
-    const fromList =
-      fromZone === 'main' ? mainIds : fromZone === 'hold' ? holdIds : maalIds;
-    if (fromList[fromIndex] !== cardId) {
-      return;
+    if (fromZone === 'main') {
+      if (mainIds[fromIndex] !== cardId) {
+        return;
+      }
+      mainIds.splice(fromIndex, 1);
+    } else if (fromZone === 'hold') {
+      if (holdIds[fromIndex] !== cardId) {
+        return;
+      }
+      holdIds.splice(fromIndex, 1);
+    } else {
+      const pos = this.flatToMaalPos(fromIndex);
+      if (!pos || groups[pos.group]?.[pos.index] !== cardId) {
+        return;
+      }
+      fromGroup = pos.group;
+      fromLocal = pos.index;
+      groups[pos.group]!.splice(pos.index, 1);
     }
 
-    const [moved] = fromList.splice(fromIndex, 1);
-    if (!moved) {
-      return;
-    }
-
-    const toList = toZone === 'main' ? mainIds : toZone === 'hold' ? holdIds : maalIds;
-    const insertAt =
-      fromZone === toZone && fromIndex < toIndex ? Math.max(0, toIndex - 1) : toIndex;
-    toList.splice(Math.min(insertAt, toList.length), 0, moved);
-
-    let maalSequences = me.maalSequences ?? [];
-    if (toZone === 'maal' || fromZone === 'maal') {
-      // Rebuild as groups of 3; incomplete trailing cards go back to hold.
-      const chunks: Array<[string, string, string]> = [];
-      for (let i = 0; i + 2 < maalIds.length; i += 3) {
-        chunks.push([maalIds[i]!, maalIds[i + 1]!, maalIds[i + 2]!]);
+    if (toZone === 'main') {
+      const insertAt =
+        fromZone === 'main' && fromIndex < toIndex ? Math.max(0, toIndex - 1) : toIndex;
+      mainIds.splice(Math.min(insertAt, mainIds.length), 0, cardId);
+    } else if (toZone === 'hold') {
+      const insertAt =
+        fromZone === 'hold' && fromIndex < toIndex ? Math.max(0, toIndex - 1) : toIndex;
+      holdIds.splice(Math.min(insertAt, holdIds.length), 0, cardId);
+    } else {
+      const dest = targetGroup != null && targetGroup >= 0 && targetGroup < 3 ? targetGroup : 0;
+      const group = groups[dest]!;
+      if (fromGroup === dest && fromLocal != null) {
+        const start = this.groupStartFlat(groups, dest);
+        // Use pre-removal lengths for start — recompute from original
+        const orig = [0, 1, 2].map((i) => [...(me.maalSequences?.[i] ?? [])]);
+        const origStart = this.groupStartFlat(orig, dest);
+        let local = Math.max(0, Math.min(group.length, toIndex - origStart));
+        if (fromLocal < local) {
+          local = Math.max(0, local - 1);
+        }
+        group.splice(local, 0, cardId);
+      } else {
+        group.push(cardId);
       }
-      const leftover = maalIds.length % 3 === 0 ? [] : maalIds.slice(maalIds.length - (maalIds.length % 3));
-      if (leftover.length) {
-        holdIds.push(...leftover);
-      }
-      maalSequences = chunks;
     }
 
     this.reorder.emit({
       freeCardIds: mainIds,
       holdCardIds: holdIds,
-      maalSequences,
+      maalSequences: groups,
     });
+  }
+
+  private groupStartFlat(groups: string[][], groupIndex: number): number {
+    let flat = 0;
+    for (let g = 0; g < groupIndex; g += 1) {
+      flat += groups[g]?.length ?? 0;
+    }
+    return flat;
+  }
+
+  /** True when removing this card would dissolve a meld and leave fewer than 3 open melds. */
+  private wouldBreakMinOpenMelds(meldIndex: number, cardId: string): boolean {
+    const me = this.current();
+    if (!me || me.openMelds.length > 3) {
+      return false;
+    }
+    const meld = me.openMelds[meldIndex];
+    if (!meld?.cardIds.includes(cardId)) {
+      return false;
+    }
+    const nextIds = meld.cardIds.filter((id) => id !== cardId);
+    if (meld.type === 'SEQUENCE' && nextIds.length >= 3) {
+      const pool = [...me.hand, ...this.meldCards(meld)];
+      const next = classifyOpenSequence(nextIds, pool, this.state().tiplu);
+      if (next && next.type === 'SEQUENCE') {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  private tryCommitDrawFromDrag(source: DragSource): void {
+    if (source !== 'stock' && source !== 'discard') {
+      return;
+    }
+    if (!this.canDraw() || this.drawTouchCommitted()) {
+      return;
+    }
+    this.drawTouchCommitted.set(true);
+    this.clearDragUi();
+    if (source === 'stock') {
+      this.drawStock.emit();
+    } else {
+      this.drawDiscard.emit();
+    }
+  }
+
+  onYourHandPanelDragOver(event: DragEvent): void {
+    const source = this.dragSource();
+    if (source !== 'stock' && source !== 'discard') {
+      return;
+    }
+    if (!this.canDraw() && !this.drawTouchCommitted()) {
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    if (event.dataTransfer) {
+      event.dataTransfer.dropEffect = 'move';
+    }
+    this.handDropActive.set(true);
+    this.tryCommitDrawFromDrag(source);
+  }
+
+  onYourHandPanelDragLeave(event: DragEvent): void {
+    const next = event.relatedTarget as Node | null;
+    const current = event.currentTarget as Node | null;
+    if (current && next && current.contains(next)) {
+      return;
+    }
+    this.handDropActive.set(false);
+  }
+
+  onYourHandPanelDrop(event: DragEvent): void {
+    const source =
+      this.dragSource() ??
+      (event.dataTransfer?.getData('application/x-draw-source') as DragSource | '');
+    if (source !== 'stock' && source !== 'discard') {
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    this.tryCommitDrawFromDrag(source);
   }
 
   private clearDragUi(): void {
@@ -1052,7 +1494,9 @@ export class MarriageTableComponent {
     this.handDropActive.set(false);
     this.stagedDropActive.set(false);
     this.maalDropActive.set(false);
+    this.maalDropGroup.set(null);
     this.meldDropIndex.set(null);
+    this.newMeldDropActive.set(false);
   }
 
   private canOrganize(): boolean {

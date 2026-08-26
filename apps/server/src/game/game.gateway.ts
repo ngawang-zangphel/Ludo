@@ -21,6 +21,7 @@ import {
   MarriageJoinMeldsPayload,
   MarriageOpenPayload,
   MarriageRemoveMeldCardPayload,
+  MarriageAddMeldPayload,
   MarriageReorderPayload,
   MarriageShowPayload,
   MovePiecePayload,
@@ -287,6 +288,19 @@ export class GameGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
         payload.meldIndex,
         payload.cardId
       );
+    } catch (error) {
+      this.emitError(client, payload.matchId, error);
+    }
+  }
+
+  @SubscribeMessage('marriage-add-meld')
+  async marriageAddMeld(
+    @ConnectedSocket() client: ArenaSocket,
+    @MessageBody() payload: MarriageAddMeldPayload
+  ): Promise<void> {
+    const user = this.requireUser(client);
+    try {
+      await this.matches.marriageAddMeld(payload.matchId, user.id, payload.cardIds);
     } catch (error) {
       this.emitError(client, payload.matchId, error);
     }

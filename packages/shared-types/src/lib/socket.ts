@@ -48,10 +48,10 @@ export interface MarriageReorderPayload {
   /** Cards in the temporary sequence-hold tray (ordered). */
   holdCardIds: string[];
   /**
-   * Three pure sequences for seeing maal (optional reorder).
-   * After hasSeenMaal, membership must stay the same — breaking throws.
+   * Three pure sequences/tunnels for seeing maal (optional reorder).
+   * Each meld is 3+ card ids — sequences may be longer than three.
    */
-  maalSequences: Array<[string, string, string]>;
+  maalSequences: string[][];
 }
 
 /** Cut maal when the current drawer already has three pure opens. */
@@ -78,6 +78,12 @@ export interface MarriageRemoveMeldCardPayload {
   matchId: string;
   meldIndex: number;
   cardId: string;
+}
+
+/** Lay an additional meld from hand after opening. */
+export interface MarriageAddMeldPayload {
+  matchId: string;
+  cardIds: string[];
 }
 
 export interface ReconnectMatchPayload {
@@ -179,6 +185,7 @@ export interface ClientToServerEvents {
   'marriage-extend-meld': (payload: MarriageExtendMeldPayload) => void;
   'marriage-join-melds': (payload: MarriageJoinMeldsPayload) => void;
   'marriage-remove-meld-card': (payload: MarriageRemoveMeldCardPayload) => void;
+  'marriage-add-meld': (payload: MarriageAddMeldPayload) => void;
   'reconnect-match': (payload: ReconnectMatchPayload) => void;
   'admin-subscribe': () => void;
   'join-broadcast': () => void;

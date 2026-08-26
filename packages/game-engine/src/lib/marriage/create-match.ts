@@ -14,7 +14,7 @@ import {
 } from '@ludo-game/shared-types';
 import { isoNow } from '../queries';
 import { buildMarriageDeck, shuffleCards } from './cards';
-import { findThreePureOpenMelds, sortHand } from './melds';
+import { sortHand } from './melds';
 
 export function createMarriageMatchState(input: CreateMarriageMatchInput): MarriageGameState {
   const rules = resolveMarriageRules(input.rules);
@@ -85,23 +85,8 @@ export function createMarriageMatchState(input: CreateMarriageMatchInput): Marri
     throw new GameEngineError('INVALID_PLAYER_SETUP', 'Deck exhausted during deal');
   }
 
-  // If the first player already has three pure opens, cut maal and lock sequences.
-  let tiplu: MarriageCard | null = null;
-  const firstOpens = findThreePureOpenMelds(first.hand, null);
-  if (firstOpens) {
-    tiplu = stock.pop() ?? null;
-    if (tiplu) {
-      const locked = new Set(firstOpens.flat());
-      first.maalSequences = firstOpens;
-      first.maalProtectIds = firstOpens.flat();
-      first.hasSeenMaal = true;
-      first.holdCardIds = [];
-      first.hand = [
-        ...first.hand.filter((card) => !locked.has(card.id)),
-        ...firstOpens.flat().map((id) => first.hand.find((card) => card.id === id)!),
-      ];
-    }
-  }
+  // Maal stays hidden until a player parks three pure sequences/tunnels in the maal tray.
+  const tiplu: MarriageCard | null = null;
 
   const now = isoNow(input.now);
 

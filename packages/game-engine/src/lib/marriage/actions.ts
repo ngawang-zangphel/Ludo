@@ -10,7 +10,7 @@ import {
 } from '@ludo-game/shared-types';
 import { isoNow } from '../queries';
 import { findCardInHand, findMarriagePlayer } from './create-match';
-import { canPartitionHand, classifyOpenSequence, findThreePureOpenMelds, validateOpenMelds } from './melds';
+import { canPartitionHand, classifyMeld, classifyOpenSequence, findThreePureOpenMelds, validateMaalMelds, validateOpenMelds } from './melds';
 import { parseMarriageCardId } from './cards';
 
 function bump(
@@ -39,6 +39,16 @@ function requireTurn(state: MarriageGameState, playerId: string): void {
   if (state.currentPlayerId !== playerId) {
     const player = findMarriagePlayer(state, playerId);
     throw new GameEngineError('NOT_PLAYER_TURN', `It is not ${player.name}'s turn`);
+  }
+}
+
+/** Open-meld edits are allowed on your turn before or after drawing. */
+function requireOpenMeldEditPhase(state: MarriageGameState): void {
+  if (
+    state.turnPhase !== TurnPhase.WAITING_FOR_DRAW &&
+    state.turnPhase !== TurnPhase.WAITING_FOR_DISCARD
+  ) {
+    throw new GameEngineError('WRONG_PHASE', 'Edit open melds on your turn');
   }
 }
 
@@ -79,8 +89,8 @@ function reshuffleIfNeeded(stock: MarriageCard[], discard: MarriageCard[]): {
 }
 
 /**
- * If this player already has three pure opens, cut maal (once) and lock those
- * sequences into `maalSequences` so they can see maal before drawing.
+ * Reveal maal only when this player has parked three valid pure sequences/tunnels
+ * in `maalSequences`. Hands are not auto-scanned — the player must insert the melds.
  */
 function qualifyPlayerForMaal(
   state: MarriageGameState,
@@ -123,11 +133,9 @@ function qualifyPlayerForMaal(
     };
   }
 
-  const melds =
-    player.maalSequences.length === 3
-      ? player.maalSequences
-      : findThreePureOpenMelds(player.hand, null);
-  if (!melds) {
+  const filled = player.maalSequences.filter((ids) => ids.length > 0);
+  const parked = validateMaalMelds(filled, player.hand, null);
+  if (!parked) {
     return {
       stock: state.stock,
       discard: state.discard,
@@ -136,6 +144,8 @@ function qualifyPlayerForMaal(
       changed: false,
     };
   }
+
+  const melds = filled;
 
   let stock = [...state.stock];
   let discard = [...state.discard];
@@ -166,14 +176,17 @@ function qualifyPlayerForMaal(
 
   const lockedIds = new Set(melds.flat());
   const holdCardIds = (player.holdCardIds ?? []).filter((id) => !lockedIds.has(id));
-  const freeIds = player.hand.map((card) => card.id).filter((id) => !lockedIds.has(id) && !holdCardIds.includes(id));
-  const hand = rebuildHandOrder(player.hand, freeIds, holdCardIds, melds);
+  // Fold parked maal melds back into the free hand — the tray is only for revealing maal.
+  const freeIds = player.hand
+    .map((card) => card.id)
+    .filter((id) => !holdCardIds.includes(id));
+  const hand = rebuildHandOrder(player.hand, freeIds, holdCardIds, []);
 
   players[playerIndex] = {
     ...player,
     hand,
     holdCardIds,
-    maalSequences: melds,
+    maalSequences: [],
     maalProtectIds: melds.flat(),
     hasSeenMaal: true,
   };
@@ -190,7 +203,7 @@ function rebuildHandOrder(
   hand: MarriageCard[],
   freeIds: string[],
   holdIds: string[],
-  maalSequences: Array<[string, string, string]>
+  maalSequences: string[][]
 ): MarriageCard[] {
   const byId = new Map(hand.map((card) => [card.id, card]));
   const ordered = [...freeIds, ...holdIds, ...maalSequences.flat()];
@@ -199,8 +212,21 @@ function rebuildHandOrder(
     .filter((card): card is MarriageCard => !!card);
 }
 
-function flatMaalIds(sequences: Array<[string, string, string]>): string[] {
+function flatMaalIds(sequences: string[][]): string[] {
   return sequences.flat();
+}
+
+/** Normalize to at most three slots (empty placeholders allowed). */
+function padMaalSlots(sequences: string[][]): string[][] {
+  const slots = sequences.slice(0, 3).map((ids) => [...ids]);
+  while (slots.length < 3) {
+    slots.push([]);
+  }
+  // Drop trailing empties only when everything is empty (cleaner default).
+  if (slots.every((ids) => ids.length === 0)) {
+    return [];
+  }
+  return slots;
 }
 
 export function drawMarriageCard(
@@ -352,7 +378,7 @@ export function discardMarriageCard(
   if (player.hasSeenMaal && locked.has(cardId)) {
     throw new GameEngineError(
       'ILLEGAL_MOVE',
-      'you cannot break the sequence once you see the maal'
+      'you cannot destroy the sequence once you have seen the maal'
     );
   }
 
@@ -512,23 +538,26 @@ export function marriageSuggestOpen(
 }
 
 /**
- * True when the current player may see maal before drawing: they already have
- * three pure sequences/tunnels (maal is cut for them at turn start).
+ * True when the player has parked three valid pure sequences/tunnels in the maal tray.
+ * Maal is never revealed from a hand scan alone — melds must be inserted.
  */
 export function marriageReadyToSeeMaal(
   state: MarriageGameState,
   playerId: string
 ): boolean {
   const player = state.players.find((entry) => entry.id === playerId);
-  if (!player || player.hasOpened) {
+  if (!player || player.hasOpened || player.hasSeenMaal) {
     return false;
   }
-  return findThreePureOpenMelds(player.hand, state.tiplu) != null;
+  return validateMaalMelds(
+    (player.maalSequences ?? []).filter((ids) => ids.length > 0),
+    player.hand,
+    null
+  ) != null;
 }
 
 /**
- * Cut maal now if the current drawer already has three pure opens.
- * Locks those sequences into the maal section and marks hasSeenMaal.
+ * Cut/reveal maal when the current drawer has parked three pure opens in the maal tray.
  */
 export function ensureMaalVisibleBeforeDraw(
   state: MarriageGameState,
@@ -557,7 +586,7 @@ export function ensureMaalVisibleBeforeDraw(
 
 /**
  * After maal (tiplu) is cut, an opened player may lay a hand card onto an open sequence.
- * Allowed on your turn after drawing (before discard). Tunnels cannot grow.
+ * Allowed on your turn (before or after drawing). Tunnels cannot grow.
  */
 export function extendMarriageMeld(
   state: MarriageGameState,
@@ -567,9 +596,7 @@ export function extendMarriageMeld(
   now?: string
 ): EngineResult<MarriageGameState> {
   requireTurn(state, playerId);
-  if (state.turnPhase !== TurnPhase.WAITING_FOR_DISCARD) {
-    throw new GameEngineError('WRONG_PHASE', 'Lay off after drawing');
-  }
+  requireOpenMeldEditPhase(state);
   if (!state.tiplu) {
     throw new GameEngineError('ILLEGAL_MOVE', 'Maal must be cut before editing open melds');
   }
@@ -626,9 +653,7 @@ export function joinMarriageMelds(
   now?: string
 ): EngineResult<MarriageGameState> {
   requireTurn(state, playerId);
-  if (state.turnPhase !== TurnPhase.WAITING_FOR_DISCARD) {
-    throw new GameEngineError('WRONG_PHASE', 'Join melds after drawing');
-  }
+  requireOpenMeldEditPhase(state);
   if (!state.tiplu) {
     throw new GameEngineError('ILLEGAL_MOVE', 'Maal must be cut before joining sequences');
   }
@@ -647,6 +672,12 @@ export function joinMarriageMelds(
   }
   if (a.type !== 'SEQUENCE' || b.type !== 'SEQUENCE') {
     throw new GameEngineError('INVALID_MELD', 'Only sequences can be joined');
+  }
+  if (player.openMelds.length <= 3) {
+    throw new GameEngineError(
+      'INVALID_MELD',
+      'you cannot destroy the sequence once you have seen the maal'
+    );
   }
 
   const nextIds = [...a.cardIds, ...b.cardIds];
@@ -677,8 +708,9 @@ export function joinMarriageMelds(
 }
 
 /**
- * Pull a card from an open sequence back into hand once maal is visible.
- * Remaining cards must still form a valid sequence (length ≥ 3).
+ * Pull a card from an open meld back into hand.
+ * If the remainder is no longer a valid meld (or would be under 3 cards),
+ * the whole meld is dissolved back into hand.
  */
 export function removeMarriageMeldCard(
   state: MarriageGameState,
@@ -688,9 +720,7 @@ export function removeMarriageMeldCard(
   now?: string
 ): EngineResult<MarriageGameState> {
   requireTurn(state, playerId);
-  if (state.turnPhase !== TurnPhase.WAITING_FOR_DISCARD) {
-    throw new GameEngineError('WRONG_PHASE', 'Edit open melds after drawing');
-  }
+  requireOpenMeldEditPhase(state);
   if (!state.tiplu) {
     throw new GameEngineError('ILLEGAL_MOVE', 'Maal must be cut before editing open melds');
   }
@@ -703,35 +733,43 @@ export function removeMarriageMeldCard(
   if (!meld) {
     throw new GameEngineError('INVALID_MELD', 'Open meld not found');
   }
-  if (meld.type !== 'SEQUENCE') {
-    throw new GameEngineError('INVALID_MELD', 'Only sequences can be edited');
-  }
   if (!meld.cardIds.includes(cardId)) {
     throw new GameEngineError('INVALID_CARD', 'Card is not in that meld');
   }
-  if (meld.cardIds.length <= 3) {
-    throw new GameEngineError(
-      'INVALID_MELD',
-      'Keep at least three cards in each open sequence'
-    );
-  }
 
-  const removed = parseMarriageCardId(cardId);
-  if (!removed) {
-    throw new GameEngineError('INVALID_CARD', `Unknown card ${cardId}`);
-  }
-
+  const removedCards = meldCards(meld.cardIds);
   const nextIds = meld.cardIds.filter((id) => id !== cardId);
-  const pool = [...player.hand, removed, ...meldCards(nextIds)];
-  const nextMeld = classifyOpenSequence(nextIds, pool, state.tiplu);
-  if (!nextMeld || nextMeld.type !== 'SEQUENCE') {
-    throw new GameEngineError('INVALID_MELD', 'Remaining cards must still form a sequence');
-  }
+  const pool = [...player.hand, ...removedCards];
 
-  const hand = [...player.hand, removed];
-  const openMelds = player.openMelds.map((entry, index) =>
-    index === meldIndex ? nextMeld : entry
-  );
+  let hand = [...player.hand];
+  let openMelds = [...player.openMelds];
+
+  const keepAsSequence =
+    meld.type === 'SEQUENCE' &&
+    nextIds.length >= 3 &&
+    (() => {
+      const next = classifyOpenSequence(nextIds, pool, state.tiplu);
+      return next && next.type === 'SEQUENCE' ? next : null;
+    })();
+
+  if (keepAsSequence) {
+    const pulled = removedCards.find((card) => card.id === cardId);
+    if (!pulled) {
+      throw new GameEngineError('INVALID_CARD', `Unknown card ${cardId}`);
+    }
+    hand = [...hand, pulled];
+    openMelds = openMelds.map((entry, index) => (index === meldIndex ? keepAsSequence : entry));
+  } else {
+    if (player.openMelds.length <= 3) {
+      throw new GameEngineError(
+        'INVALID_MELD',
+        'you cannot destroy the sequence once you have seen the maal'
+      );
+    }
+    // Dissolve the whole meld back to hand.
+    hand = [...hand, ...removedCards];
+    openMelds = openMelds.filter((_, index) => index !== meldIndex);
+  }
 
   return bump(
     state,
@@ -742,7 +780,80 @@ export function removeMarriageMeldCard(
       {
         type: 'MELD_CARD_REMOVED',
         playerId,
-        payload: { cardId, meldIndex },
+        payload: { cardId, meldIndex, dissolved: !keepAsSequence },
+      },
+    ],
+    now
+  );
+}
+
+/**
+ * After opening, lay an additional meld from hand (sequence / trial / tunnel).
+ * Sequences may be longer than three; trials and tunnels are exactly three.
+ */
+export function addMarriageMeld(
+  state: MarriageGameState,
+  playerId: string,
+  cardIds: string[],
+  now?: string
+): EngineResult<MarriageGameState> {
+  requireTurn(state, playerId);
+  requireOpenMeldEditPhase(state);
+  if (!state.tiplu) {
+    throw new GameEngineError('ILLEGAL_MOVE', 'Maal must be cut before laying new melds');
+  }
+
+  const player = findMarriagePlayer(state, playerId);
+  if (!player.hasOpened) {
+    throw new GameEngineError('NOT_OPENED', 'Open before laying additional melds');
+  }
+  if (cardIds.length < 3) {
+    throw new GameEngineError('INVALID_MELD', 'A meld needs at least three cards');
+  }
+  if (new Set(cardIds).size !== cardIds.length) {
+    throw new GameEngineError('INVALID_CARD', 'Duplicate cards in meld');
+  }
+  for (const id of cardIds) {
+    findCardInHand(player, id);
+  }
+
+  let nextMeld: MarriageMeld | null = null;
+  if (cardIds.length === 3) {
+    const triplet: [string, string, string] = [cardIds[0]!, cardIds[1]!, cardIds[2]!];
+    nextMeld = classifyMeld(triplet, player.hand, state.tiplu, false);
+  } else {
+    nextMeld = classifyOpenSequence(cardIds, player.hand, state.tiplu);
+    if (nextMeld && nextMeld.type !== 'SEQUENCE') {
+      nextMeld = null;
+    }
+  }
+  if (!nextMeld) {
+    throw new GameEngineError('INVALID_MELD', 'Cards do not form a valid meld');
+  }
+
+  const used = new Set(cardIds);
+  const hand = player.hand.filter((card) => !used.has(card.id));
+  const holdCardIds = (player.holdCardIds ?? []).filter((id) => !used.has(id));
+  const maalSequences = (player.maalSequences ?? []).map((group) =>
+    group.filter((id) => !used.has(id))
+  );
+  const openMelds = [...player.openMelds, nextMeld];
+
+  return bump(
+    state,
+    {
+      players: replacePlayer(state, playerId, {
+        hand,
+        holdCardIds,
+        maalSequences,
+        openMelds,
+      }),
+    },
+    [
+      {
+        type: 'MELD_ADDED',
+        playerId,
+        payload: { meldType: nextMeld.type, cardIds: cardIds.join(',') },
       },
     ],
     now
@@ -765,7 +876,7 @@ export function reorderMarriageHand(
   layout: {
     freeCardIds: string[];
     holdCardIds: string[];
-    maalSequences: Array<[string, string, string]>;
+    maalSequences: string[][];
   },
   now?: string
 ): EngineResult<MarriageGameState> {
@@ -793,41 +904,97 @@ export function reorderMarriageHand(
     }
   }
 
-  if (maalSequences.length > 0 && maalSequences.length !== 3) {
-    throw new GameEngineError('INVALID_MELD', 'Maal section needs exactly three sequences');
+  if (maalSequences.length > 3) {
+    throw new GameEngineError('INVALID_MELD', 'Maal section has at most three sequences');
   }
 
-  if (maalSequences.length === 3) {
-    const validated = validateOpenMelds(maalSequences, player.hand, null);
-    if (!validated) {
-      throw new GameEngineError('INVALID_MELD', 'Maal section needs three pure sequences/tunnels');
+  // Allow empty placeholder slots and work-in-progress groups (1–2 cards).
+  // Completed groups (3+) must be valid pure sequences/tunnels.
+  const used = new Set<string>();
+  for (const ids of maalSequences) {
+    for (const id of ids) {
+      if (used.has(id)) {
+        throw new GameEngineError('INVALID_CARD', 'Duplicate card in maal section');
+      }
+      used.add(id);
+    }
+    if (ids.length === 0 || ids.length < 3) {
+      continue;
+    }
+    if (ids.length === 3) {
+      const triplet: [string, string, string] = [ids[0]!, ids[1]!, ids[2]!];
+      const meld = classifyMeld(triplet, player.hand, null, true);
+      if (!meld || !meld.pure || (meld.type !== 'SEQUENCE' && meld.type !== 'TUNNEL')) {
+        throw new GameEngineError(
+          'INVALID_MELD',
+          'Maal groups of three must be a pure sequence or tunnel'
+        );
+      }
+      continue;
+    }
+    const meld = classifyOpenSequence(ids, player.hand, null);
+    if (!meld || !meld.pure || meld.type !== 'SEQUENCE') {
+      throw new GameEngineError(
+        'INVALID_MELD',
+        'Longer maal groups must be a pure sequence'
+      );
     }
   }
+
+  const filled = maalSequences.filter((ids) => ids.length > 0);
+  const ready = validateMaalMelds(filled, player.hand, null);
 
   const hand = rebuildHandOrder(player.hand, freeCardIds, holdCardIds, maalSequences);
   const protect =
     player.hasSeenMaal && (player.maalProtectIds?.length ?? 0) > 0
       ? player.maalProtectIds
-      : maalSequences.length === 3
-        ? maalSequences.flat()
+      : ready
+        ? filled.flat()
         : (player.maalProtectIds ?? []);
+
+  const laidOut: MarriageGameState = {
+    ...state,
+    players: replacePlayer(state, playerId, {
+      hand,
+      holdCardIds,
+      // Keep slot positions (including empty) so Sequence 1/2/3 stay stable in the UI.
+      maalSequences: padMaalSlots(maalSequences),
+      maalProtectIds: protect,
+    }),
+  };
+
+  const events: GameEvent[] = [
+    {
+      type: 'HAND_REORDERED',
+      playerId,
+    },
+  ];
+
+  // Parking three pure sequences/tunnels should reveal maal (including for player 2+
+  // when tiplu was already cut for someone else).
+  if (!player.hasSeenMaal && !player.hasOpened && ready) {
+    const maal = qualifyPlayerForMaal(laidOut, playerId, events);
+    if (maal.changed) {
+      return bump(
+        state,
+        {
+          stock: maal.stock,
+          discard: maal.discard,
+          tiplu: maal.tiplu,
+          players: maal.players,
+        },
+        events,
+        now
+      );
+    }
+  }
 
   return bump(
     state,
     {
-      players: replacePlayer(state, playerId, {
-        hand,
-        holdCardIds,
-        maalSequences: maalSequences.length === 3 ? maalSequences : [],
-        maalProtectIds: protect,
-      }),
+      players: laidOut.players,
     },
-    [
-      {
-        type: 'HAND_REORDERED',
-        playerId,
-      },
-    ],
+    events,
     now
   );
 }

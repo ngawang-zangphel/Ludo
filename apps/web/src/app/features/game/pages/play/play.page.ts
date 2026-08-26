@@ -79,13 +79,11 @@ import { httpErrorMessage } from '../../../../shared/format';
             (extendMeld)="game.marriageExtendMeld($event.cardId, $event.meldIndex)"
             (joinMelds)="game.marriageJoinMelds($event.meldIndexA, $event.meldIndexB)"
             (meldCardRemove)="onMeldCardRemove($event)"
-            (layoutError)="game.errorMessage.set($event)"
+            (addMeld)="game.marriageAddMeld($event)"
+            (layoutError)="game.flashError($event)"
           />
           @if (game.lastEvent(); as event) {
             <p class="mx-auto mt-3 max-w-5xl text-center text-xs text-arena-mist/60">{{ event }}</p>
-          }
-          @if (game.errorMessage(); as err) {
-            <p class="mx-auto mt-2 max-w-5xl text-center text-sm text-piece-red">{{ err }}</p>
           }
         } @else {
           <ludo-game-table
@@ -121,6 +119,17 @@ import { httpErrorMessage } from '../../../../shared/format';
               </li>
             }
           </ul>
+        </div>
+      }
+
+      @if (game.errorMessage(); as err) {
+        <div class="pointer-events-none fixed inset-x-0 bottom-8 z-[100] flex justify-center px-4">
+          <div
+            role="alert"
+            class="pointer-events-auto max-w-md rounded-xl border border-piece-red/50 bg-[#1a1528] px-5 py-3 text-center text-sm text-white shadow-2xl"
+          >
+            {{ err }}
+          </div>
         </div>
       }
 

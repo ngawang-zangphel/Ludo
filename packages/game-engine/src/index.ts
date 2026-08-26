@@ -80,6 +80,7 @@ export {
   extendMarriageMeld,
   joinMarriageMelds,
   removeMarriageMeldCard,
+  addMarriageMeld,
 } from './lib/marriage/actions';
 export {
   buildMarriageDeck,
@@ -98,5 +99,6 @@ export {
   handHasThreePureOpens,
   sortHand,
   validateOpenMelds,
+  validateMaalMelds,
 } from './lib/marriage/melds';
 export { sanitizeMarriageState, sanitizeGameStateForViewer } from './lib/marriage/sanitize';

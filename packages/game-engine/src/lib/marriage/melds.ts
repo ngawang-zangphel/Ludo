@@ -282,6 +282,51 @@ export function validateOpenMelds(
   return result;
 }
 
+/**
+ * Validate the maal tray: exactly three pure sequences and/or tunnels.
+ * Sequences may be longer than three; tunnels must stay length three.
+ */
+export function validateMaalMelds(
+  melds: string[][],
+  hand: MarriageCard[],
+  tiplu: MarriageCard | null
+): MarriageMeld[] | null {
+  if (melds.length !== 3) {
+    return null;
+  }
+  const used = new Set<string>();
+  const result: MarriageMeld[] = [];
+  for (const ids of melds) {
+    if (ids.length < 3) {
+      return null;
+    }
+    for (const id of ids) {
+      if (used.has(id)) {
+        return null;
+      }
+      used.add(id);
+    }
+    if (ids.length === 3) {
+      const triplet: [string, string, string] = [ids[0]!, ids[1]!, ids[2]!];
+      const meld = classifyMeld(triplet, hand, tiplu, true);
+      if (!meld || !meld.pure) {
+        return null;
+      }
+      if (meld.type !== 'SEQUENCE' && meld.type !== 'TUNNEL') {
+        return null;
+      }
+      result.push(meld);
+      continue;
+    }
+    const meld = classifyOpenSequence(ids, hand, tiplu);
+    if (!meld || !meld.pure || meld.type !== 'SEQUENCE') {
+      return null;
+    }
+    result.push(meld);
+  }
+  return result;
+}
+
 /** True when the hand contains three disjoint pure sequences and/or tunnels. */
 export function handHasThreePureOpens(
   hand: MarriageCard[],
