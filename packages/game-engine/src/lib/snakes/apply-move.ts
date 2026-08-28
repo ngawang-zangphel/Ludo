@@ -122,7 +122,9 @@ export function applySnakesMove(
   const playerDone = stillPlaying ? isSnakesPlayerFinished(stillPlaying) : true;
 
   if (playerDone) {
-    next = clearRollWindow(completeSnakesMatch(next, events));
+    next = checkSnakesMatchFinished(next)
+      ? clearRollWindow(completeSnakesMatch(next, events))
+      : openRollWindow(passSnakesTurn(next, player.id, events), now);
   } else {
     next = openRollWindow(extraOrPass(next, player.id, dice, events), now);
   }

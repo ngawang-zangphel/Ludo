@@ -10,6 +10,7 @@ import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import {
   GameType,
+  MatchStatus,
   PlayerColor,
   SnakesCustomBoardDto,
   SnakesLevelId,
@@ -23,6 +24,7 @@ import { SnakesBoardComponent } from '../../components/snakes-board/snakes-board
 import { SnakesLayoutEditorComponent } from '../../components/snakes-layout-editor/snakes-layout-editor';
 import { SnakesPresetPickerComponent } from '../../components/snakes-preset-picker/snakes-preset-picker';
 import { PLAYER_SWATCH } from '../../models/theme';
+import { FinishCelebrationComponent } from '../../components/finish-celebration/finish-celebration';
 
 @Component({
   selector: 'ludo-local-match-page',
@@ -35,6 +37,7 @@ import { PLAYER_SWATCH } from '../../models/theme';
     SnakesBoardComponent,
     SnakesLayoutEditorComponent,
     SnakesPresetPickerComponent,
+    FinishCelebrationComponent,
   ],
   template: `
     <div
@@ -192,7 +195,9 @@ import { PLAYER_SWATCH } from '../../models/theme';
             <div class="flex flex-wrap items-end justify-between gap-3">
               <div>
                 <p class="text-xs uppercase tracking-[0.25em] text-arena-gold/80">Players</p>
-                <p class="mt-1 text-sm text-arena-mist/70">2 to 4 people at this table</p>
+                <p class="mt-1 text-sm text-arena-mist/70">
+                  2 to {{ match.allowedPlayerCounts().at(-1) }} people at this table
+                </p>
               </div>
               <div class="flex flex-wrap gap-2">
                 @for (count of match.allowedPlayerCounts(); track count) {
@@ -298,7 +303,9 @@ import { PLAYER_SWATCH } from '../../models/theme';
           (squareSelect)="editor()?.applySquare($event)"
         />
 
-        @if (match.winner(); as winner) {
+        <arena-finish-celebration [celebration]="match.celebration()" />
+
+        @if (match.state()?.status === MatchStatus.COMPLETED && match.winner(); as winner) {
           <div class="pointer-events-none fixed inset-x-0 bottom-10 z-20 flex justify-center">
             <div class="rounded-full bg-arena-gold px-7 py-3.5 font-display text-xl font-semibold text-arena-ink shadow-[0_12px_40px_rgba(228,193,106,0.45)]">
               {{ winner.name }} wins
@@ -314,6 +321,7 @@ export class LocalMatchPage implements OnInit {
   readonly match = inject(LocalMatchService);
   private readonly api = inject(ArenaApiService);
   readonly GameType = GameType;
+  readonly MatchStatus = MatchStatus;
   readonly SnakesLevelId = SnakesLevelId;
   readonly PlayerColor = PlayerColor;
   readonly editor = viewChild(SnakesLayoutEditorComponent);

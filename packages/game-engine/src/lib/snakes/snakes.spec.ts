@@ -142,13 +142,17 @@ describe('snakes and ladders', () => {
     expect(afterRoll.events.some((event) => event.type === GameEventType.NO_VALID_MOVES)).toBe(true);
   });
 
-  it('wins on an exact roll to 100', () => {
+  it('records first place without ending a two-player match', () => {
     const result = rollAndMove(place(makeSnakesMatch(), 'red', 97), 'red', 3);
     const red = result.state.players.find((player) => player.id === 'red');
     expect(red?.position).toBe(SNAKES_FINISH_SQUARE);
+    expect(red?.finishedPosition).toBe(1);
     expect(result.state.rankings[0]).toBe('red');
-    expect(result.state.status).toBe('COMPLETED');
-    expect(result.events.some((event) => event.type === GameEventType.MATCH_FINISHED)).toBe(true);
+    expect(result.state.status).toBe('LIVE');
+    expect(result.state.currentPlayerId).toBe('green');
+    expect(result.state.turnPhase).toBe(TurnPhase.WAITING_FOR_ROLL);
+    expect(result.events.some((event) => event.type === GameEventType.PLAYER_FINISHED)).toBe(true);
+    expect(result.events.some((event) => event.type === GameEventType.MATCH_FINISHED)).toBe(false);
   });
 
   it('gives an extra turn after rolling six when the rule is on', () => {
@@ -160,9 +164,38 @@ describe('snakes and ladders', () => {
   it('does not grant an extra turn after a winning six', () => {
     const result = rollAndMove(place(makeSnakesMatch(), 'red', 94), 'red', 6);
     expect(result.state.rankings[0]).toBe('red');
-    expect(result.state.currentPlayerId).toBe('red');
-    expect(result.state.turnPhase).toBe(TurnPhase.MATCH_OVER);
+    expect(result.state.currentPlayerId).toBe('green');
+    expect(result.state.turnPhase).toBe(TurnPhase.WAITING_FOR_ROLL);
     expect(result.events.some((event) => event.type === GameEventType.EXTRA_TURN)).toBe(false);
+  });
+
+  it('ends the match once four players have finished', () => {
+    const match = createSnakesMatchState({
+      matchId: 'snakes-five',
+      now: '2026-01-01T00:00:00.000Z',
+      players: [
+        { id: 'red', userId: 'u-red', name: 'Red', color: PlayerColor.RED },
+        { id: 'green', userId: 'u-green', name: 'Green', color: PlayerColor.GREEN },
+        { id: 'yellow', userId: 'u-yellow', name: 'Yellow', color: PlayerColor.YELLOW },
+        { id: 'blue', userId: 'u-blue', name: 'Blue', color: PlayerColor.BLUE },
+        { id: 'purple', userId: 'u-purple', name: 'Purple', color: PlayerColor.PURPLE },
+      ],
+    });
+    let state = place(match, 'green', 100);
+    state = {
+      ...state,
+      rankings: ['green', 'yellow', 'blue'],
+      players: state.players.map((player) => {
+        if (player.id === 'green') return { ...player, finishedPosition: 1 };
+        if (player.id === 'yellow') return { ...player, finishedPosition: 2, position: 100 };
+        if (player.id === 'blue') return { ...player, finishedPosition: 3, position: 100 };
+        return player;
+      }),
+    };
+    const result = rollAndMove(place(state, 'red', 97), 'red', 3);
+    expect(result.state.rankings).toEqual(['green', 'yellow', 'blue', 'red', 'purple']);
+    expect(result.state.status).toBe('COMPLETED');
+    expect(result.events.some((event) => event.type === GameEventType.MATCH_FINISHED)).toBe(true);
   });
 });
 

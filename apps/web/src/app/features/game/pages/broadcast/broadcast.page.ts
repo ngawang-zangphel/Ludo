@@ -1,11 +1,12 @@
 import { ChangeDetectionStrategy, Component, OnDestroy, OnInit, inject, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
-import { isMarriageState, MarriageGameState } from '@ludo-game/shared-types';
+import { isMarriageState, MarriageGameState, MatchStatus } from '@ludo-game/shared-types';
 import { GameSocketService } from '../../services/game-socket.service';
 import { ArenaApiService } from '../../../../core/api/arena-api.service';
 import { GameTableComponent } from '../../components/game-table/game-table';
 import { MarriageTableComponent } from '../../components/marriage-table/marriage-table';
 import { MatchStartOverlayComponent } from '../../components/match-start-overlay/match-start-overlay';
+import { FinishCelebrationComponent } from '../../components/finish-celebration/finish-celebration';
 import { AuthService } from '../../../../core/auth/auth.service';
 
 @Component({
@@ -13,7 +14,13 @@ import { AuthService } from '../../../../core/auth/auth.service';
   changeDetection: ChangeDetectionStrategy.OnPush,
   providers: [GameSocketService],
   host: { class: 'broadcast-screen' },
-  imports: [GameTableComponent, MarriageTableComponent, MatchStartOverlayComponent, RouterLink],
+  imports: [
+    GameTableComponent,
+    MarriageTableComponent,
+    MatchStartOverlayComponent,
+    FinishCelebrationComponent,
+    RouterLink,
+  ],
   template: `
     <div class="min-h-screen px-6 py-8">
       <arena-match-start-overlay
@@ -60,7 +67,9 @@ import { AuthService } from '../../../../core/auth/auth.service';
         </div>
       }
 
-      @if (game.winner(); as winner) {
+      <arena-finish-celebration [celebration]="game.celebration()" />
+
+      @if (game.status() === MatchStatus.COMPLETED && game.winner(); as winner) {
         <div class="pointer-events-none fixed inset-x-0 bottom-10 flex justify-center">
           <div class="rounded-full bg-arena-gold px-8 py-4 font-display text-2xl font-semibold text-arena-ink shadow-2xl">
             {{ winner.name }} wins
@@ -75,6 +84,7 @@ export class BroadcastPage implements OnInit, OnDestroy {
   readonly auth = inject(AuthService);
   readonly game = inject(GameSocketService);
   readonly message = signal('Waiting for an admin to select a match.');
+  readonly MatchStatus = MatchStatus;
 
   asMarriage(state: unknown): MarriageGameState | null {
     return state && typeof state === 'object' && isMarriageState(state as never)

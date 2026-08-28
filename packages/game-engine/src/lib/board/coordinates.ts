@@ -6,6 +6,8 @@ import {
   HOME_PATH_START,
   HOME_POSITION,
   LOOP_SIZE,
+  LUDO_PLAYER_COLORS,
+  LudoSeatColor,
   PieceState,
   PlayerColor,
   TRACK_MAX_RELATIVE,
@@ -21,19 +23,26 @@ import {
   YARD_SLOTS,
 } from './path';
 
+function ludoSeat(color: PlayerColor): LudoSeatColor {
+  if (color === PlayerColor.PURPLE) {
+    throw new Error('Purple is not a Ludo seat');
+  }
+  return color;
+}
+
 export function getColorStartIndex(color: PlayerColor): number {
-  return COLOR_START_INDEX[color];
+  return COLOR_START_INDEX[ludoSeat(color)];
 }
 
 export function relativeToGlobal(color: PlayerColor, relativePosition: number): number {
   if (relativePosition < 0 || relativePosition > TRACK_MAX_RELATIVE) {
     throw new Error(`Relative position ${relativePosition} is not on the shared track`);
   }
-  return (COLOR_START_INDEX[color] + relativePosition) % LOOP_SIZE;
+  return (COLOR_START_INDEX[ludoSeat(color)] + relativePosition) % LOOP_SIZE;
 }
 
 export function globalToRelative(color: PlayerColor, globalIndex: number): number {
-  return (globalIndex - COLOR_START_INDEX[color] + LOOP_SIZE) % LOOP_SIZE;
+  return (globalIndex - COLOR_START_INDEX[ludoSeat(color)] + LOOP_SIZE) % LOOP_SIZE;
 }
 
 export function isSafeSquare(globalIndex: number): boolean {
@@ -70,14 +79,14 @@ export function getAbsoluteBoardPosition(
 
   if (relativePosition < HOME_POSITION) {
     const homeIndex = relativePosition - HOME_PATH_START;
-    const cell = HOME_PATHS[color][homeIndex];
+    const cell = HOME_PATHS[ludoSeat(color)][homeIndex];
     if (!cell) {
       throw new Error(`Invalid home-path index: ${homeIndex}`);
     }
     return cell;
   }
 
-  return HOME_TRIANGLES[color];
+  return HOME_TRIANGLES[ludoSeat(color)];
 }
 
 export function getGlobalPosition(
@@ -88,7 +97,7 @@ export function getGlobalPosition(
 }
 
 export function getYardSlot(color: PlayerColor, slot: number): BoardCoordinate {
-  const cell = YARD_SLOTS[color][slot];
+  const cell = YARD_SLOTS[ludoSeat(color)][slot];
   if (!cell) {
     throw new Error(`Invalid yard slot ${slot} for ${color}`);
   }
@@ -133,7 +142,7 @@ export function checkHomeEntry(fromRelative: number, toRelative: number): boolea
 }
 
 function yardColorAt(row: number, col: number): PlayerColor | undefined {
-  for (const color of Object.values(PlayerColor)) {
+  for (const color of LUDO_PLAYER_COLORS) {
     const bounds = YARD_BOUNDS[color];
     if (
       row >= bounds.rowStart &&
@@ -148,7 +157,7 @@ function yardColorAt(row: number, col: number): PlayerColor | undefined {
 }
 
 function findYardSlot(color: PlayerColor, row: number, col: number): number | undefined {
-  const index = YARD_SLOTS[color].findIndex((slot) => slot.row === row && slot.col === col);
+  const index = YARD_SLOTS[ludoSeat(color)].findIndex((slot) => slot.row === row && slot.col === col);
   return index >= 0 ? index : undefined;
 }
 
@@ -167,7 +176,7 @@ export function getBoardLayout(): BoardCell[][] {
     cells.push(line);
   }
 
-  for (const color of Object.values(PlayerColor)) {
+  for (const color of LUDO_PLAYER_COLORS) {
     const bounds = YARD_BOUNDS[color];
     for (let row = bounds.rowStart; row <= bounds.rowEnd; row += 1) {
       for (let col = bounds.colStart; col <= bounds.colEnd; col += 1) {
@@ -201,7 +210,7 @@ export function getBoardLayout(): BoardCell[][] {
     cell.globalIndex = globalIndex;
   });
 
-  (Object.values(PlayerColor) as PlayerColor[]).forEach((color) => {
+  LUDO_PLAYER_COLORS.forEach((color) => {
     HOME_PATHS[color].forEach((coord, homePathIndex) => {
       const cell = cells[coord.row]?.[coord.col];
       if (!cell) {

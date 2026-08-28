@@ -10,6 +10,7 @@ import {
   GameEventType,
   GameState,
   GameType,
+  GameRules,
   isLudoState,
   isMarriageRules,
   isMarriageState,
@@ -23,6 +24,7 @@ import {
   maxMarriagePlayers,
   ParticipantStatus,
   defaultSeatColors,
+  maxPlayersForGame,
   ServerToClientEvents,
   SnakesGameState,
   GameEngineError,
@@ -170,10 +172,7 @@ export class MatchesService implements OnModuleInit {
     const freeIds = participants
       .filter((participant) => !busy.has(toObjectIdString(participant.userId)))
       .map((participant) => toObjectIdString(participant.userId));
-    const groupSize =
-      tournament.gameType === GameType.MARRIAGE && isMarriageRules(tournament.rules)
-        ? maxMarriagePlayers(tournament.rules.deckCount)
-        : 4;
+    const groupSize = maxSeatsForTournament(tournament.gameType, tournament.rules);
     const groups = splitIntoGroups(freeIds, groupSize);
     if (groups.length === 0) {
       throw new BadRequestException('Need at least 2 free players to form a group.');
@@ -199,10 +198,7 @@ export class MatchesService implements OnModuleInit {
     }
     const tournament = await this.requireTournament(toObjectIdString(match.tournamentId));
     const gameType = match.gameType ?? tournament.gameType ?? GameType.LUDO;
-    const maxPlayers =
-      gameType === GameType.MARRIAGE && isMarriageRules(tournament.rules)
-        ? maxMarriagePlayers(tournament.rules.deckCount)
-        : 4;
+    const maxPlayers = maxSeatsForTournament(gameType, tournament.rules);
     if (dto.playerUserIds.length < 2 || dto.playerUserIds.length > maxPlayers) {
       throw new BadRequestException(`A match needs 2 to ${maxPlayers} players`);
     }
@@ -240,10 +236,7 @@ export class MatchesService implements OnModuleInit {
     const match = await this.state.loadMatch(matchId);
     const tournament = await this.requireTournament(toObjectIdString(match.tournamentId));
     const gameType = match.gameType ?? tournament.gameType ?? GameType.LUDO;
-    const maxPlayers =
-      gameType === GameType.MARRIAGE && isMarriageRules(tournament.rules)
-        ? maxMarriagePlayers(tournament.rules.deckCount)
-        : 4;
+    const maxPlayers = maxSeatsForTournament(gameType, tournament.rules);
     const assigned = new Set(
       (
         await this.matches
@@ -1341,6 +1334,13 @@ export class MatchesService implements OnModuleInit {
     }
     return detail;
   }
+}
+
+function maxSeatsForTournament(gameType: GameType, rules: GameRules): number {
+  if (gameType === GameType.MARRIAGE && isMarriageRules(rules)) {
+    return maxMarriagePlayers(rules.deckCount);
+  }
+  return maxPlayersForGame(gameType);
 }
 
 function splitIntoGroups<T>(items: T[], groupSize = 4): T[][] {

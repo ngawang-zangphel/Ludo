@@ -18,6 +18,7 @@ import {
   MatchStatus,
   MatchSummaryDto,
   maxMarriagePlayers,
+  maxPlayersForGame,
   ParticipantDto,
   resolveSnakesRules,
   SNAKES_LEVEL_LABEL,
@@ -47,6 +48,18 @@ import { SnakesPresetPickerComponent } from '../../game/components/snakes-preset
   ],
   template: `
     <div class="mx-auto max-w-6xl px-4 py-8">
+      @if (grouping()) {
+        <div class="fixed inset-0 z-50 grid place-items-center bg-black/55 backdrop-blur-[2px]">
+          <div class="flex flex-col items-center gap-4 rounded-3xl border border-arena-gold/40 bg-arena-navy px-10 py-8 shadow-2xl">
+            <span
+              class="h-11 w-11 animate-spin rounded-full border-[3px] border-arena-gold/25 border-t-arena-gold"
+              aria-hidden="true"
+            ></span>
+            <p class="font-display text-xl text-white">Dividing groups…</p>
+            <p class="text-sm text-arena-mist/70">Seating free players at tables</p>
+          </div>
+        </div>
+      }
       <div class="flex flex-wrap items-end justify-between gap-4">
         <div>
           <a routerLink="/admin" class="text-xs uppercase tracking-[0.3em] text-arena-gold hover:underline">
@@ -385,7 +398,7 @@ import { SnakesPresetPickerComponent } from '../../game/components/snakes-preset
               <div>
                 <h2 class="font-display text-lg">Group tables</h2>
                 <p class="mt-1 text-sm text-arena-mist/70">
-                  One tournament can run many groups at once. Each group of 2–4 players gets its own table.
+                  One tournament can run many groups at once. Each group of 2–{{ maxTableSeats() }} players gets its own table.
                 </p>
               </div>
               @if (rounds().length > 1) {
@@ -482,10 +495,11 @@ import { SnakesPresetPickerComponent } from '../../game/components/snakes-preset
                   </button>
                   <button
                     type="button"
-                    class="rounded-full border border-arena-gold px-4 py-2 text-sm text-arena-gold"
+                    class="rounded-full border border-arena-gold px-4 py-2 text-sm text-arena-gold disabled:opacity-40"
+                    [disabled]="grouping()"
                     (click)="createGroups()"
                   >
-                    Split everyone into groups
+                    {{ grouping() ? 'Dividing groups…' : 'Split everyone into groups' }}
                   </button>
                 </div>
                 @if (leftoverCount() === 1) {
@@ -529,6 +543,7 @@ export class AdminTournamentsPage implements OnInit {
   readonly error = signal<string | null>(null);
   readonly playerNames = playerNames;
   readonly selectedPlayerIds = signal<string[]>([]);
+  readonly grouping = signal(false);
   readonly registerUserIds = signal<string[]>([]);
   readonly GAME_TYPE_LABEL = GAME_TYPE_LABEL;
   readonly SNAKES_LEVEL_LABEL = SNAKES_LEVEL_LABEL;
@@ -603,7 +618,7 @@ export class AdminTournamentsPage implements OnInit {
 
   readonly canCreate = computed(() => {
     const selected = this.selectedPlayerIds();
-    return selected.length >= 2 && selected.length <= 4;
+    return selected.length >= 2 && selected.length <= this.maxTableSeats();
   });
 
   seatedSummary(): string {
@@ -783,7 +798,7 @@ export class AdminTournamentsPage implements OnInit {
     if (tournament?.gameType === GameType.MARRIAGE && isMarriageRules(tournament.rules)) {
       return maxMarriagePlayers(tournament.rules.deckCount);
     }
-    return 4;
+    return maxPlayersForGame(tournament?.gameType ?? GameType.LUDO);
   }
 
   maxSeatsForDecks(decks: number): number {
@@ -792,22 +807,27 @@ export class AdminTournamentsPage implements OnInit {
 
   async createRandomMatch(): Promise<void> {
     const tournament = this.selected();
-    if (!tournament) {
+    if (!tournament || this.grouping()) {
       return;
     }
     if (this.freeParticipants().length < 2) {
       this.error.set('Need at least 2 free players to form a group.');
       return;
     }
-    await this.guard(async () => {
-      await this.api.createMatchGroups({
-        tournamentId: tournament.id,
-        round: this.round,
-        roundNumber: this.roundNumber,
+    this.grouping.set(true);
+    try {
+      await this.guard(async () => {
+        await this.api.createMatchGroups({
+          tournamentId: tournament.id,
+          round: this.round,
+          roundNumber: this.roundNumber,
+        });
+        this.selectedPlayerIds.set([]);
+        await this.refreshSelected();
       });
-      this.selectedPlayerIds.set([]);
-      await this.refreshSelected();
-    });
+    } finally {
+      this.grouping.set(false);
+    }
   }
 
   createGroups(): Promise<void> {
@@ -829,7 +849,7 @@ export class AdminTournamentsPage implements OnInit {
       if (ids.includes(userId)) {
         return ids.filter((id) => id !== userId);
       }
-      if (ids.length >= 4) {
+      if (ids.length >= this.maxTableSeats()) {
         return ids;
       }
       return [...ids, userId];
@@ -967,7 +987,7 @@ export class AdminTournamentsPage implements OnInit {
     }
     const freeIds = participants
       .filter((player) => !this.busyPlayerIds().has(player.userId))
-      .slice(0, 4)
+      .slice(0, this.maxTableSeats())
       .map((player) => player.userId);
     if (freeIds.length >= 2 && this.selectedPlayerIds().length === 0) {
       this.selectedPlayerIds.set(freeIds);

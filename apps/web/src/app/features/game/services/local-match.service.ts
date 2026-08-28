@@ -9,6 +9,7 @@ import {
   GameType,
   isLudoState,
   isSnakesState,
+  maxPlayersForGame,
   PLAYER_COLOR_ORDER,
   PLAYER_COLOR_OPPOSITE,
   PlayerColor,
@@ -29,6 +30,7 @@ import {
   getSnakesSquareCoordinate,
 } from '@ludo-game/game-engine';
 import { DiceUiState } from '../models/dice';
+import { PlaceCelebration, celebrationFromEvents } from '../models/celebration';
 import { DICE_REVEAL_MS, DICE_TUMBLE_MS, PIECE_STEP_MS } from '../models/motion';
 import { formatGameEvents } from '../../../shared/format';
 
@@ -59,7 +61,9 @@ export class LocalMatchService {
   readonly displayCoords = signal<Record<string, BoardCoordinate>>({});
   readonly errorMessage = signal<string | null>(null);
   readonly lastEvent = signal<string | null>(null);
+  readonly celebration = signal<PlaceCelebration | null>(null);
   private actionGen = 0;
+  private celebrationTimer: ReturnType<typeof setTimeout> | null = null;
 
   readonly currentPlayer = computed(() => {
     const match = this.state();
@@ -98,9 +102,14 @@ export class LocalMatchService {
     return match.players.find((player) => player.id === winnerId) ?? null;
   });
 
-  readonly colors = computed(() => [...PLAYER_COLOR_ORDER]);
+  readonly colors = computed(() =>
+    PLAYER_COLOR_ORDER.slice(0, maxPlayersForGame(this.gameType()))
+  );
 
-  readonly allowedPlayerCounts = computed(() => [2, 3, 4]);
+  readonly allowedPlayerCounts = computed(() => {
+    const max = maxPlayersForGame(this.gameType());
+    return [2, 3, 4, 5].filter((count) => count <= max);
+  });
 
   readonly setupReady = computed(() => {
     if (!this.playerSlots().every((slot) => slot.name.trim().length > 0)) {
@@ -129,7 +138,7 @@ export class LocalMatchService {
       return;
     }
     this.gameType.set(type);
-    const nextCount = Math.min(this.playerCount(), 4);
+    const nextCount = Math.min(this.playerCount(), maxPlayersForGame(type));
     this.playerCount.set(nextCount);
     this.playerSlots.set(defaultSlots(nextCount));
     if (this.phase() === 'playing') {
@@ -197,7 +206,7 @@ export class LocalMatchService {
   }
 
   setPlayerCount(count: number): void {
-    const next = Math.min(4, Math.max(2, Math.floor(count)));
+    const next = Math.min(maxPlayersForGame(this.gameType()), Math.max(2, Math.floor(count)));
     const names = this.playerSlots().map((slot) => slot.name);
     if (next === 2) {
       this.playerCount.set(2);
@@ -293,6 +302,11 @@ export class LocalMatchService {
     this.displayCoords.set({});
     this.errorMessage.set(null);
     this.lastEvent.set(null);
+    this.celebration.set(null);
+    if (this.celebrationTimer) {
+      clearTimeout(this.celebrationTimer);
+      this.celebrationTimer = null;
+    }
   }
 
   newMatch(): void {
@@ -399,6 +413,7 @@ export class LocalMatchService {
       this.movingPieceId.set(null);
       this.diceUi.set('WAITING');
       this.lastEvent.set(summarize(result.events.map((event) => event.type)));
+      this.flashCelebration(celebrationFromEvents(result.events, result.state.players));
     } catch (error) {
       this.animating.set(false);
       this.movingPieceId.set(null);
@@ -465,6 +480,20 @@ export class LocalMatchService {
       return { levelId, layout: this.customLayout() };
     }
     return { levelId };
+  }
+
+  private flashCelebration(value: PlaceCelebration | null): void {
+    if (!value) {
+      return;
+    }
+    this.celebration.set(value);
+    if (this.celebrationTimer) {
+      clearTimeout(this.celebrationTimer);
+    }
+    this.celebrationTimer = setTimeout(() => {
+      this.celebration.set(null);
+      this.celebrationTimer = null;
+    }, 3200);
   }
 }
 

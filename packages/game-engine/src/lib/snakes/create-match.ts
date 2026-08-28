@@ -2,6 +2,7 @@ import {
   CreateSnakesMatchInput,
   DICE_AUTO_ROLL_MS,
   GameEngineError,
+  SNAKES_MAX_PLAYERS,
   GameType,
   MatchStatus,
   PLAYER_COLOR_ORDER,
@@ -20,10 +21,10 @@ export function snakesTokenId(color: PlayerColor): string {
 }
 
 export function createSnakesMatchState(input: CreateSnakesMatchInput): SnakesGameState {
-  if (input.players.length < 2 || input.players.length > 4) {
+  if (input.players.length < 2 || input.players.length > SNAKES_MAX_PLAYERS) {
     throw new GameEngineError(
       'INVALID_PLAYER_SETUP',
-      'A match requires 2 to 4 players'
+      `A match requires 2 to ${SNAKES_MAX_PLAYERS} players`
     );
   }
 

@@ -1,4 +1,4 @@
-import { BOARD_SIZE, LOOP_SIZE, PlayerColor } from '@ludo-game/shared-types';
+import { BOARD_SIZE, LOOP_SIZE, LUDO_PLAYER_COLORS, PlayerColor } from '@ludo-game/shared-types';
 import {
   COLOR_START_INDEX,
   COMMON_PATH,
@@ -52,7 +52,7 @@ describe('board path', () => {
   });
 
   it('gives each color a 5-cell private home path plus a home triangle', () => {
-    for (const color of Object.values(PlayerColor)) {
+    for (const color of LUDO_PLAYER_COLORS) {
       expect(HOME_PATHS[color]).toHaveLength(5);
       expect(HOME_TRIANGLES[color]).toEqual(getAbsoluteBoardPosition(color, 56));
       expect(YARD_SLOTS[color]).toHaveLength(4);
@@ -72,7 +72,7 @@ describe('board path', () => {
   });
 
   it('builds a 57-step player path for all four colors', () => {
-    for (const color of Object.values(PlayerColor)) {
+    for (const color of LUDO_PLAYER_COLORS) {
       const path = getPlayerPath(color);
       expect(path).toHaveLength(57);
       expect(path[0]).toEqual(getAbsoluteBoardPosition(color, 0));
@@ -83,7 +83,7 @@ describe('board path', () => {
 
   it('does not place two colors on the same home-path cell', () => {
     const keys = new Set<string>();
-    for (const color of Object.values(PlayerColor)) {
+    for (const color of LUDO_PLAYER_COLORS) {
       for (const cell of HOME_PATHS[color]) {
         const key = `${cell.row},${cell.col}`;
         expect(keys.has(key)).toBe(false);

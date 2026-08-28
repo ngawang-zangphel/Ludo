@@ -10,6 +10,7 @@ import {
   ParticipantStatus,
   resolveMarriageRules,
   resolveSnakesRules,
+  maxPlayersForGame,
   TournamentDto,
   TournamentStatus,
   validateSnakesLayout,
@@ -184,8 +185,9 @@ export class TournamentsService {
     const existing = matches.filter((match) => match.roundNumber === nextRound.number);
     let matchNumber =
       matches.reduce((max, match) => Math.max(max, match.matchNumber), 0) + 1;
-    for (let index = 0; index < winners.length; index += 4) {
-      const group = winners.slice(index, index + 4);
+    const groupSize = maxPlayersForGame(tournament.gameType);
+    for (let index = 0; index < winners.length; index += groupSize) {
+      const group = winners.slice(index, index + groupSize);
       if (group.length < 2) {
         break;
       }

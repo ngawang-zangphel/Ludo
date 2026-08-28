@@ -15,6 +15,7 @@ import { GameSocketService } from '../../services/game-socket.service';
 import { GameTableComponent } from '../../components/game-table/game-table';
 import { MarriageTableComponent } from '../../components/marriage-table/marriage-table';
 import { MatchStartOverlayComponent } from '../../components/match-start-overlay/match-start-overlay';
+import { FinishCelebrationComponent } from '../../components/finish-celebration/finish-celebration';
 import { StatusBadgeComponent } from '../../../../shared/ui/status-badge';
 import { httpErrorMessage } from '../../../../shared/format';
 
@@ -27,6 +28,7 @@ import { httpErrorMessage } from '../../../../shared/format';
     GameTableComponent,
     MarriageTableComponent,
     MatchStartOverlayComponent,
+    FinishCelebrationComponent,
     StatusBadgeComponent,
   ],
   template: `
@@ -145,6 +147,7 @@ import { httpErrorMessage } from '../../../../shared/format';
             [errorMessage]="game.errorMessage()"
           />
         }
+        <arena-finish-celebration [celebration]="game.celebration()" />
       } @else {
         <div class="mx-auto max-w-xl rounded-3xl border border-dashed border-arena-line p-10 text-center text-arena-mist/70">
           This match has not started yet.

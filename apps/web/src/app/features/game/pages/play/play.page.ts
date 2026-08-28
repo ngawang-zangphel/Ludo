@@ -20,6 +20,7 @@ import { GameSocketService } from '../../services/game-socket.service';
 import { GameTableComponent } from '../../components/game-table/game-table';
 import { MarriageTableComponent } from '../../components/marriage-table/marriage-table';
 import { MatchStartOverlayComponent } from '../../components/match-start-overlay/match-start-overlay';
+import { FinishCelebrationComponent } from '../../components/finish-celebration/finish-celebration';
 import { StatusBadgeComponent } from '../../../../shared/ui/status-badge';
 import { httpErrorMessage } from '../../../../shared/format';
 
@@ -32,6 +33,7 @@ import { httpErrorMessage } from '../../../../shared/format';
     GameTableComponent,
     MarriageTableComponent,
     MatchStartOverlayComponent,
+    FinishCelebrationComponent,
     StatusBadgeComponent,
   ],
   template: `
@@ -133,7 +135,9 @@ import { httpErrorMessage } from '../../../../shared/format';
         </div>
       }
 
-      @if (game.winner(); as winner) {
+      <arena-finish-celebration [celebration]="game.celebration()" />
+
+      @if (status() === MatchStatus.COMPLETED && game.winner(); as winner) {
         <div class="pointer-events-none fixed inset-x-0 bottom-8 flex justify-center">
           <div class="rounded-full bg-arena-gold px-6 py-3 font-display text-lg font-semibold text-arena-ink shadow-2xl">
             {{ winner.name }} wins the arena
@@ -150,6 +154,7 @@ export class PlayPage implements OnInit, OnDestroy {
   readonly game = inject(GameSocketService);
   readonly detail = signal<MatchDetailDto | null>(null);
   readonly error = signal<string | null>(null);
+  readonly MatchStatus = MatchStatus;
 
   readonly status = computed(() => this.game.status() ?? this.detail()?.status ?? null);
   readonly canPlay = computed(

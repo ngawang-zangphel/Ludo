@@ -1,5 +1,6 @@
 import {
   BoardCoordinate,
+  LudoSeatColor,
   PlayerColor,
 } from '@ludo-game/shared-types';
 
@@ -68,7 +69,7 @@ export const COMMON_PATH: readonly BoardCoordinate[] = [
   { row: 14, col: 6 }, // 51 last square before RED start / RED home entry
 ];
 
-export const COLOR_START_INDEX: Record<PlayerColor, number> = {
+export const COLOR_START_INDEX: Record<LudoSeatColor, number> = {
   [PlayerColor.RED]: 0,
   [PlayerColor.GREEN]: 13,
   [PlayerColor.YELLOW]: 26,
@@ -85,7 +86,7 @@ export const SAFE_INDICES: ReadonlySet<number> = new Set([
   ...STAR_INDICES,
 ]);
 
-export const HOME_PATHS: Record<PlayerColor, readonly BoardCoordinate[]> = {
+export const HOME_PATHS: Record<LudoSeatColor, readonly BoardCoordinate[]> = {
   [PlayerColor.RED]: [
     { row: 13, col: 7 },
     { row: 12, col: 7 },
@@ -116,7 +117,7 @@ export const HOME_PATHS: Record<PlayerColor, readonly BoardCoordinate[]> = {
   ],
 };
 
-export const HOME_TRIANGLES: Record<PlayerColor, BoardCoordinate> = {
+export const HOME_TRIANGLES: Record<LudoSeatColor, BoardCoordinate> = {
   [PlayerColor.RED]: { row: 8, col: 7 },
   [PlayerColor.GREEN]: { row: 7, col: 6 },
   [PlayerColor.YELLOW]: { row: 6, col: 7 },
@@ -125,7 +126,7 @@ export const HOME_TRIANGLES: Record<PlayerColor, BoardCoordinate> = {
 
 export const CENTER_COORDINATE: BoardCoordinate = { row: 7, col: 7 };
 
-export const YARD_SLOTS: Record<PlayerColor, readonly BoardCoordinate[]> = {
+export const YARD_SLOTS: Record<LudoSeatColor, readonly BoardCoordinate[]> = {
   [PlayerColor.RED]: [
     { row: 10, col: 1 },
     { row: 10, col: 4 },
@@ -153,7 +154,7 @@ export const YARD_SLOTS: Record<PlayerColor, readonly BoardCoordinate[]> = {
 };
 
 export const YARD_BOUNDS: Record<
-  PlayerColor,
+  LudoSeatColor,
   { rowStart: number; rowEnd: number; colStart: number; colEnd: number }
 > = {
   [PlayerColor.RED]: { rowStart: 9, rowEnd: 14, colStart: 0, colEnd: 5 },

@@ -30,6 +30,7 @@ import {
 import { SocketService } from '../../../core/socket/socket.service';
 import { AuthService } from '../../../core/auth/auth.service';
 import { DiceUiState } from '../models/dice';
+import { PlaceCelebration, celebrationFromEvents } from '../models/celebration';
 import {
   MARRIAGE_DEAL_CARD_MS,
   MATCH_START_COUNTDOWN_FROM,
@@ -70,7 +71,9 @@ export class GameSocketService {
   readonly displayCoords = signal<Record<string, BoardCoordinate>>({});
   readonly errorMessage = signal<string | null>(null);
   readonly lastEvent = signal<string | null>(null);
+  readonly celebration = signal<PlaceCelebration | null>(null);
   private errorClearTimer: ReturnType<typeof setTimeout> | null = null;
+  private celebrationTimer: ReturnType<typeof setTimeout> | null = null;
   readonly status = signal<MatchStatus | null>(null);
   readonly roster = signal<MatchPlayerDto[]>([]);
   readonly selectedCardId = signal<string | null>(null);
@@ -250,6 +253,21 @@ export class GameSocketService {
     }, 4000);
   }
 
+  private flashCelebration(value: PlaceCelebration | null): void {
+    this.celebration.set(value);
+    if (this.celebrationTimer) {
+      clearTimeout(this.celebrationTimer);
+    }
+    if (!value) {
+      this.celebrationTimer = null;
+      return;
+    }
+    this.celebrationTimer = setTimeout(() => {
+      this.celebration.set(null);
+      this.celebrationTimer = null;
+    }, 3200);
+  }
+
   detach(): void {
     const socket = this.sockets.client;
     const matchId = this.matchId();
@@ -266,6 +284,11 @@ export class GameSocketService {
       clearTimeout(this.errorClearTimer);
       this.errorClearTimer = null;
     }
+    if (this.celebrationTimer) {
+      clearTimeout(this.celebrationTimer);
+      this.celebrationTimer = null;
+    }
+    this.celebration.set(null);
     this.matchId.set(null);
     this.state.set(null);
     this.roster.set([]);
@@ -454,6 +477,7 @@ export class GameSocketService {
     this.applyState(payload.state);
     this.diceUi.set('WAITING');
     this.lastEvent.set(formatGameEvents(payload.events.map((event) => event.type)));
+    this.flashCelebration(celebrationFromEvents(payload.events, payload.state.players));
   }
 
   private applyState(state: GameState): void {

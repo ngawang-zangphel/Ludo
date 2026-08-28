@@ -1,6 +1,7 @@
 import {
   GameEngineError,
   MatchStatus,
+  SNAKES_WINNER_CAP,
   SnakesGameState,
   SnakesPlayer,
 } from '@ludo-game/shared-types';
@@ -37,7 +38,8 @@ export function isSnakesPlayerFinished(player: SnakesPlayer): boolean {
 }
 
 export function checkSnakesMatchFinished(state: SnakesGameState): boolean {
-  return state.players.filter((player) => !isSnakesPlayerFinished(player)).length <= 1;
+  const racing = state.players.filter((player) => !isSnakesPlayerFinished(player));
+  return racing.length === 0 || state.rankings.length >= SNAKES_WINNER_CAP;
 }
 
 export function getNextSnakesPlayer(
