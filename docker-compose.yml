@@ -1,0 +1,49 @@
+services:
+  ludo:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: ludo-arena:latest
+    container_name: ludo-arena
+    restart: unless-stopped
+
+    # All configuration lives in .env (copy it from .env.example).
+    env_file:
+      - .env
+
+    ports:
+      - "${PORT:-3000}:${PORT:-3000}"
+
+    # Lets MONGODB_URI use host.docker.internal to reach a mongod running on
+    # this machine. A LAN or Atlas address needs nothing special.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:'+(process.env.PORT||3000)+'/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 40s
+
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+
+# ---------------------------------------------------------------------------
+# Reaching MongoDB — set MONGODB_URI in .env to match your case
+# ---------------------------------------------------------------------------
+# LAN or remote server:  mongodb://user:pass@192.168.168.2:27017/ludo-arena
+# Atlas:                 mongodb+srv://user:pass@cluster.mongodb.net/ludo-arena
+#
+# mongod on THIS machine: mongodb://host.docker.internal:27017/ludo-arena
+#   That needs mongod to listen beyond loopback — set `net.bindIp: 0.0.0.0`
+#   (or `127.0.0.1,172.17.0.1`) in /etc/mongod.conf and restart it.
+#   Alternatively, drop the `ports:` and `extra_hosts:` blocks above, add
+#   `network_mode: host`, and keep MONGODB_URI on 127.0.0.1.
