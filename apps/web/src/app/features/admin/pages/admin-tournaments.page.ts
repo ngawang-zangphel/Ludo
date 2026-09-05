@@ -32,6 +32,7 @@ import {
   UserRole,
 } from '@ludo-game/shared-types';
 import { ArenaApiService } from '../../../core/api/arena-api.service';
+import { MultiAutocompleteComponent } from '../../../shared/ui/multi-autocomplete';
 import { StatusBadgeComponent } from '../../../shared/ui/status-badge';
 import { httpErrorMessage, playerNames, readyCountLabel } from '../../../shared/format';
 import { SnakesBoardComponent } from '../../game/components/snakes-board/snakes-board';
@@ -43,6 +44,7 @@ import { SnakesPresetPickerComponent } from '../../game/components/snakes-preset
   imports: [
     FormsModule,
     RouterLink,
+    MultiAutocompleteComponent,
     StatusBadgeComponent,
     SnakesBoardComponent,
     SnakesPresetPickerComponent,
@@ -357,32 +359,26 @@ import { SnakesPresetPickerComponent } from '../../game/components/snakes-preset
             <div class="mt-4 border-t border-arena-line/80 pt-4">
               <p class="text-sm font-medium text-white">Add players</p>
               <p class="mt-1 text-sm text-arena-mist/60">
-                Select one or more players, then Add.
+                Search and select one or more players, then Add.
                 @if (registerUserIds().length) {
                   · {{ registerUserIds().length }} selected
                 }
               </p>
-              <div class="mt-3 flex flex-wrap gap-2">
-                @for (user of availablePlayers(); track user.id) {
-                  <button
-                    type="button"
-                    class="rounded-full border px-3 py-1.5 text-sm"
-                    [class.border-arena-gold]="isRegisterSelected(user.id)"
-                    [class.bg-arena-gold]="isRegisterSelected(user.id)"
-                    [class.text-arena-ink]="isRegisterSelected(user.id)"
-                    [class.border-arena-line]="!isRegisterSelected(user.id)"
-                    (click)="toggleRegisterUser(user.id)"
-                  >
-                    {{ user.name }}
-                  </button>
-                } @empty {
-                  <p class="text-sm text-arena-mist/60">
-                    All players are already registered, or
-                    <a routerLink="/admin/users" class="text-arena-gold hover:underline">create users</a>
-                    first.
-                  </p>
-                }
-              </div>
+              @if (availablePlayers().length) {
+                <div class="mt-3">
+                  <ludo-multi-autocomplete
+                    [options]="availablePlayerOptions()"
+                    [(selectedIds)]="registerUserIds"
+                    placeholder="Type a player name…"
+                  />
+                </div>
+              } @else {
+                <p class="mt-3 text-sm text-arena-mist/60">
+                  All players are already registered, or
+                  <a routerLink="/admin/users" class="text-arena-gold hover:underline">create users</a>
+                  first.
+                </p>
+              }
               <button
                 type="button"
                 class="mt-4 rounded-full bg-arena-gold px-4 py-2 text-sm font-semibold text-arena-ink disabled:opacity-40"
@@ -495,23 +491,16 @@ import { SnakesPresetPickerComponent } from '../../game/components/snakes-preset
 
               @if (freeParticipants().length >= 2) {
                 <p class="mt-1 text-sm text-arena-mist/70">
-                  {{ selectedPlayerIds().length }} selected · tap 2–{{ maxTableSeats() }} free players for one group, or split everyone.
+                  {{ selectedPlayerIds().length }} selected · search and pick 2–{{ maxTableSeats() }} free players for one group, or split everyone.
                   Players already in a match are unavailable.
                 </p>
-                <div class="mt-3 flex flex-wrap gap-2">
-                  @for (player of freeParticipants(); track player.userId) {
-                    <button
-                      type="button"
-                      class="rounded-full border px-3 py-1.5 text-sm"
-                      [class.border-arena-gold]="isSelected(player.userId)"
-                      [class.bg-arena-gold]="isSelected(player.userId)"
-                      [class.text-arena-ink]="isSelected(player.userId)"
-                      [class.border-arena-line]="!isSelected(player.userId)"
-                      (click)="togglePlayer(player.userId)"
-                    >
-                      {{ player.name }}
-                    </button>
-                  }
+                <div class="mt-3">
+                  <ludo-multi-autocomplete
+                    [options]="freePlayerOptions()"
+                    [(selectedIds)]="selectedPlayerIds"
+                    [maxSelected]="maxTableSeats()"
+                    placeholder="Type a player name…"
+                  />
                 </div>
                 @if (seatedParticipants().length) {
                   <p class="mt-3 text-xs text-arena-mist/50">
@@ -636,6 +625,21 @@ export class AdminTournamentsPage implements OnInit {
     this.users().filter(
       (user) => user.role === UserRole.PLAYER && !this.registeredUserIds().has(user.id)
     )
+  );
+
+  readonly availablePlayerOptions = computed(() =>
+    this.availablePlayers().map((user) => ({
+      id: user.id,
+      label: user.name,
+      hint: user.email,
+    }))
+  );
+
+  readonly freePlayerOptions = computed(() =>
+    this.freeParticipants().map((player) => ({
+      id: player.userId,
+      label: player.name,
+    }))
   );
 
   readonly groupedTables = computed(() => {
@@ -787,16 +791,6 @@ export class AdminTournamentsPage implements OnInit {
     });
   }
 
-  isRegisterSelected(userId: string): boolean {
-    return this.registerUserIds().includes(userId);
-  }
-
-  toggleRegisterUser(userId: string): void {
-    this.registerUserIds.update((ids) =>
-      ids.includes(userId) ? ids.filter((id) => id !== userId) : [...ids, userId]
-    );
-  }
-
   async setStatus(status: TournamentStatus): Promise<void> {
     const tournament = this.selected();
     if (!tournament) {
@@ -882,22 +876,6 @@ export class AdminTournamentsPage implements OnInit {
     const section = this.groupedTables().find((item) => item.roundNumber === match.roundNumber);
     const index = section?.tables.findIndex((item) => item.id === match.id) ?? 0;
     return String.fromCharCode(65 + Math.max(0, index));
-  }
-
-  isSelected(userId: string): boolean {
-    return this.selectedPlayerIds().includes(userId);
-  }
-
-  togglePlayer(userId: string): void {
-    this.selectedPlayerIds.update((ids) => {
-      if (ids.includes(userId)) {
-        return ids.filter((id) => id !== userId);
-      }
-      if (ids.length >= this.maxTableSeats()) {
-        return ids;
-      }
-      return [...ids, userId];
-    });
   }
 
   onRoundChange(value: number): void {
