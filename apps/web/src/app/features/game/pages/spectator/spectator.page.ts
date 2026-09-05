@@ -53,28 +53,46 @@ import { httpErrorMessage } from '../../../../shared/format';
         </div>
         <div class="flex flex-wrap items-center gap-2">
           @if (detail(); as match) {
-            <ludo-status-badge [status]="match.status" />
+            <ludo-status-badge [status]="matchStatus() ?? match.status" />
             @if (onBroadcast()) {
-              <button
-                type="button"
-                class="rounded-full border border-piece-red px-3 py-1.5 text-xs text-piece-red"
-                (click)="stopBroadcast()"
-              >
+              <button type="button" class="spec-btn spec-btn-danger" (click)="stopBroadcast()">
                 Stop broadcast
               </button>
             } @else {
+              <button type="button" class="spec-btn" (click)="broadcast(match.id)">Broadcast</button>
+            }
+            @if (matchStatus() === MatchStatus.READY || matchStatus() === MatchStatus.WAITING) {
               <button
                 type="button"
-                class="rounded-full border border-arena-gold px-3 py-1.5 text-xs text-arena-gold"
-                (click)="broadcast(match.id)"
+                class="spec-btn spec-btn-gold disabled:cursor-not-allowed disabled:opacity-40"
+                [disabled]="!canStart()"
+                [title]="canStart() ? '' : 'Every seated player must join the match first'"
+                (click)="startMatch()"
               >
-                Broadcast this match
+                Start
               </button>
             }
+            @if (matchStatus() === MatchStatus.LIVE) {
+              <button type="button" class="spec-btn" (click)="pauseMatch()">Pause</button>
+            }
+            @if (matchStatus() === MatchStatus.PAUSED) {
+              <button type="button" class="spec-btn spec-btn-gold" (click)="resumeMatch()">Resume</button>
+            }
+            @if (
+              matchStatus() === MatchStatus.LIVE ||
+              matchStatus() === MatchStatus.PAUSED ||
+              matchStatus() === MatchStatus.COMPLETED
+            ) {
+              <button type="button" class="spec-btn" (click)="restartMatch()">Restart</button>
+            }
+            @if (matchStatus() !== MatchStatus.COMPLETED && matchStatus() !== MatchStatus.CANCELLED) {
+              <button type="button" class="spec-btn spec-btn-danger" (click)="cancelMatch()">Cancel</button>
+            }
+            <button type="button" class="spec-btn spec-btn-danger" (click)="deleteMatch()">Delete</button>
           }
           <button
             type="button"
-            class="rounded-full border border-arena-line px-3 py-1.5 text-xs disabled:opacity-40"
+            class="spec-btn disabled:opacity-40"
             [disabled]="!neighbors()?.previousId"
             (click)="go(neighbors()?.previousId)"
           >
@@ -82,7 +100,7 @@ import { httpErrorMessage } from '../../../../shared/format';
           </button>
           <button
             type="button"
-            class="rounded-full border border-arena-line px-3 py-1.5 text-xs disabled:opacity-40"
+            class="spec-btn disabled:opacity-40"
             [disabled]="!neighbors()?.nextId"
             (click)="go(neighbors()?.nextId)"
           >
@@ -151,10 +169,30 @@ import { httpErrorMessage } from '../../../../shared/format';
       } @else {
         <div class="mx-auto max-w-xl rounded-3xl border border-dashed border-arena-line p-10 text-center text-arena-mist/70">
           This match has not started yet.
-          <p class="mt-2 text-sm">Players must join from their invite before you can start from the dashboard.</p>
+          <p class="mt-2 text-sm">Players must join from their invite before you can start.</p>
         </div>
       }
     </div>
+  `,
+  styles: `
+    .spec-btn {
+      border-radius: 999px;
+      border: 1px solid var(--color-arena-line);
+      padding: 0.35rem 0.8rem;
+      font-size: 0.75rem;
+      color: inherit;
+      background: transparent;
+    }
+    .spec-btn-gold {
+      border-color: transparent;
+      background: var(--color-arena-gold);
+      color: var(--color-arena-ink);
+      font-weight: 600;
+    }
+    .spec-btn-danger {
+      border-color: var(--color-piece-red);
+      color: var(--color-piece-red);
+    }
   `,
 })
 export class SpectatorPage implements OnInit, OnDestroy {
@@ -163,6 +201,7 @@ export class SpectatorPage implements OnInit, OnDestroy {
   private readonly api = inject(ArenaApiService);
   private readonly adminRt = inject(AdminRealtimeService);
   readonly game = inject(GameSocketService);
+  readonly MatchStatus = MatchStatus;
   readonly detail = signal<MatchDetailDto | null>(null);
   readonly neighbors = signal<MatchNeighbors | null>(null);
   readonly error = signal<string | null>(null);
@@ -173,9 +212,20 @@ export class SpectatorPage implements OnInit, OnDestroy {
       : null;
   }
 
+  readonly matchStatus = computed(() => this.game.status() ?? this.detail()?.status ?? null);
+
   readonly onBroadcast = computed(
     () => !!this.detail() && this.adminRt.broadcastMatchId() === this.detail()?.id
   );
+
+  readonly canStart = computed(() => {
+    const status = this.matchStatus();
+    if (status !== MatchStatus.READY && status !== MatchStatus.WAITING) {
+      return false;
+    }
+    const seats = this.seats();
+    return seats.length >= 2 && seats.every((player) => player.ready);
+  });
 
   readonly seats = computed(() => {
     const roster = this.game.roster();
@@ -224,6 +274,88 @@ export class SpectatorPage implements OnInit, OnDestroy {
     } catch (error) {
       this.error.set(httpErrorMessage(error));
     }
+  }
+
+  async startMatch(): Promise<void> {
+    const match = this.detail();
+    if (!match || !this.canStart()) {
+      return;
+    }
+    await this.runMatchAction(() => this.api.start(match.id));
+  }
+
+  async pauseMatch(): Promise<void> {
+    const match = this.detail();
+    if (!match) {
+      return;
+    }
+    await this.runMatchAction(() => this.api.pause(match.id));
+  }
+
+  async resumeMatch(): Promise<void> {
+    const match = this.detail();
+    if (!match) {
+      return;
+    }
+    await this.runMatchAction(() => this.api.resume(match.id));
+  }
+
+  async restartMatch(): Promise<void> {
+    const match = this.detail();
+    if (!match) {
+      return;
+    }
+    if (!window.confirm(`Restart match ${match.matchNumber}? The current board will be reset.`)) {
+      return;
+    }
+    await this.runMatchAction(() => this.api.restart(match.id));
+  }
+
+  async cancelMatch(): Promise<void> {
+    const match = this.detail();
+    if (!match) {
+      return;
+    }
+    if (!window.confirm(`Cancel match ${match.matchNumber}?`)) {
+      return;
+    }
+    await this.runMatchAction(() => this.api.cancel(match.id));
+  }
+
+  async deleteMatch(): Promise<void> {
+    const match = this.detail();
+    if (!match) {
+      return;
+    }
+    if (!window.confirm(`Delete match ${match.matchNumber}? This cannot be undone.`)) {
+      return;
+    }
+    this.error.set(null);
+    try {
+      await this.api.deleteMatch(match.id);
+      if (this.adminRt.broadcastMatchId() === match.id) {
+        this.adminRt.broadcastMatchId.set(null);
+      }
+      await this.router.navigate(['/admin']);
+    } catch (error) {
+      this.error.set(httpErrorMessage(error));
+    }
+  }
+
+  private async runMatchAction(action: () => Promise<MatchDetailDto>): Promise<void> {
+    this.error.set(null);
+    try {
+      this.applyDetail(await action());
+    } catch (error) {
+      this.error.set(httpErrorMessage(error));
+    }
+  }
+
+  private applyDetail(detail: MatchDetailDto): void {
+    this.detail.set(detail);
+    this.game.seed(detail.gameState);
+    this.game.seedRoster(detail.players);
+    this.game.status.set(detail.status);
   }
 
   async removePlayer(userId: string): Promise<void> {
