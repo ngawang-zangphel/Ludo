@@ -22,12 +22,16 @@ import { DiceUiState } from '../../models/dice';
         class="dice-scene"
         [class.is-clickable]="canRoll()"
         [class.is-compact]="compact()"
+        [class.is-ready]="canRoll() && state() !== 'ROLLING'"
+        [class.is-rolling]="state() === 'ROLLING'"
+        [class.is-result]="state() === 'RESULT'"
         [disabled]="!canRoll()"
         [attr.aria-label]="canRoll() ? 'Roll dice' : 'Dice'"
         (click)="requestRoll()"
       >
+        <div class="dice-glow" aria-hidden="true"></div>
         <div class="dice-shadow" [class.is-rolling]="state() === 'ROLLING'"></div>
-        <div class="dice-rig">
+        <div class="dice-rig" [class.is-rolling]="state() === 'ROLLING'">
           <div
             class="dice-cube"
             [class.is-rolling]="state() === 'ROLLING'"
@@ -54,6 +58,7 @@ import { DiceUiState } from '../../models/dice';
         <button
           type="button"
           class="dice-roll-btn"
+          [class.is-ready]="canRoll() && state() !== 'ROLLING'"
           [disabled]="!canRoll()"
           (click)="requestRoll()"
         >

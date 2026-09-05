@@ -33,6 +33,7 @@ import { DiceUiState } from '../models/dice';
 import { PlaceCelebration, celebrationFromEvents } from '../models/celebration';
 import {
   MARRIAGE_DEAL_CARD_MS,
+  DICE_TUMBLE_MS,
   MATCH_START_COUNTDOWN_FROM,
   MATCH_START_COUNTDOWN_TICK_MS,
   PIECE_STEP_MS,
@@ -74,6 +75,8 @@ export class GameSocketService {
   readonly celebration = signal<PlaceCelebration | null>(null);
   private errorClearTimer: ReturnType<typeof setTimeout> | null = null;
   private celebrationTimer: ReturnType<typeof setTimeout> | null = null;
+  private diceRevealTimer: ReturnType<typeof setTimeout> | null = null;
+  private rollStartedAt = 0;
   readonly status = signal<MatchStatus | null>(null);
   readonly roster = signal<MatchPlayerDto[]>([]);
   readonly selectedCardId = signal<string | null>(null);
@@ -169,13 +172,13 @@ export class GameSocketService {
         return;
       }
       this.applyState(payload.state);
-      this.diceUi.set('RESULT');
-      this.lastEvent.set(`Dice ${payload.value}`);
+      this.finishDiceRoll(payload.value);
     });
     this.listen('piece-moved', (payload: PieceMovedPayload) => {
       void this.onPieceMoved(payload);
     });
     this.listen('match-error', (payload: MatchErrorPayload) => {
+      this.clearDiceReveal();
       if (this.diceUi() === 'ROLLING') {
         this.diceUi.set('WAITING');
       }
@@ -288,6 +291,8 @@ export class GameSocketService {
       clearTimeout(this.celebrationTimer);
       this.celebrationTimer = null;
     }
+    this.clearDiceReveal();
+    this.diceUi.set('WAITING');
     this.celebration.set(null);
     this.matchId.set(null);
     this.state.set(null);
@@ -309,8 +314,34 @@ export class GameSocketService {
       return;
     }
     this.errorMessage.set(null);
-    this.diceUi.set('ROLLING');
+    this.startDiceRoll();
     this.sockets.client.emit('roll-dice', { matchId });
+  }
+
+  private startDiceRoll(): void {
+    this.clearDiceReveal();
+    this.diceUi.set('ROLLING');
+    this.rollStartedAt = Date.now();
+  }
+
+  private finishDiceRoll(value: number): void {
+    if (this.diceUi() !== 'ROLLING') {
+      this.startDiceRoll();
+    }
+    const wait = Math.max(0, DICE_TUMBLE_MS - (Date.now() - this.rollStartedAt));
+    this.clearDiceReveal();
+    this.diceRevealTimer = setTimeout(() => {
+      this.diceRevealTimer = null;
+      this.diceUi.set('RESULT');
+      this.lastEvent.set(`Dice ${value}`);
+    }, wait);
+  }
+
+  private clearDiceReveal(): void {
+    if (this.diceRevealTimer != null) {
+      clearTimeout(this.diceRevealTimer);
+      this.diceRevealTimer = null;
+    }
   }
 
   move(pieceId: string): void {
@@ -475,6 +506,7 @@ export class GameSocketService {
       await this.playAnimation(payload.animation);
     }
     this.applyState(payload.state);
+    this.clearDiceReveal();
     this.diceUi.set('WAITING');
     this.lastEvent.set(formatGameEvents(payload.events.map((event) => event.type)));
     this.flashCelebration(celebrationFromEvents(payload.events, payload.state.players));

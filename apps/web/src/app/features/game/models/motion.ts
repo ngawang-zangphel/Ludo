@@ -1,8 +1,8 @@
 /** Keep in sync with `.piece-float` transition and `piece-hop` duration in styles.css. */
 export const PIECE_STEP_MS = 200;
 
-/** 3D tumble before the rolled face is shown. */
-export const DICE_TUMBLE_MS = 650;
+/** 3D tumble before the rolled face is shown. Keep in sync with `dice-tumble` in styles.css. */
+export const DICE_TUMBLE_MS = 800;
 
 /** Hold the face on the current player before valid-move checks / turn change. */
 export const DICE_REVEAL_MS = 800;

@@ -505,8 +505,17 @@ body {
   }
 
   .dice-cube.is-rolling,
-  .dice-shadow.is-rolling {
+  .dice-shadow.is-rolling,
+  .dice-scene.is-ready .dice-rig,
+  .dice-scene.is-ready .dice-glow,
+  .dice-scene.is-result .dice-rig,
+  .dice-result-label,
+  .dice-roll-btn.is-ready {
     animation: none;
+  }
+
+  .dice-rig {
+    transition: none;
   }
 }
 
@@ -516,8 +525,9 @@ body {
   position: relative;
   display: grid;
   place-items: center;
-  width: 5rem;
-  height: 4.6rem;
+  width: 5.2rem;
+  height: 5rem;
+  overflow: visible;
   perspective: 900px;
   border: 0;
   padding: 0;
@@ -579,7 +589,16 @@ body {
 }
 
 .dice-scene.is-compact .dice-rig {
-  transform: rotateX(-8deg) rotateY(10deg);
+  transform: none;
+}
+
+.dice-scene.is-compact .dice-rig.is-rolling {
+  transform: rotateX(-22deg) rotateY(30deg) scale(1.06);
+}
+
+.dice-scene.is-compact .dice-glow {
+  width: 2.2rem;
+  height: 2.2rem;
 }
 
 .dice-shell {
@@ -596,6 +615,20 @@ body {
 .dice-scene.is-compact:focus-visible {
   outline-offset: 2px;
   border-radius: 0.4rem;
+}
+
+.dice-glow {
+  position: absolute;
+  width: 3.4rem;
+  height: 3.4rem;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(228, 193, 106, 0.42), transparent 68%);
+  opacity: 0;
+  pointer-events: none;
+}
+
+.dice-scene.is-ready .dice-glow {
+  animation: dice-glow-pulse 1.6s ease-in-out infinite;
 }
 
 .dice-countdown {
@@ -621,8 +654,9 @@ body {
   font-size: 1.15rem;
   font-weight: 700;
   line-height: 1;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.08em;
   color: var(--color-arena-gold);
+  animation: dice-result-in 0.4s cubic-bezier(0.2, 1.2, 0.32, 1);
 }
 
 .dice-shadow {
@@ -637,16 +671,29 @@ body {
 }
 
 .dice-shadow.is-rolling {
-  animation: dice-shadow-bounce 0.7s ease-in-out infinite;
+  animation: dice-shadow-bounce 0.8s cubic-bezier(0.4, 0, 0.2, 1) both;
 }
 
 .dice-rig {
   position: relative;
+  z-index: 1;
   width: var(--dice-size);
   height: var(--dice-size);
-  /* Shallow tilt: front face dominates so the rolled value is obvious. */
-  transform: rotateX(-12deg) rotateY(14deg);
+  transform: none;
   transform-style: preserve-3d;
+  transition: transform 0.28s ease;
+}
+
+.dice-rig.is-rolling {
+  transform: rotateX(-26deg) rotateY(34deg) scale(1.08);
+}
+
+.dice-scene.is-ready .dice-rig {
+  animation: dice-ready-bob 1.6s ease-in-out infinite;
+}
+
+.dice-scene.is-result .dice-rig {
+  animation: dice-stamp 0.42s cubic-bezier(0.22, 1.2, 0.28, 1);
 }
 
 .dice-cube {
@@ -654,7 +701,7 @@ body {
   width: 100%;
   height: 100%;
   transform-style: preserve-3d;
-  transition: transform 0.55s cubic-bezier(0.22, 0.8, 0.28, 1);
+  transition: transform 0.45s cubic-bezier(0.22, 0.8, 0.28, 1);
 }
 
 .dice-cube[data-face="1"] { transform: rotateX(0deg) rotateY(0deg); }
@@ -665,7 +712,7 @@ body {
 .dice-cube[data-face="6"] { transform: rotateY(180deg); }
 
 .dice-cube.is-rolling {
-  animation: dice-tumble 0.7s linear infinite;
+  animation: dice-tumble 0.8s cubic-bezier(0.16, 0.62, 0.28, 1) both;
   transition: none;
 }
 
@@ -687,6 +734,17 @@ body {
   transition: filter 0.25s ease, opacity 0.25s ease, box-shadow 0.25s ease;
 }
 
+.dice-face::before {
+  content: "";
+  position: absolute;
+  inset: 0.2rem;
+  border-radius: 0.32rem;
+  background: linear-gradient(145deg, #ffffff 0%, #f3f3f3 100%);
+  box-shadow: inset 0 0 0 1.4px rgba(20, 20, 20, 0.45);
+  opacity: 0;
+  pointer-events: none;
+}
+
 .dice-face[data-face="1"] { transform: rotateY(0deg) translateZ(var(--dice-half)); }
 .dice-face[data-face="2"] { transform: rotateX(90deg) translateZ(var(--dice-half)); }
 .dice-face[data-face="3"] { transform: rotateY(90deg) translateZ(var(--dice-half)); }
@@ -694,10 +752,10 @@ body {
 .dice-face[data-face="5"] { transform: rotateX(-90deg) translateZ(var(--dice-half)); }
 .dice-face[data-face="6"] { transform: rotateY(180deg) translateZ(var(--dice-half)); }
 
-/* Dim every side except the result face so only one value reads clearly. */
+/* Flat 2D: hide every side except the result face. */
 .dice-cube.is-settled .dice-face {
-  filter: brightness(0.42);
-  opacity: 0.55;
+  opacity: 0;
+  pointer-events: none;
 }
 
 .dice-cube.is-settled[data-face="1"] .dice-face[data-face="1"],
@@ -706,13 +764,55 @@ body {
 .dice-cube.is-settled[data-face="4"] .dice-face[data-face="4"],
 .dice-cube.is-settled[data-face="5"] .dice-face[data-face="5"],
 .dice-cube.is-settled[data-face="6"] .dice-face[data-face="6"] {
-  filter: none;
   opacity: 1;
+  pointer-events: auto;
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.95),
     inset 0 -2px 4px rgba(0, 0, 0, 0.08),
     inset 0 0 0 1.5px rgba(20, 20, 20, 0.55),
+    0 4px 10px rgba(0, 0, 0, 0.22);
+}
+
+.dice-scene.is-result .dice-cube.is-settled[data-face="1"] .dice-face[data-face="1"],
+.dice-scene.is-result .dice-cube.is-settled[data-face="2"] .dice-face[data-face="2"],
+.dice-scene.is-result .dice-cube.is-settled[data-face="3"] .dice-face[data-face="3"],
+.dice-scene.is-result .dice-cube.is-settled[data-face="4"] .dice-face[data-face="4"],
+.dice-scene.is-result .dice-cube.is-settled[data-face="5"] .dice-face[data-face="5"],
+.dice-scene.is-result .dice-cube.is-settled[data-face="6"] .dice-face[data-face="6"] {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.95),
+    inset 0 -2px 4px rgba(0, 0, 0, 0.08),
+    inset 0 0 0 1.5px rgba(20, 20, 20, 0.55),
+    0 0 0 2px rgba(228, 193, 106, 0.55),
     0 8px 18px rgba(0, 0, 0, 0.28);
+}
+
+/* Dark cube + inset white plates only while tumbling. */
+.dice-scene.is-rolling .dice-face,
+.dice-scene.is-compact.is-rolling .dice-face {
+  background: #14171f;
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.08),
+    0 0 0 1px rgba(0, 0, 0, 0.35);
+}
+
+.dice-scene.is-rolling .dice-face::before,
+.dice-scene.is-compact.is-rolling .dice-face::before {
+  opacity: 1;
+}
+
+.dice-scene.is-rolling .dice-pip,
+.dice-scene.is-compact.is-rolling .dice-pip {
+  position: relative;
+  z-index: 1;
+}
+
+.dice-scene.is-rolling .dice-pip.is-on,
+.dice-scene.is-compact.is-rolling .dice-pip.is-on {
+  background: radial-gradient(circle at 32% 28%, #3a3a3a 0%, #111 70%);
+  box-shadow:
+    inset 0 1px 1px rgba(255, 255, 255, 0.16),
+    0 1px 1px rgba(0, 0, 0, 0.28);
 }
 
 .dice-pip {
@@ -731,19 +831,22 @@ body {
 
 @keyframes dice-tumble {
   0% {
-    transform: rotateX(0deg) rotateY(0deg) rotateZ(0deg) translateY(0);
+    transform: rotateX(-12deg) rotateY(8deg) rotateZ(0deg) translateY(0) scale(1);
   }
-  25% {
-    transform: rotateX(210deg) rotateY(160deg) rotateZ(40deg) translateY(-16px);
+  18% {
+    transform: rotateX(150deg) rotateY(130deg) rotateZ(42deg) translateY(-22px) scale(1.08);
   }
-  50% {
-    transform: rotateX(420deg) rotateY(340deg) rotateZ(-18deg) translateY(0);
+  42% {
+    transform: rotateX(360deg) rotateY(290deg) rotateZ(-28deg) translateY(-6px) scale(1.02);
   }
-  75% {
-    transform: rotateX(610deg) rotateY(520deg) rotateZ(28deg) translateY(-10px);
+  68% {
+    transform: rotateX(560deg) rotateY(510deg) rotateZ(24deg) translateY(-18px) scale(1.06);
+  }
+  86% {
+    transform: rotateX(690deg) rotateY(700deg) rotateZ(-6deg) translateY(-4px) scale(1.02);
   }
   100% {
-    transform: rotateX(720deg) rotateY(720deg) rotateZ(0deg) translateY(0);
+    transform: rotateX(720deg) rotateY(720deg) rotateZ(0deg) translateY(0) scale(1);
   }
 }
 
@@ -751,11 +854,75 @@ body {
   0%,
   100% {
     transform: scaleX(1);
-    opacity: 0.7;
+    opacity: 0.75;
+  }
+  20%,
+  68% {
+    transform: scaleX(0.58);
+    opacity: 0.32;
+  }
+  42% {
+    transform: scaleX(0.82);
+    opacity: 0.55;
+  }
+}
+
+@keyframes dice-ready-bob {
+  0%,
+  100% {
+    transform: translateY(0);
   }
   50% {
-    transform: scaleX(0.62);
-    opacity: 0.35;
+    transform: translateY(-5px);
+  }
+}
+
+@keyframes dice-glow-pulse {
+  0%,
+  100% {
+    opacity: 0.28;
+    transform: scale(0.92);
+  }
+  50% {
+    opacity: 0.7;
+    transform: scale(1.12);
+  }
+}
+
+@keyframes dice-stamp {
+  0% {
+    transform: rotateX(-20deg) rotateY(26deg) scale(1.16);
+  }
+  55% {
+    transform: rotateX(3deg) rotateY(-4deg) scale(0.94);
+  }
+  100% {
+    transform: none;
+  }
+}
+
+@keyframes dice-result-in {
+  0% {
+    opacity: 0;
+    transform: translateY(6px) scale(0.86);
+  }
+  100% {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes dice-btn-ready {
+  0%,
+  100% {
+    box-shadow:
+      0 0 0 1px rgba(255, 255, 255, 0.18),
+      0 8px 22px rgba(228, 193, 106, 0.38);
+  }
+  50% {
+    box-shadow:
+      0 0 0 3px rgba(228, 193, 106, 0.45),
+      0 10px 26px rgba(228, 193, 106, 0.55);
   }
 }
 
@@ -1079,6 +1246,10 @@ body {
   box-shadow:
     0 0 0 1px rgba(255, 255, 255, 0.18),
     0 8px 22px rgba(228, 193, 106, 0.38);
+}
+
+.dice-roll-btn.is-ready {
+  animation: dice-btn-ready 1.6s ease-in-out infinite;
 }
 
 .arena-event {
