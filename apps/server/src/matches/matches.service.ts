@@ -67,7 +67,14 @@ import { UsersService } from '../users/users.service';
 import { MatchStateService } from './match-state.service';
 import { MatchCommandQueue } from './match-command-queue.service';
 import { toDetail, toPlayerDto, toSummary } from './match-mapper';
-import { AssignPlayersDto, BulkMatchActionDto, CreateMatchDto, CreateMatchGroupsDto } from './dto/match.dto';
+import {
+  AddPlayerDto,
+  AssignPlayersDto,
+  BulkMatchActionDto,
+  CreateMatchDto,
+  CreateMatchGroupsDto,
+  UpdateMatchDto,
+} from './dto/match.dto';
 import { toObjectIdString } from '../common/types';
 import { logEvent } from '../common/logger';
 import { RealtimeService } from '../realtime/realtime.service';
@@ -129,9 +136,11 @@ export class MatchesService implements OnModuleInit {
       tournament.rounds.find((item) => item.number === roundNumber)?.name ||
       `Round ${roundNumber}`;
 
+    const groupName = dto.groupName?.trim() || (await this.nextGroupName(tournament._id, roundNumber));
     const match = await this.matches.create({
       tournamentId: tournament._id,
       gameType: tournament.gameType ?? GameType.LUDO,
+      groupName,
       round,
       roundNumber,
       matchNumber,
@@ -190,6 +199,82 @@ export class MatchesService implements OnModuleInit {
       );
     }
     return created;
+  }
+
+  async updateMatch(matchId: string, dto: UpdateMatchDto): Promise<MatchDetailDto> {
+    return this.enqueue(matchId, async () => {
+      const match = await this.state.loadMatch(matchId);
+      if (dto.groupName !== undefined) {
+        const groupName = dto.groupName.trim();
+        if (!groupName) {
+          throw new BadRequestException('Enter a group name');
+        }
+        match.groupName = groupName;
+      }
+      const saved = await this.state.persistMatch(match);
+      await this.publishAdmin();
+      logEvent('Match updated', { matchId, groupName: saved.groupName ?? '' });
+      return this.toDetailDto(saved);
+    });
+  }
+
+  async addPlayer(matchId: string, dto: AddPlayerDto): Promise<MatchDetailDto> {
+    return this.enqueue(matchId, async () => {
+      const match = await this.state.loadMatch(matchId);
+      if (match.status === MatchStatus.COMPLETED || match.status === MatchStatus.CANCELLED) {
+        throw new BadRequestException('Cannot add a player to a finished match');
+      }
+      if (match.players.some((player) => toObjectIdString(player.userId) === dto.userId)) {
+        throw new BadRequestException('That player is already in this group');
+      }
+      const tournament = await this.requireTournament(toObjectIdString(match.tournamentId));
+      const gameType = match.gameType ?? tournament.gameType ?? GameType.LUDO;
+      const maxPlayers = maxSeatsForTournament(gameType, tournament.rules);
+      if (match.players.length >= maxPlayers) {
+        throw new BadRequestException(`This group is already full (${maxPlayers} players)`);
+      }
+      await this.assertPlayersAvailable(toObjectIdString(match.tournamentId), [dto.userId], matchId);
+      await this.ensureParticipants(tournament._id, [dto.userId]);
+      const palette =
+        gameType === GameType.MARRIAGE
+          ? [...MARRIAGE_SEAT_COLORS]
+          : defaultSeatColors(maxPlayers);
+      const used = new Set(match.players.map((player) => player.color));
+      const color = palette.find((item) => !used.has(item));
+      if (!color) {
+        throw new BadRequestException('No seat color left for another player');
+      }
+      const user = await this.users.findById(dto.userId);
+      match.players.push({
+        userId: user._id,
+        name: user.name,
+        color: color as MatchPlayer['color'],
+        ready: false,
+      });
+      match.markModified('players');
+
+      const live = match.status === MatchStatus.LIVE || match.status === MatchStatus.PAUSED;
+      if (live) {
+        this.clearAutoRoll(matchId);
+        for (const player of match.players) {
+          player.ready = true;
+        }
+        match.status = MatchStatus.READY;
+        match.gameState = null;
+        match.startedAt = null;
+        match.finishedAt = null;
+        match.winnerIds = [];
+        match.currentPlayerId = null;
+        await this.state.persistMatch(match);
+        return this.startUnlocked(matchId);
+      }
+
+      match.status = match.players.length >= 2 ? MatchStatus.READY : MatchStatus.WAITING;
+      const saved = await this.state.persistMatch(match);
+      await this.publishAdmin();
+      logEvent('Player added to match', { matchId, userId: dto.userId });
+      return this.toDetailDto(saved);
+    });
   }
 
   async assignPlayers(matchId: string, dto: AssignPlayersDto): Promise<MatchDetailDto> {
@@ -313,6 +398,56 @@ export class MatchesService implements OnModuleInit {
       this.clearAutoRoll(matchId);
       const match = await this.state.loadMatch(matchId);
       this.assertPlayersReady(match);
+      match.status = MatchStatus.READY;
+      match.gameState = null;
+      match.startedAt = null;
+      match.finishedAt = null;
+      match.winnerIds = [];
+      match.currentPlayerId = null;
+      await this.state.persistMatch(match);
+      return this.startUnlocked(matchId);
+    });
+  }
+
+  async resetActiveSnakesMatches(tournamentId: string): Promise<BulkMatchActionResultDto> {
+    const rows = await this.matches
+      .find({
+        tournamentId: new Types.ObjectId(tournamentId),
+        status: { $in: [MatchStatus.LIVE, MatchStatus.PAUSED] },
+      })
+      .select({ _id: 1 })
+      .exec();
+    const ok: string[] = [];
+    const failed: BulkMatchActionResultDto['failed'] = [];
+    for (const row of rows) {
+      const matchId = toObjectIdString(row._id);
+      try {
+        await this.resetSnakesBoardFromTournament(matchId);
+        ok.push(matchId);
+      } catch (error) {
+        failed.push({ matchId, reason: actionErrorMessage(error) });
+      }
+    }
+    return { ok, failed };
+  }
+
+  private async resetSnakesBoardFromTournament(matchId: string): Promise<MatchDetailDto> {
+    return this.enqueue(matchId, async () => {
+      this.clearAutoRoll(matchId);
+      const match = await this.state.loadMatch(matchId);
+      if (match.status !== MatchStatus.LIVE && match.status !== MatchStatus.PAUSED) {
+        return this.toDetailDto(match);
+      }
+      const gameType = match.gameType ?? GameType.LUDO;
+      if (gameType !== GameType.SNAKES) {
+        throw new BadRequestException('Only snakes matches can be reset from a board change');
+      }
+      if (match.players.length < 2) {
+        throw new BadRequestException('Assign players before resetting this table');
+      }
+      for (const player of match.players) {
+        player.ready = true;
+      }
       match.status = MatchStatus.READY;
       match.gameState = null;
       match.startedAt = null;
@@ -1263,7 +1398,14 @@ export class MatchesService implements OnModuleInit {
       })
       .exec();
     const busy = new Set(
-      active.flatMap((match) => match.players.map((player) => toObjectIdString(player.userId)))
+      active.flatMap((match) =>
+        match.players
+          .filter((player) => {
+            const userId = toObjectIdString(player.userId);
+            return match.gameState?.players.find((seated) => seated.id === userId)?.eliminated !== true;
+          })
+          .map((player) => toObjectIdString(player.userId))
+      )
     );
     const conflict = playerUserIds.find((userId) => busy.has(userId));
     if (conflict) {
@@ -1290,6 +1432,23 @@ export class MatchesService implements OnModuleInit {
         status: ParticipantStatus.REGISTERED,
       });
     }
+  }
+
+  private async nextGroupName(tournamentId: Types.ObjectId, roundNumber: number): Promise<string> {
+    const rows = await this.matches
+      .find({ tournamentId, roundNumber })
+      .select({ groupName: 1 })
+      .exec();
+    const used = new Set(
+      rows.map((row) => row.groupName?.trim()).filter((name): name is string => Boolean(name))
+    );
+    for (let index = 0; index < 26; index += 1) {
+      const name = `Group ${String.fromCharCode(65 + index)}`;
+      if (!used.has(name)) {
+        return name;
+      }
+    }
+    return `Group ${rows.length + 1}`;
   }
 
   private async requireTournament(id: string): Promise<TournamentDocument> {

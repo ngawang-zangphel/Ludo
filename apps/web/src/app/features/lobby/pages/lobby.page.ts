@@ -36,7 +36,7 @@ import { formatDuration, gameTypeLabel, httpErrorMessage, playerNames } from '..
             <div class="flex flex-wrap items-start justify-between gap-3">
               <div>
                 <p class="text-xs uppercase tracking-wider text-arena-mist/50">
-                  {{ match.tournamentName }} · {{ roundLabel(match.round) }} · {{ gameTypeLabel(match.gameType) }}
+                  {{ match.tournamentName }} · {{ match.groupName || roundLabel(match.round) }} · {{ gameTypeLabel(match.gameType) }}
                 </p>
                 <h2 class="mt-1 font-display text-xl text-white">{{ playerNames(match) }}</h2>
                 <p class="mt-1 text-sm text-arena-mist/70">

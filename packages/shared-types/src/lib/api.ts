@@ -94,6 +94,7 @@ export interface MatchSummaryDto {
   tournamentId: string;
   tournamentName: string;
   gameType: GameType;
+  groupName: string | null;
   round: string;
   roundNumber: number;
   matchNumber: number;
@@ -123,6 +124,12 @@ export interface BulkMatchFailureDto {
 
 export interface BulkMatchActionResultDto {
   ok: string[];
+  failed: BulkMatchFailureDto[];
+}
+
+export interface TournamentSnakesRulesUpdateDto {
+  tournament: TournamentDto;
+  resetMatchIds: string[];
   failed: BulkMatchFailureDto[];
 }
 

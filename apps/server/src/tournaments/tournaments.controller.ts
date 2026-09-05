@@ -1,9 +1,15 @@
 import { Body, Controller, Delete, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
-import { ParticipantDto, TournamentDto, UserRole } from '@ludo-game/shared-types';
+import {
+  ParticipantDto,
+  TournamentDto,
+  TournamentSnakesRulesUpdateDto,
+  UserRole,
+} from '@ludo-game/shared-types';
 import { TournamentsService } from './tournaments.service';
 import {
   CreateTournamentDto,
   RegisterParticipantDto,
+  UpdateTournamentSnakesRulesDto,
   UpdateTournamentStatusDto,
 } from './dto/tournament.dto';
 import { AuthGuard } from '../common/auth.guard';
@@ -35,6 +41,15 @@ export class TournamentsController {
   @Roles(UserRole.ADMIN)
   setStatus(@Param('id') id: string, @Body() dto: UpdateTournamentStatusDto): Promise<TournamentDto> {
     return this.tournaments.setStatus(id, dto.status);
+  }
+
+  @Patch(':id/snakes-rules')
+  @Roles(UserRole.ADMIN)
+  updateSnakesRules(
+    @Param('id') id: string,
+    @Body() dto: UpdateTournamentSnakesRulesDto
+  ): Promise<TournamentSnakesRulesUpdateDto> {
+    return this.tournaments.updateSnakesRules(id, dto);
   }
 
   @Delete(':id')

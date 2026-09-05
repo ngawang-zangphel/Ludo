@@ -31,6 +31,7 @@ export function toSummary(
     tournamentId: toObjectIdString(match.tournamentId),
     tournamentName,
     gameType: match.gameType ?? GameType.LUDO,
+    groupName: match.groupName?.trim() || null,
     round: match.round,
     roundNumber: match.roundNumber,
     matchNumber: match.matchNumber,

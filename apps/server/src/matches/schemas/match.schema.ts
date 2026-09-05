@@ -42,6 +42,9 @@ export class Match {
   @Prop({ type: String, enum: GameType, default: GameType.LUDO })
   gameType!: GameType;
 
+  @Prop({ type: String, default: null, trim: true })
+  groupName!: string | null;
+
   @Prop({ required: true })
   round!: string;
 

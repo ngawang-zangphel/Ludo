@@ -12,7 +12,9 @@ import {
   ParticipantDto,
   SnakesBoardLayout,
   SnakesCustomBoardDto,
+  SnakesLevelId,
   TournamentDto,
+  TournamentSnakesRulesUpdateDto,
   TournamentStatus,
   UserDto,
 } from '@ludo-game/shared-types';
@@ -74,6 +76,16 @@ export class ArenaApiService {
     roundNumber?: number;
   }): Promise<MatchDetailDto[]> {
     return firstValueFrom(this.http.post<MatchDetailDto[]>('/api/matches/groups', body));
+  }
+
+  updateMatch(matchId: string, body: { groupName?: string }): Promise<MatchDetailDto> {
+    return firstValueFrom(this.http.patch<MatchDetailDto>(`/api/matches/${matchId}`, body));
+  }
+
+  addPlayer(matchId: string, userId: string): Promise<MatchDetailDto> {
+    return firstValueFrom(
+      this.http.post<MatchDetailDto>(`/api/matches/${matchId}/players`, { userId })
+    );
   }
 
   assignPlayers(matchId: string, playerUserIds: string[]): Promise<MatchDetailDto> {
@@ -201,6 +213,15 @@ export class ArenaApiService {
   setTournamentStatus(id: string, status: TournamentStatus): Promise<TournamentDto> {
     return firstValueFrom(
       this.http.patch<TournamentDto>(`/api/tournaments/${id}/status`, { status })
+    );
+  }
+
+  updateTournamentSnakesRules(
+    id: string,
+    body: { snakesLevelId?: SnakesLevelId; snakesLayout?: SnakesBoardLayout }
+  ): Promise<TournamentSnakesRulesUpdateDto> {
+    return firstValueFrom(
+      this.http.patch<TournamentSnakesRulesUpdateDto>(`/api/tournaments/${id}/snakes-rules`, body)
     );
   }
 

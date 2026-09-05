@@ -12,6 +12,7 @@ import {
   resolveSnakesRules,
   maxPlayersForGame,
   TournamentDto,
+  TournamentSnakesRulesUpdateDto,
   TournamentStatus,
   validateSnakesLayout,
 } from '@ludo-game/shared-types';
@@ -20,7 +21,11 @@ import {
   TournamentParticipant,
   TournamentParticipantDocument,
 } from './schemas/participant.schema';
-import { CreateTournamentDto, RegisterParticipantDto } from './dto/tournament.dto';
+import {
+  CreateTournamentDto,
+  RegisterParticipantDto,
+  UpdateTournamentSnakesRulesDto,
+} from './dto/tournament.dto';
 import { UsersService } from '../users/users.service';
 import { toObjectIdString } from '../common/types';
 import { logEvent } from '../common/logger';
@@ -110,6 +115,41 @@ export class TournamentsService {
     tournament.status = status;
     await tournament.save();
     return this.withCounts(tournament);
+  }
+
+  async updateSnakesRules(
+    id: string,
+    dto: UpdateTournamentSnakesRulesDto
+  ): Promise<TournamentSnakesRulesUpdateDto> {
+    const tournament = await this.require(id);
+    if (tournament.gameType !== GameType.SNAKES || !isSnakesRules(tournament.rules)) {
+      throw new BadRequestException('This tournament is not Snakes & Ladders');
+    }
+    if (!dto.snakesLevelId && !dto.snakesLayout) {
+      throw new BadRequestException('Choose a board preset or send a layout');
+    }
+    const rules = resolveSnakesRules({
+      extraTurnOnSix: tournament.rules.extraTurnOnSix,
+      exactRollRequiredForFinish: tournament.rules.exactRollRequiredForFinish,
+      levelId: dto.snakesLevelId ?? tournament.rules.levelId,
+      layout: dto.snakesLayout ?? tournament.rules.layout,
+    });
+    const layoutError = validateSnakesLayout(rules.layout);
+    if (layoutError) {
+      throw new BadRequestException(layoutError);
+    }
+    tournament.rules = rules;
+    await tournament.save();
+    logEvent('Tournament snakes board updated', {
+      tournamentId: id,
+      levelId: rules.levelId,
+    });
+    const reset = await this.matches.resetActiveSnakesMatches(id);
+    return {
+      tournament: await this.withCounts(tournament),
+      resetMatchIds: reset.ok,
+      failed: reset.failed,
+    };
   }
 
   async register(tournamentId: string, dto: RegisterParticipantDto): Promise<ParticipantDto> {

@@ -80,6 +80,17 @@ export class UpdateTournamentStatusDto {
   status!: TournamentStatus;
 }
 
+export class UpdateTournamentSnakesRulesDto {
+  @IsOptional()
+  @IsEnum(SnakesLevelId)
+  snakesLevelId?: SnakesLevelId;
+
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => SnakesBoardLayoutDto)
+  snakesLayout?: SnakesBoardLayoutDto;
+}
+
 export class RegisterParticipantDto {
   @IsMongoId()
   userId!: string;

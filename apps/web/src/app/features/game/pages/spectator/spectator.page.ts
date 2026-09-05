@@ -42,7 +42,7 @@ import { httpErrorMessage } from '../../../../shared/format';
           <a routerLink="/admin" class="text-[0.65rem] uppercase tracking-[0.3em] text-arena-gold hover:underline">Admin</a>
           <h1 class="font-display text-xl font-bold text-white md:text-2xl">Spectator</h1>
           <p class="text-xs text-arena-mist/70">
-            {{ detail()?.tournamentName }} · {{ detail()?.round }} · Match {{ detail()?.matchNumber }}
+            {{ detail()?.tournamentName }} · {{ detail()?.groupName || detail()?.round }} · Match {{ detail()?.matchNumber }}
             @if (neighbors(); as nav) {
               · Live {{ nav.index }} / {{ nav.total }}
             }

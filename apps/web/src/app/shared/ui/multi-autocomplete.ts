@@ -5,6 +5,7 @@ import {
   computed,
   input,
   model,
+  output,
   signal,
   viewChild,
 } from '@angular/core';
@@ -66,7 +67,8 @@ export interface MultiAutocompleteOption {
         <ul
           [id]="listId"
           role="listbox"
-          class="absolute z-30 mt-1 max-h-56 w-full overflow-auto rounded-xl border border-arena-line bg-arena-navy py-1 shadow-2xl"
+          class="absolute z-40 mt-1 max-h-56 w-full overflow-auto rounded-xl border border-arena-line bg-arena-navy py-1 shadow-2xl"
+          (pointerdown)="$event.stopPropagation()"
         >
           @for (option of filtered(); track option.id; let i = $index) {
             <li role="option" [attr.aria-selected]="i === highlight()">
@@ -75,7 +77,7 @@ export interface MultiAutocompleteOption {
                 class="flex w-full items-baseline justify-between gap-3 px-3 py-2 text-left text-sm"
                 [class.bg-white/10]="i === highlight()"
                 [class.text-white]="i === highlight()"
-                (mousedown)="choose(option.id, $event)"
+                (click)="choose(option.id, $event)"
                 (mouseenter)="highlight.set(i)"
               >
                 <span>{{ option.label }}</span>
@@ -97,6 +99,8 @@ export class MultiAutocompleteComponent {
 
   readonly options = input.required<MultiAutocompleteOption[]>();
   readonly selectedIds = model<string[]>([]);
+  readonly pickOne = input(false);
+  readonly picked = output<string>();
   readonly placeholder = input('Search…');
   readonly emptyMessage = input('No matching players.');
   readonly maxSelected = input<number | null>(null);
@@ -181,6 +185,14 @@ export class MultiAutocompleteComponent {
 
   choose(id: string, event?: Event): void {
     event?.preventDefault();
+    event?.stopPropagation();
+    if (this.pickOne()) {
+      this.query.set('');
+      this.highlight.set(0);
+      this.open.set(false);
+      this.picked.emit(id);
+      return;
+    }
     const max = this.maxSelected();
     if (this.selectedIds().includes(id)) {
       return;

@@ -30,12 +30,14 @@ import {
   TournamentStatus,
   UserDto,
   UserRole,
+  validateSnakesLayout,
 } from '@ludo-game/shared-types';
 import { ArenaApiService } from '../../../core/api/arena-api.service';
 import { MultiAutocompleteComponent } from '../../../shared/ui/multi-autocomplete';
 import { StatusBadgeComponent } from '../../../shared/ui/status-badge';
-import { httpErrorMessage, playerNames, readyCountLabel } from '../../../shared/format';
+import { httpErrorMessage, readyCountLabel } from '../../../shared/format';
 import { SnakesBoardComponent } from '../../game/components/snakes-board/snakes-board';
+import { SnakesLayoutEditorComponent } from '../../game/components/snakes-layout-editor/snakes-layout-editor';
 import { SnakesPresetPickerComponent } from '../../game/components/snakes-preset-picker/snakes-preset-picker';
 
 @Component({
@@ -47,6 +49,7 @@ import { SnakesPresetPickerComponent } from '../../game/components/snakes-preset
     MultiAutocompleteComponent,
     StatusBadgeComponent,
     SnakesBoardComponent,
+    SnakesLayoutEditorComponent,
     SnakesPresetPickerComponent,
   ],
   template: `
@@ -306,16 +309,60 @@ import { SnakesPresetPickerComponent } from '../../game/components/snakes-preset
               <div>
                 <p class="text-xs uppercase tracking-[0.25em] text-arena-gold">Board</p>
                 <h2 class="mt-1 font-display text-lg text-white">
-                  {{ SNAKES_LEVEL_LABEL[tournament.rules.levelId] || 'Classic' }} preview
+                  {{ SNAKES_LEVEL_LABEL[editSnakesLevelId] || 'Classic' }}
                 </h2>
                 <p class="mt-1 text-sm text-arena-mist/60">
-                  {{ tournament.rules.layout.snakes.length }} snakes ·
-                  {{ tournament.rules.layout.ladders.length }} ladders
+                  {{ editLayout.snakes.length }} snakes ·
+                  {{ editLayout.ladders.length }} ladders
+                  @if (liveTableCount()) {
+                    · {{ liveTableCount() }} live table{{ liveTableCount() === 1 ? '' : 's' }} will reset
+                  }
                 </p>
               </div>
             </div>
-            <div class="mt-4 max-w-md">
-              <arena-snakes-board [layout]="tournament.rules.layout" [compact]="true" />
+            <div class="mt-4 max-w-xl">
+              <arena-snakes-preset-picker
+                [value]="editSnakesLevelId"
+                (valueChange)="setEditLevel($event)"
+              />
+              @if (editSnakesLevelId === SnakesLevelId.CUSTOM) {
+                <label class="mt-3 block">
+                  <span class="text-xs uppercase tracking-[0.25em] text-arena-gold/80">Saved board</span>
+                  <select
+                    class="field mt-2 w-full"
+                    name="editBoardId"
+                    [ngModel]="editBoardId"
+                    (ngModelChange)="onEditSelectBoard($event)"
+                  >
+                    <option value="">Current layout</option>
+                    @for (board of customBoards(); track board.id) {
+                      <option [value]="board.id">{{ board.name }}</option>
+                    }
+                  </select>
+                </label>
+                <div class="mt-3">
+                  <arena-snakes-layout-editor
+                    [layout]="editLayout"
+                    [compact]="true"
+                    (layoutChange)="onEditLayoutChange($event)"
+                  />
+                </div>
+              } @else {
+                <div class="mt-3">
+                  <arena-snakes-board [layout]="editLayout" [compact]="true" />
+                </div>
+              }
+              <p class="mt-3 text-sm text-arena-mist/60">
+                Saving updates this tournament board. Live and paused tables restart from the start on the new board.
+              </p>
+              <button
+                type="button"
+                class="mt-3 rounded-full bg-arena-gold px-4 py-2 text-sm font-semibold text-arena-ink disabled:opacity-40"
+                [disabled]="!canSaveBoard() || savingBoard()"
+                (click)="saveBoard()"
+              >
+                {{ savingBoard() ? 'Saving…' : 'Save board' }}
+              </button>
             </div>
           </section>
         }
@@ -440,19 +487,36 @@ import { SnakesPresetPickerComponent } from '../../game/components/snakes-preset
                     @for (match of section.tables; track match.id) {
                       <article class="rounded-2xl border border-arena-line p-4">
                         <div class="flex items-start justify-between gap-2">
-                          <div class="flex min-w-0 items-start gap-2">
+                          <div class="flex min-w-0 flex-1 items-start gap-2">
                             <input
                               type="checkbox"
                               class="mt-1"
                               [checked]="isTableSelected(match.id)"
-                              [attr.aria-label]="'Select group ' + groupLetter(match)"
+                              [attr.aria-label]="'Select group ' + groupTitle(match)"
                               (change)="toggleTable(match.id)"
                             />
-                            <div>
-                              <p class="text-xs uppercase tracking-wider text-arena-mist/50">
-                                Group {{ groupLetter(match) }}
-                              </p>
-                              <p class="mt-1 font-display text-white">{{ playerNames(match) }}</p>
+                            <div class="min-w-0 flex-1">
+                              @if (editingGroupId() === match.id) {
+                                <input
+                                  class="field w-full text-sm"
+                                  name="editGroupName"
+                                  maxlength="40"
+                                  autofocus
+                                  [ngModel]="draftGroupName"
+                                  (ngModelChange)="draftGroupName = $event"
+                                  (keydown.enter)="saveGroupName(match)"
+                                  (keydown.escape)="cancelEditGroupName()"
+                                  (blur)="saveGroupName(match)"
+                                />
+                              } @else {
+                                <button
+                                  type="button"
+                                  class="text-left text-xs uppercase tracking-wider text-arena-mist/50 hover:text-arena-gold"
+                                  (click)="startEditGroupName(match)"
+                                >
+                                  {{ groupTitle(match) }}
+                                </button>
+                              }
                               <p class="mt-1 text-xs text-arena-mist/60">
                                 @if (match.status === MatchStatus.WAITING || match.status === MatchStatus.READY) {
                                   {{ readyCountLabel(match) }} — mark Ready, then Start.
@@ -460,6 +524,34 @@ import { SnakesPresetPickerComponent } from '../../game/components/snakes-preset
                                   {{ match.status.replace('_', ' ') }}
                                 }
                               </p>
+                              <div class="mt-2 flex flex-wrap gap-1.5">
+                                @for (player of match.players; track player.userId) {
+                                  <span class="inline-flex items-center gap-1 rounded-full border border-arena-line px-2 py-0.5 text-xs">
+                                    {{ player.name }}
+                                    @if (canEditMembers(match) && !player.eliminated) {
+                                      <button
+                                        type="button"
+                                        class="text-piece-red hover:text-white"
+                                        [attr.aria-label]="'Remove ' + player.name"
+                                        [disabled]="memberBusy()"
+                                        (click)="removeMember(match, player)"
+                                      >
+                                        ×
+                                      </button>
+                                    }
+                                  </span>
+                                }
+                              </div>
+                              @if (canAddMembers(match) && addableOptions(match).length) {
+                                <div class="mt-2">
+                                  <ludo-multi-autocomplete
+                                    [options]="addableOptions(match)"
+                                    [pickOne]="true"
+                                    placeholder="Add a player…"
+                                    (picked)="addMember(match, $event)"
+                                  />
+                                </div>
+                              }
                             </div>
                           </div>
                           <ludo-status-badge [status]="match.status" />
@@ -564,12 +656,14 @@ export class AdminTournamentsPage implements OnInit {
   readonly matches = signal<MatchSummaryDto[]>([]);
   readonly users = signal<UserDto[]>([]);
   readonly error = signal<string | null>(null);
-  readonly playerNames = playerNames;
   readonly selectedPlayerIds = signal<string[]>([]);
   readonly grouping = signal(false);
   readonly bulkBusy = signal(false);
   readonly selectedTableIds = signal<string[]>([]);
   readonly registerUserIds = signal<string[]>([]);
+  readonly editingGroupId = signal<string | null>(null);
+  readonly memberBusy = signal(false);
+  draftGroupName = '';
   readonly readyCountLabel = readyCountLabel;
   readonly MatchStatus = MatchStatus;
   readonly GAME_TYPE_LABEL = GAME_TYPE_LABEL;
@@ -588,7 +682,9 @@ export class AdminTournamentsPage implements OnInit {
         continue;
       }
       for (const player of match.players) {
-        ids.add(player.userId);
+        if (!player.eliminated) {
+          ids.add(player.userId);
+        }
       }
     }
     return ids;
@@ -616,6 +712,13 @@ export class AdminTournamentsPage implements OnInit {
   );
 
   readonly leftoverCount = computed(() => (this.freeParticipants().length === 1 ? 1 : 0));
+
+  readonly liveTableCount = computed(
+    () =>
+      this.matches().filter(
+        (match) => match.status === MatchStatus.LIVE || match.status === MatchStatus.PAUSED
+      ).length
+  );
 
   readonly registeredUserIds = computed(
     () => new Set(this.participants().map((participant) => participant.userId))
@@ -703,6 +806,10 @@ export class AdminTournamentsPage implements OnInit {
   readonly marriageDeckOptions = [...MARRIAGE_DECK_OPTIONS];
   selectedBoardId = '';
   customLayout: SnakesBoardLayout = cloneSnakesLayout(resolveSnakesRules().layout);
+  editSnakesLevelId = SnakesLevelId.CLASSIC;
+  editBoardId = '';
+  editLayout: SnakesBoardLayout = cloneSnakesLayout(resolveSnakesRules().layout);
+  readonly savingBoard = signal(false);
   round = 'ROUND_1';
   roundNumber = 1;
   matchNumber = 1;
@@ -716,7 +823,98 @@ export class AdminTournamentsPage implements OnInit {
     this.selectedPlayerIds.set([]);
     this.registerUserIds.set([]);
     this.selectedTableIds.set([]);
+    this.syncBoardEditor(tournament);
     await this.refreshSelected();
+  }
+
+  syncBoardEditor(tournament: TournamentDto): void {
+    if (!isSnakesRules(tournament.rules)) {
+      return;
+    }
+    this.editSnakesLevelId = tournament.rules.levelId;
+    this.editBoardId = '';
+    this.editLayout = cloneSnakesLayout(tournament.rules.layout);
+  }
+
+  setEditLevel(levelId: SnakesLevelId): void {
+    this.editSnakesLevelId = levelId;
+    this.editBoardId = '';
+    if (levelId === SnakesLevelId.CUSTOM) {
+      return;
+    }
+    this.editLayout = cloneSnakesLayout(resolveSnakesRules({ levelId }).layout);
+  }
+
+  onEditSelectBoard(boardId: string): void {
+    this.editBoardId = boardId;
+    this.editSnakesLevelId = SnakesLevelId.CUSTOM;
+    if (!boardId) {
+      return;
+    }
+    const board = this.customBoards().find((item) => item.id === boardId);
+    if (board) {
+      this.editLayout = cloneSnakesLayout(board.layout);
+    }
+  }
+
+  onEditLayoutChange(layout: SnakesBoardLayout): void {
+    this.editLayout = layout;
+    this.editSnakesLevelId = SnakesLevelId.CUSTOM;
+    this.editBoardId = '';
+  }
+
+  canSaveBoard(): boolean {
+    const tournament = this.selected();
+    if (!tournament || !isSnakesRules(tournament.rules)) {
+      return false;
+    }
+    if (this.editSnakesLevelId === SnakesLevelId.CUSTOM && validateSnakesLayout(this.editLayout)) {
+      return false;
+    }
+    return (
+      this.editSnakesLevelId !== tournament.rules.levelId ||
+      JSON.stringify(this.editLayout) !== JSON.stringify(tournament.rules.layout)
+    );
+  }
+
+  async saveBoard(): Promise<void> {
+    const tournament = this.selected();
+    if (!tournament || !this.canSaveBoard() || this.savingBoard()) {
+      return;
+    }
+    const live = this.liveTableCount();
+    if (
+      live > 0 &&
+      !window.confirm(
+        `Save this board? ${live} live table${live === 1 ? '' : 's'} will restart from the start.`
+      )
+    ) {
+      return;
+    }
+    this.savingBoard.set(true);
+    try {
+      await this.guard(async () => {
+        const result = await this.api.updateTournamentSnakesRules(tournament.id, {
+          snakesLevelId: this.editSnakesLevelId,
+          snakesLayout: this.editLayout,
+        });
+        this.selected.set(result.tournament);
+        this.tournaments.update((rows) =>
+          rows.map((row) => (row.id === result.tournament.id ? result.tournament : row))
+        );
+        this.syncBoardEditor(result.tournament);
+        await this.refreshSelected();
+        if (result.failed.length) {
+          throw new Error(
+            `Board saved, but ${result.failed.length} table(s) did not reset: ${result.failed
+              .map((row) => row.reason)
+              .join(' · ')}`
+          );
+        }
+      });
+    } finally {
+      this.savingBoard.set(false);
+    }
   }
 
   setCreateLevel(levelId: SnakesLevelId): void {
@@ -876,6 +1074,105 @@ export class AdminTournamentsPage implements OnInit {
     const section = this.groupedTables().find((item) => item.roundNumber === match.roundNumber);
     const index = section?.tables.findIndex((item) => item.id === match.id) ?? 0;
     return String.fromCharCode(65 + Math.max(0, index));
+  }
+
+  groupTitle(match: MatchSummaryDto): string {
+    return match.groupName?.trim() || `Group ${this.groupLetter(match)}`;
+  }
+
+  startEditGroupName(match: MatchSummaryDto): void {
+    this.editingGroupId.set(match.id);
+    this.draftGroupName = this.groupTitle(match);
+  }
+
+  cancelEditGroupName(): void {
+    this.editingGroupId.set(null);
+    this.draftGroupName = '';
+  }
+
+  async saveGroupName(match: MatchSummaryDto): Promise<void> {
+    if (this.editingGroupId() !== match.id) {
+      return;
+    }
+    const groupName = this.draftGroupName.trim();
+    this.cancelEditGroupName();
+    if (!groupName || groupName === this.groupTitle(match)) {
+      return;
+    }
+    await this.guard(async () => {
+      const updated = await this.api.updateMatch(match.id, { groupName });
+      this.matches.update((rows) => rows.map((row) => (row.id === updated.id ? updated : row)));
+    });
+  }
+
+  canEditMembers(match: MatchSummaryDto): boolean {
+    return match.status !== MatchStatus.COMPLETED && match.status !== MatchStatus.CANCELLED;
+  }
+
+  canAddMembers(match: MatchSummaryDto): boolean {
+    return this.canEditMembers(match) && match.players.length < this.maxTableSeats();
+  }
+
+  addableOptions(match: MatchSummaryDto) {
+    const seated = new Set(
+      match.players.filter((player) => !player.eliminated).map((player) => player.userId)
+    );
+    return this.freeParticipants()
+      .filter((player) => !seated.has(player.userId))
+      .map((player) => ({ id: player.userId, label: player.name }));
+  }
+
+  async addMember(match: MatchSummaryDto, userId: string): Promise<void> {
+    if (!userId || this.memberBusy()) {
+      return;
+    }
+    if (match.players.some((player) => player.userId === userId && !player.eliminated)) {
+      return;
+    }
+    const nextIds = [
+      ...match.players.filter((player) => !player.eliminated).map((player) => player.userId),
+      userId,
+    ];
+    if (
+      (match.status === MatchStatus.LIVE || match.status === MatchStatus.PAUSED) &&
+      !window.confirm(`Add this player to ${this.groupTitle(match)}? The live table will restart from the start.`)
+    ) {
+      return;
+    }
+    this.memberBusy.set(true);
+    try {
+      await this.guard(async () => {
+        if (match.status === MatchStatus.WAITING || match.status === MatchStatus.READY) {
+          await this.api.assignPlayers(match.id, nextIds);
+        } else {
+          await this.api.addPlayer(match.id, userId);
+        }
+        await this.refreshSelected();
+      });
+    } finally {
+      this.memberBusy.set(false);
+    }
+  }
+
+  async removeMember(
+    match: MatchSummaryDto,
+    player: { userId: string; name: string }
+  ): Promise<void> {
+    if (this.memberBusy() || !this.canEditMembers(match)) {
+      return;
+    }
+    if (!window.confirm(`Remove ${player.name} from ${this.groupTitle(match)}?`)) {
+      return;
+    }
+    this.memberBusy.set(true);
+    try {
+      await this.guard(async () => {
+        await this.api.removePlayer(match.id, player.userId);
+        await this.refreshSelected();
+      });
+    } finally {
+      this.memberBusy.set(false);
+    }
   }
 
   onRoundChange(value: number): void {

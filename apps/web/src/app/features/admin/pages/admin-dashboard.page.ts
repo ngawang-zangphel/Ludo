@@ -110,7 +110,7 @@ type Filter = 'ALL' | MatchStatus;
               />
               <div class="min-w-0 flex-1">
                 <p class="text-xs uppercase tracking-wider text-arena-mist/50">
-                  {{ match.tournamentName }} · {{ gameTypeLabel(match.gameType) }} · {{ match.round }} · Match {{ match.matchNumber }}
+                  {{ match.tournamentName }} · {{ gameTypeLabel(match.gameType) }} · {{ match.groupName || match.round }} · Match {{ match.matchNumber }}
                 </p>
                 <h2 class="mt-1 font-display text-xl text-white">{{ playerNames(match) }}</h2>
                 <p class="mt-1 text-sm text-arena-mist/70">
