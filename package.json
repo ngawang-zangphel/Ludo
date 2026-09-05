@@ -11,10 +11,10 @@
     "build:prod": "nx build server && nx build web",
     "test": "nx test game-engine",
     "test:engine": "nx test game-engine",
-    "deploy": "docker compose down && docker compose up -d --build",
+    "deploy": "./deploy.sh",
     "docker:up": "docker compose up -d --build",
     "docker:down": "docker compose down",
-    "docker:restart": "npm run deploy",
+    "docker:restart": "./deploy.sh",
     "docker:logs": "docker compose logs -f --tail=100",
     "docker:status": "docker compose ps",
     "docker:rebuild": "docker compose build --no-cache && docker compose up -d"
