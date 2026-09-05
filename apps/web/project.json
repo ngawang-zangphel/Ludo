@@ -57,14 +57,9 @@
           "buildTarget": "web:build:development"
         }
       },
-      "dependsOn": [
-        {
-          "projects": ["server"],
-          "target": "serve"
-        }
-      ],
       "options": {
-        "proxyConfig": "apps/web/proxy.conf.json"
+        "port": 8819,
+        "proxyConfig": "apps/web/proxy.conf.js"
       }
     },
     "lint": {

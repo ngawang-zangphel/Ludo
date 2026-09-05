@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "license": "MIT",
   "scripts": {
-    "start": "nx run-many -t serve -p server,web --parallel=2",
+    "start": "nx serve web",
     "start:server": "nx serve server",
     "start:web": "nx serve web",
     "start:prod": "node dist/apps/server/main.js",
