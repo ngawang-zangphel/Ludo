@@ -1,7 +1,8 @@
 import { BadRequestException, Body, Controller, Delete, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
-import { UserDto, UserRole } from '@ludo-game/shared-types';
+import { BulkUserCreateResultDto, UserDto, UserRole } from '@ludo-game/shared-types';
 import { UsersService } from './users.service';
 import { CreateUserDto } from './dto/create-user.dto';
+import { BulkCreateUsersDto } from './dto/bulk-create-users.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { AuthGuard } from '../common/auth.guard';
 import { RolesGuard } from '../common/roles.guard';
@@ -30,6 +31,12 @@ export class UsersController {
   @Roles(UserRole.ADMIN)
   create(@Body() dto: CreateUserDto): Promise<UserDto> {
     return this.users.create(dto);
+  }
+
+  @Post('bulk')
+  @Roles(UserRole.ADMIN)
+  createMany(@Body() dto: BulkCreateUsersDto): Promise<BulkUserCreateResultDto> {
+    return this.users.createMany(dto);
   }
 
   @Patch(':id')

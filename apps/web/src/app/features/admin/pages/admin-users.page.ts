@@ -9,11 +9,12 @@ import {
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
-import { UserDto, UserRole } from '@ludo-game/shared-types';
+import { BulkUserCreateResultDto, BulkUserRowDto, UserDto, UserRole } from '@ludo-game/shared-types';
 import { ArenaApiService } from '../../../core/api/arena-api.service';
 import { AdminRealtimeService } from '../../../core/socket/admin-realtime.service';
 import { AuthService } from '../../../core/auth/auth.service';
 import { httpErrorMessage } from '../../../shared/format';
+import { downloadUserSheetTemplate, parseUserSheet } from '../bulk-users-sheet';
 
 type UserFilter = 'ALL' | 'ONLINE' | 'PLAYER' | 'ADMIN';
 
@@ -51,6 +52,69 @@ type UserFilter = 'ALL' | 'ONLINE' | 'PLAYER' | 'ADMIN';
             Create
           </button>
         </div>
+      </form>
+
+      <form class="mt-4 rounded-3xl border border-arena-line bg-arena-navy/80 p-5" (ngSubmit)="createBulk()">
+        <div>
+          <h2 class="font-display text-lg">Bulk create from Excel</h2>
+          <p class="mt-1 text-sm text-arena-mist/70">
+            Download the template, fill <span class="text-white">name</span> and
+            <span class="text-white">email</span>, then upload it. Every new account gets the same password.
+          </p>
+        </div>
+        <div class="mt-3 flex flex-wrap gap-2">
+          <button
+            type="button"
+            class="rounded-full border border-arena-gold px-4 py-2 text-sm font-semibold text-arena-gold hover:bg-arena-gold/10"
+            (click)="downloadTemplate()"
+          >
+            Download template
+          </button>
+        </div>
+        <div class="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+          <input
+            class="field"
+            name="bulkPassword"
+            placeholder="Shared password"
+            [(ngModel)]="bulkPassword"
+            required
+            minlength="6"
+          />
+          <select class="field" name="bulkRole" [(ngModel)]="bulkRole">
+            <option [ngValue]="UserRole.PLAYER">Player</option>
+            <option [ngValue]="UserRole.ADMIN">Admin</option>
+          </select>
+          <input
+            class="field"
+            name="bulkFile"
+            type="file"
+            accept=".xlsx,.xls,.csv"
+            (change)="onSheetSelected($event)"
+          />
+          <button
+            class="rounded-full bg-arena-gold px-4 py-2 text-sm font-semibold text-arena-ink disabled:opacity-40"
+            type="submit"
+            [disabled]="bulkBusy() || !bulkRows().length"
+          >
+            {{ bulkBusy() ? 'Creating…' : 'Create accounts' }}
+          </button>
+        </div>
+        @if (bulkFileName()) {
+          <p class="mt-3 text-sm text-arena-mist/70">
+            {{ bulkFileName() }} · {{ bulkRows().length }} row{{ bulkRows().length === 1 ? '' : 's' }} ready
+          </p>
+        }
+        @if (bulkResult(); as result) {
+          <p class="mt-3 text-sm text-piece-green">Created {{ result.created.length }} account{{ result.created.length === 1 ? '' : 's' }}.</p>
+          @if (result.failed.length) {
+            <div class="mt-2 max-h-40 overflow-auto rounded-xl border border-arena-line/80 p-3 text-sm">
+              <p class="text-piece-red">{{ result.failed.length }} skipped</p>
+              @for (row of result.failed; track row.row + row.email) {
+                <p class="mt-1 text-arena-mist/70">Row {{ row.row }} · {{ row.email || row.name }} · {{ row.reason }}</p>
+              }
+            </div>
+          }
+        }
       </form>
 
       <div class="mt-6 flex flex-wrap gap-2">
@@ -174,6 +238,12 @@ export class AdminUsersPage implements OnInit, OnDestroy {
   createEmail = '';
   createPassword = 'Player123!';
   createRole = UserRole.PLAYER;
+  bulkPassword = 'Player123!';
+  bulkRole = UserRole.PLAYER;
+  readonly bulkRows = signal<BulkUserRowDto[]>([]);
+  readonly bulkFileName = signal<string | null>(null);
+  readonly bulkBusy = signal(false);
+  readonly bulkResult = signal<BulkUserCreateResultDto | null>(null);
   editName = '';
   editEmail = '';
   editPassword = '';
@@ -222,6 +292,53 @@ export class AdminUsersPage implements OnInit, OnDestroy {
   cancelEdit(): void {
     this.editingId.set(null);
     this.editPassword = '';
+  }
+
+  downloadTemplate(): void {
+    downloadUserSheetTemplate();
+  }
+
+  async onSheetSelected(event: Event): Promise<void> {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
+    this.bulkResult.set(null);
+    this.bulkRows.set([]);
+    this.bulkFileName.set(null);
+    if (!file) {
+      return;
+    }
+    await this.guard(async () => {
+      const rows = await parseUserSheet(file);
+      if (!rows.length) {
+        throw new Error('No name/email rows found. Use the template or add those column headers.');
+      }
+      this.bulkFileName.set(file.name);
+      this.bulkRows.set(rows);
+    });
+    input.value = '';
+  }
+
+  async createBulk(): Promise<void> {
+    const users = this.bulkRows();
+    if (!users.length) {
+      return;
+    }
+    this.bulkBusy.set(true);
+    try {
+      await this.guard(async () => {
+        const result = await this.api.createUsersBulk({
+          password: this.bulkPassword,
+          role: this.bulkRole,
+          users,
+        });
+        this.bulkResult.set(result);
+        this.bulkRows.set([]);
+        this.bulkFileName.set(null);
+        await this.refresh();
+      });
+    } finally {
+      this.bulkBusy.set(false);
+    }
   }
 
   async create(): Promise<void> {

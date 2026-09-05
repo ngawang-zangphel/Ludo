@@ -1,7 +1,8 @@
 import { Injectable, inject } from '@angular/core';
-import { HttpClient, HttpParams } from '@angular/common/http';
+import { HttpClient, HttpErrorResponse, HttpParams } from '@angular/common/http';
 import {
   BroadcastStateDto,
+  BulkUserCreateResultDto,
   MatchDetailDto,
   MatchResultDto,
   MatchStatus,
@@ -14,6 +15,7 @@ import {
   UserDto,
 } from '@ludo-game/shared-types';
 import { firstValueFrom } from 'rxjs';
+import { httpErrorMessage } from '../../shared/format';
 
 export interface MatchNeighbors {
   previousId: string | null;
@@ -215,6 +217,54 @@ export class ArenaApiService {
     role?: string;
   }): Promise<UserDto> {
     return firstValueFrom(this.http.post<UserDto>('/api/users', body));
+  }
+
+  async createUsersBulk(body: {
+    password: string;
+    role?: string;
+    users: Array<{ name: string; email: string }>;
+  }): Promise<BulkUserCreateResultDto> {
+    try {
+      return await firstValueFrom(this.http.post<BulkUserCreateResultDto>('/api/users/bulk', body));
+    } catch (error) {
+      if (!this.isMissingRoute(error)) {
+        throw error;
+      }
+      return this.createUsersOneByOne(body);
+    }
+  }
+
+  private async createUsersOneByOne(body: {
+    password: string;
+    role?: string;
+    users: Array<{ name: string; email: string }>;
+  }): Promise<BulkUserCreateResultDto> {
+    const created: UserDto[] = [];
+    const failed: BulkUserCreateResultDto['failed'] = [];
+    for (const [index, row] of body.users.entries()) {
+      try {
+        created.push(
+          await this.createUser({
+            name: row.name,
+            email: row.email,
+            password: body.password,
+            role: body.role,
+          })
+        );
+      } catch (error) {
+        failed.push({
+          row: index + 2,
+          name: row.name,
+          email: row.email,
+          reason: httpErrorMessage(error),
+        });
+      }
+    }
+    return { created, failed };
+  }
+
+  private isMissingRoute(error: unknown): boolean {
+    return error instanceof HttpErrorResponse && (error.status === 404 || error.status === 405);
   }
 
   updateUser(

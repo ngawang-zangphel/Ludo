@@ -21,6 +21,23 @@ export interface UserDto {
   online?: boolean;
 }
 
+export interface BulkUserRowDto {
+  name: string;
+  email: string;
+}
+
+export interface BulkUserFailureDto {
+  row: number;
+  name: string;
+  email: string;
+  reason: string;
+}
+
+export interface BulkUserCreateResultDto {
+  created: UserDto[];
+  failed: BulkUserFailureDto[];
+}
+
 export interface SnakesCustomBoardDto {
   id: string;
   name: string;

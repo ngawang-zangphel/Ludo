@@ -7,9 +7,10 @@ import {
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { hash, compare } from 'bcrypt';
-import { MatchStatus, UserDto, UserRole } from '@ludo-game/shared-types';
+import { BulkUserCreateResultDto, MatchStatus, UserDto, UserRole } from '@ludo-game/shared-types';
 import { User, UserDocument } from './schemas/user.schema';
 import { CreateUserDto } from './dto/create-user.dto';
+import { BulkCreateUsersDto } from './dto/bulk-create-users.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { toObjectIdString } from '../common/types';
 import { Match, MatchDocument } from '../matches/schemas/match.schema';
@@ -17,6 +18,8 @@ import {
   TournamentParticipant,
   TournamentParticipantDocument,
 } from '../tournaments/schemas/participant.schema';
+
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 @Injectable()
 export class UsersService {
@@ -40,6 +43,64 @@ export class UsersService {
       role: dto.role ?? UserRole.PLAYER,
     });
     return this.toDto(user);
+  }
+
+  async createMany(dto: BulkCreateUsersDto): Promise<BulkUserCreateResultDto> {
+    const role = dto.role ?? UserRole.PLAYER;
+    const failed: BulkUserCreateResultDto['failed'] = [];
+    const unique = new Map<string, { row: number; name: string; email: string }>();
+
+    dto.users.forEach((row, index) => {
+      const email = row.email.trim().toLowerCase();
+      const name = row.name.trim();
+      const sheetRow = index + 2;
+      if (name.length < 2) {
+        failed.push({ row: sheetRow, name, email, reason: 'Name is too short' });
+        return;
+      }
+      if (!EMAIL_PATTERN.test(email)) {
+        failed.push({ row: sheetRow, name, email, reason: 'Invalid email' });
+        return;
+      }
+      if (unique.has(email)) {
+        failed.push({ row: sheetRow, name, email, reason: 'Duplicate email in the sheet' });
+        return;
+      }
+      unique.set(email, { row: sheetRow, name, email });
+    });
+
+    const existing = await this.users
+      .find({ email: { $in: [...unique.keys()] } })
+      .select('email')
+      .lean()
+      .exec();
+    for (const doc of existing) {
+      const row = unique.get(doc.email);
+      if (row) {
+        failed.push({ ...row, reason: 'Email already registered' });
+        unique.delete(doc.email);
+      }
+    }
+
+    if (!unique.size) {
+      return { created: [], failed: failed.sort((a, b) => a.row - b.row) };
+    }
+
+    const passwordHash = await hash(dto.password, 12);
+    const createdDocs = await this.users.insertMany(
+      [...unique.values()].map((row) => ({
+        email: row.email,
+        name: row.name,
+        passwordHash,
+        role,
+      })),
+      { ordered: false }
+    );
+
+    return {
+      created: createdDocs.map((user) => this.toDto(user)),
+      failed: failed.sort((a, b) => a.row - b.row),
+    };
   }
 
   async findByEmail(email: string): Promise<UserDocument | null> {
