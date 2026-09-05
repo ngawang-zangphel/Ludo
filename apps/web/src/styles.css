@@ -14,6 +14,7 @@
   --color-piece-yellow: #ffd23a;
   --color-piece-blue: #4fc3f7;
   --color-piece-purple: #c084fc;
+  --color-piece-orange: #fb923c;
   --color-track: #f3efe4;
   --color-track-line: #cfc4a8;
 }
@@ -1009,7 +1010,7 @@ body {
   grid-template-areas:
     "green extra yellow"
     "board board board"
-    "red . blue";
+    "red extra2 blue";
   column-gap: 0.45rem;
   row-gap: 0.35rem;
   align-items: center;
@@ -1055,6 +1056,12 @@ body {
   grid-area: extra;
   justify-self: center;
   align-self: end;
+}
+
+.ludo-table-extra2 {
+  grid-area: extra2;
+  justify-self: center;
+  align-self: start;
 }
 
 .king-badge {

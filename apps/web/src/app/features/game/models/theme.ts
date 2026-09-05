@@ -6,6 +6,7 @@ export const PLAYER_SWATCH: Record<PlayerColor, string> = {
   [PlayerColor.YELLOW]: '#ffd23a',
   [PlayerColor.BLUE]: '#4fc3f7',
   [PlayerColor.PURPLE]: '#c084fc',
+  [PlayerColor.ORANGE]: '#fb923c',
 };
 
 export const PLAYER_TRACK: Record<PlayerColor, string> = {
@@ -14,6 +15,7 @@ export const PLAYER_TRACK: Record<PlayerColor, string> = {
   [PlayerColor.YELLOW]: '#ffc93d',
   [PlayerColor.BLUE]: '#4fc3f7',
   [PlayerColor.PURPLE]: '#9b5de5',
+  [PlayerColor.ORANGE]: '#f97316',
 };
 
 export const PIECE_PAINT: Record<
@@ -49,5 +51,11 @@ export const PIECE_PAINT: Record<
     mid: '#c084fc',
     deep: '#a855f7',
     shade: '#6b21a8',
+  },
+  [PlayerColor.ORANGE]: {
+    light: '#fdba74',
+    mid: '#fb923c',
+    deep: '#f97316',
+    shade: '#c2410c',
   },
 };

@@ -153,6 +153,15 @@ import { SnakesPlayerPanelComponent } from '../snakes-player-panel/snakes-player
             />
           }
         </div>
+        <div class="ludo-table-extra2">
+          @if (snakesPlayer(snakes, PlayerColor.ORANGE); as orange) {
+            <arena-snakes-player-panel
+              [player]="orange"
+              [active]="isActive(orange.id)"
+              [align]="'end'"
+            />
+          }
+        </div>
         <div class="ludo-table-blue">
           @if (snakesPlayer(snakes, PlayerColor.BLUE); as blue) {
             <arena-snakes-player-panel

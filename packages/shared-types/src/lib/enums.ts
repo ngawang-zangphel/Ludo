@@ -4,6 +4,7 @@ export enum PlayerColor {
   YELLOW = 'YELLOW',
   BLUE = 'BLUE',
   PURPLE = 'PURPLE',
+  ORANGE = 'ORANGE',
 }
 
 export enum GameType {
@@ -84,11 +85,11 @@ export enum GameEventType {
 }
 
 export const LUDO_MAX_PLAYERS = 4;
-export const SNAKES_MAX_PLAYERS = 5;
+export const SNAKES_MAX_PLAYERS = 6;
 /** Snakes keeps racing until this many players have finished (leftovers are then ranked). */
 export const SNAKES_WINNER_CAP = 4;
 
-/** Ludo board seats. Purple is Snakes-only. */
+/** Ludo board seats. Purple and orange are Snakes-only. */
 export const LUDO_PLAYER_COLORS = [
   PlayerColor.RED,
   PlayerColor.GREEN,
@@ -109,6 +110,7 @@ export const PLAYER_COLOR_ORDER: readonly PlayerColor[] = [
   PlayerColor.YELLOW,
   PlayerColor.BLUE,
   PlayerColor.PURPLE,
+  PlayerColor.ORANGE,
 ] as const;
 
 /** Opposite corners: GREEN (NW) ↔ BLUE (SE), RED (SW) ↔ YELLOW (NE). */
@@ -118,6 +120,7 @@ export const PLAYER_COLOR_OPPOSITE: Record<PlayerColor, PlayerColor> = {
   [PlayerColor.YELLOW]: PlayerColor.RED,
   [PlayerColor.BLUE]: PlayerColor.GREEN,
   [PlayerColor.PURPLE]: PlayerColor.YELLOW,
+  [PlayerColor.ORANGE]: PlayerColor.BLUE,
 };
 
 /** Default seats. Two players sit on a diagonal; 3+ fill clockwise from RED. */

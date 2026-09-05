@@ -108,7 +108,7 @@ export class LocalMatchService {
 
   readonly allowedPlayerCounts = computed(() => {
     const max = maxPlayersForGame(this.gameType());
-    return [2, 3, 4, 5].filter((count) => count <= max);
+    return Array.from({ length: max - 1 }, (_, index) => index + 2);
   });
 
   readonly setupReady = computed(() => {

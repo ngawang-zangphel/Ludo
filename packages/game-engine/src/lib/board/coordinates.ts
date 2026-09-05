@@ -24,8 +24,8 @@ import {
 } from './path';
 
 function ludoSeat(color: PlayerColor): LudoSeatColor {
-  if (color === PlayerColor.PURPLE) {
-    throw new Error('Purple is not a Ludo seat');
+  if (color === PlayerColor.PURPLE || color === PlayerColor.ORANGE) {
+    throw new Error(`${color} is not a Ludo seat`);
   }
   return color;
 }
