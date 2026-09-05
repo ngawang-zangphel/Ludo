@@ -14,6 +14,7 @@ import {
   GameType,
   isMarriageRules,
   isSnakesRules,
+  BulkMatchAction,
   MARRIAGE_DECK_OPTIONS,
   MatchStatus,
   MatchSummaryDto,
@@ -32,7 +33,7 @@ import {
 } from '@ludo-game/shared-types';
 import { ArenaApiService } from '../../../core/api/arena-api.service';
 import { StatusBadgeComponent } from '../../../shared/ui/status-badge';
-import { httpErrorMessage, playerNames } from '../../../shared/format';
+import { httpErrorMessage, playerNames, readyCountLabel } from '../../../shared/format';
 import { SnakesBoardComponent } from '../../game/components/snakes-board/snakes-board';
 import { SnakesPresetPickerComponent } from '../../game/components/snakes-preset-picker/snakes-preset-picker';
 
@@ -416,6 +417,24 @@ import { SnakesPresetPickerComponent } from '../../game/components/snakes-preset
             </div>
 
             <div class="mt-5 space-y-5">
+              @if (matches().length) {
+                <div class="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    class="rounded-full border border-arena-line px-3 py-1.5 text-xs"
+                    (click)="toggleSelectAllTables()"
+                  >
+                    {{ allTablesSelected() ? 'Clear selection' : 'Select all tables' }}
+                  </button>
+                  @if (selectedTableIds().length) {
+                    <span class="text-xs text-arena-mist/70">{{ selectedTableIds().length }} selected</span>
+                    <button type="button" class="rounded-full bg-arena-gold px-3 py-1.5 text-xs font-semibold text-arena-ink disabled:opacity-40" [disabled]="bulkBusy()" (click)="runBulk('ready')">Ready</button>
+                    <button type="button" class="rounded-full bg-arena-gold px-3 py-1.5 text-xs font-semibold text-arena-ink disabled:opacity-40" [disabled]="bulkBusy()" (click)="runBulk('start')">Start</button>
+                    <button type="button" class="rounded-full border border-piece-red px-3 py-1.5 text-xs text-piece-red disabled:opacity-40" [disabled]="bulkBusy()" (click)="runBulk('cancel')">Cancel</button>
+                    <button type="button" class="rounded-full border border-piece-red px-3 py-1.5 text-xs text-piece-red disabled:opacity-40" [disabled]="bulkBusy()" (click)="runBulk('delete')">Delete</button>
+                  }
+                </div>
+              }
               @for (section of groupedTables(); track section.roundNumber) {
                 <div>
                   <p class="text-xs uppercase tracking-[0.2em] text-arena-gold">
@@ -425,12 +444,27 @@ import { SnakesPresetPickerComponent } from '../../game/components/snakes-preset
                     @for (match of section.tables; track match.id) {
                       <article class="rounded-2xl border border-arena-line p-4">
                         <div class="flex items-start justify-between gap-2">
-                          <div>
-                            <p class="text-xs uppercase tracking-wider text-arena-mist/50">
-                              Group {{ groupLetter(match) }}
-                            </p>
-                            <p class="mt-1 font-display text-white">{{ playerNames(match) }}</p>
-                            <p class="mt-1 text-xs text-arena-mist/60">Invitation sent — waiting for players to join.</p>
+                          <div class="flex min-w-0 items-start gap-2">
+                            <input
+                              type="checkbox"
+                              class="mt-1"
+                              [checked]="isTableSelected(match.id)"
+                              [attr.aria-label]="'Select group ' + groupLetter(match)"
+                              (change)="toggleTable(match.id)"
+                            />
+                            <div>
+                              <p class="text-xs uppercase tracking-wider text-arena-mist/50">
+                                Group {{ groupLetter(match) }}
+                              </p>
+                              <p class="mt-1 font-display text-white">{{ playerNames(match) }}</p>
+                              <p class="mt-1 text-xs text-arena-mist/60">
+                                @if (match.status === MatchStatus.WAITING || match.status === MatchStatus.READY) {
+                                  {{ readyCountLabel(match) }} — mark Ready, then Start.
+                                } @else {
+                                  {{ match.status.replace('_', ' ') }}
+                                }
+                              </p>
+                            </div>
                           </div>
                           <ludo-status-badge [status]="match.status" />
                         </div>
@@ -544,7 +578,11 @@ export class AdminTournamentsPage implements OnInit {
   readonly playerNames = playerNames;
   readonly selectedPlayerIds = signal<string[]>([]);
   readonly grouping = signal(false);
+  readonly bulkBusy = signal(false);
+  readonly selectedTableIds = signal<string[]>([]);
   readonly registerUserIds = signal<string[]>([]);
+  readonly readyCountLabel = readyCountLabel;
+  readonly MatchStatus = MatchStatus;
   readonly GAME_TYPE_LABEL = GAME_TYPE_LABEL;
   readonly SNAKES_LEVEL_LABEL = SNAKES_LEVEL_LABEL;
   readonly GameType = GameType;
@@ -616,6 +654,11 @@ export class AdminTournamentsPage implements OnInit {
     return sections;
   });
 
+  readonly allTablesSelected = computed(() => {
+    const tables = this.matches();
+    return tables.length > 0 && tables.every((match) => this.selectedTableIds().includes(match.id));
+  });
+
   readonly canCreate = computed(() => {
     const selected = this.selectedPlayerIds();
     return selected.length >= 2 && selected.length <= this.maxTableSeats();
@@ -668,6 +711,7 @@ export class AdminTournamentsPage implements OnInit {
     this.selected.set(tournament);
     this.selectedPlayerIds.set([]);
     this.registerUserIds.set([]);
+    this.selectedTableIds.set([]);
     await this.refreshSelected();
   }
 
@@ -894,6 +938,50 @@ export class AdminTournamentsPage implements OnInit {
       await this.api.assignRandom(matchId);
       await this.refreshSelected();
     });
+  }
+
+  isTableSelected(matchId: string): boolean {
+    return this.selectedTableIds().includes(matchId);
+  }
+
+  toggleTable(matchId: string): void {
+    this.selectedTableIds.update((ids) =>
+      ids.includes(matchId) ? ids.filter((id) => id !== matchId) : [...ids, matchId]
+    );
+  }
+
+  toggleSelectAllTables(): void {
+    if (this.allTablesSelected()) {
+      this.selectedTableIds.set([]);
+      return;
+    }
+    this.selectedTableIds.set(this.matches().map((match) => match.id));
+  }
+
+  async runBulk(action: BulkMatchAction): Promise<void> {
+    const matchIds = this.selectedTableIds();
+    if (!matchIds.length) {
+      return;
+    }
+    if (action === 'cancel' && !window.confirm(`Cancel ${matchIds.length} selected table(s)?`)) {
+      return;
+    }
+    if (action === 'delete' && !window.confirm(`Delete ${matchIds.length} selected table(s)? This cannot be undone.`)) {
+      return;
+    }
+    this.bulkBusy.set(true);
+    try {
+      await this.guard(async () => {
+        const result = await this.api.bulkMatches(action, matchIds);
+        this.selectedTableIds.update((ids) => ids.filter((id) => !result.ok.includes(id)));
+        await this.refreshSelected();
+        if (result.failed.length) {
+          throw new Error(result.failed.map((row) => row.reason).join(' · '));
+        }
+      });
+    } finally {
+      this.bulkBusy.set(false);
+    }
   }
 
   async remove(match: MatchSummaryDto): Promise<void> {

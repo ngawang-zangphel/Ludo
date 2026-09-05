@@ -114,6 +114,18 @@ export interface MatchDetailDto extends MatchSummaryDto {
   gameState: GameState | null;
 }
 
+export type BulkMatchAction = 'ready' | 'start' | 'cancel' | 'delete';
+
+export interface BulkMatchFailureDto {
+  matchId: string;
+  reason: string;
+}
+
+export interface BulkMatchActionResultDto {
+  ok: string[];
+  failed: BulkMatchFailureDto[];
+}
+
 export interface MatchResultDto {
   id: string;
   matchId: string;

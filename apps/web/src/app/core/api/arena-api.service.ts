@@ -2,6 +2,8 @@ import { Injectable, inject } from '@angular/core';
 import { HttpClient, HttpErrorResponse, HttpParams } from '@angular/common/http';
 import {
   BroadcastStateDto,
+  BulkMatchAction,
+  BulkMatchActionResultDto,
   BulkUserCreateResultDto,
   MatchDetailDto,
   MatchResultDto,
@@ -86,6 +88,48 @@ export class ArenaApiService {
 
   start(matchId: string): Promise<MatchDetailDto> {
     return firstValueFrom(this.http.post<MatchDetailDto>(`/api/matches/${matchId}/start`, {}));
+  }
+
+  markReady(matchId: string): Promise<MatchDetailDto> {
+    return firstValueFrom(this.http.post<MatchDetailDto>(`/api/matches/${matchId}/ready`, {}));
+  }
+
+  async bulkMatches(action: BulkMatchAction, matchIds: string[]): Promise<BulkMatchActionResultDto> {
+    try {
+      return await firstValueFrom(
+        this.http.post<BulkMatchActionResultDto>('/api/matches/bulk', { action, matchIds })
+      );
+    } catch (error) {
+      if (!this.isMissingRoute(error)) {
+        throw error;
+      }
+      return this.bulkMatchesOneByOne(action, matchIds);
+    }
+  }
+
+  private async bulkMatchesOneByOne(
+    action: BulkMatchAction,
+    matchIds: string[]
+  ): Promise<BulkMatchActionResultDto> {
+    const ok: string[] = [];
+    const failed: BulkMatchActionResultDto['failed'] = [];
+    for (const matchId of matchIds) {
+      try {
+        if (action === 'ready') {
+          await this.markReady(matchId);
+        } else if (action === 'start') {
+          await this.start(matchId);
+        } else if (action === 'cancel') {
+          await this.cancel(matchId);
+        } else {
+          await this.deleteMatch(matchId);
+        }
+        ok.push(matchId);
+      } catch (error) {
+        failed.push({ matchId, reason: httpErrorMessage(error) });
+      }
+    }
+    return { ok, failed };
   }
 
   removePlayer(matchId: string, userId: string): Promise<MatchDetailDto> {

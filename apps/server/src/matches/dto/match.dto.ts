@@ -1,4 +1,5 @@
-import { IsArray, IsBoolean, IsInt, IsMongoId, IsOptional, IsString, Min } from 'class-validator';
+import { ArrayMaxSize, ArrayMinSize, IsArray, IsBoolean, IsIn, IsInt, IsMongoId, IsOptional, IsString, Min } from 'class-validator';
+import { BulkMatchAction } from '@ludo-game/shared-types';
 
 export class CreateMatchDto {
   @IsMongoId()
@@ -32,6 +33,17 @@ export class AssignPlayersDto {
   @IsArray()
   @IsMongoId({ each: true })
   playerUserIds!: string[];
+}
+
+export class BulkMatchActionDto {
+  @IsIn(['ready', 'start', 'cancel', 'delete'])
+  action!: BulkMatchAction;
+
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(200)
+  @IsMongoId({ each: true })
+  matchIds!: string[];
 }
 
 export class CreateMatchGroupsDto {

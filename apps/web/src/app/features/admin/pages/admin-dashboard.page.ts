@@ -8,7 +8,7 @@ import {
   signal,
 } from '@angular/core';
 import { RouterLink } from '@angular/router';
-import { MatchStatus, MatchSummaryDto } from '@ludo-game/shared-types';
+import { BulkMatchAction, MatchStatus, MatchSummaryDto } from '@ludo-game/shared-types';
 import { ArenaApiService } from '../../../core/api/arena-api.service';
 import { AdminRealtimeService } from '../../../core/socket/admin-realtime.service';
 import { StatusBadgeComponent } from '../../../shared/ui/status-badge';
@@ -76,11 +76,39 @@ type Filter = 'ALL' | MatchStatus;
         <p class="mt-4 text-piece-red">{{ error() }}</p>
       }
 
+      <div class="mt-4 flex flex-wrap items-center gap-2">
+        <button type="button" class="btn-ghost" (click)="toggleSelectAll()">
+          {{ allVisibleSelected() ? 'Clear selection' : 'Select all' }}
+        </button>
+        @if (selectedIds().length) {
+          <span class="text-sm text-arena-mist/70">{{ selectedIds().length }} selected</span>
+          <button type="button" class="btn-gold disabled:opacity-40" [disabled]="bulkBusy()" (click)="runBulk('ready')">
+            Ready
+          </button>
+          <button type="button" class="btn-gold disabled:opacity-40" [disabled]="bulkBusy()" (click)="runBulk('start')">
+            Start
+          </button>
+          <button type="button" class="btn-danger disabled:opacity-40" [disabled]="bulkBusy()" (click)="runBulk('cancel')">
+            Cancel
+          </button>
+          <button type="button" class="btn-danger disabled:opacity-40" [disabled]="bulkBusy()" (click)="runBulk('delete')">
+            Delete
+          </button>
+        }
+      </div>
+
       <div class="mt-6 grid gap-4">
         @for (match of visible(); track match.id) {
           <article class="rounded-3xl border border-arena-line bg-arena-navy/80 p-5">
             <div class="flex flex-wrap items-start justify-between gap-3">
-              <div>
+              <input
+                type="checkbox"
+                class="mt-1.5"
+                [checked]="isSelected(match.id)"
+                [attr.aria-label]="'Select match ' + match.matchNumber"
+                (change)="toggleSelect(match.id)"
+              />
+              <div class="min-w-0 flex-1">
                 <p class="text-xs uppercase tracking-wider text-arena-mist/50">
                   {{ match.tournamentName }} · {{ gameTypeLabel(match.gameType) }} · {{ match.round }} · Match {{ match.matchNumber }}
                 </p>
@@ -208,6 +236,8 @@ export class AdminDashboardPage implements OnInit, OnDestroy {
   ];
   readonly filter = signal<Filter>('ALL');
   readonly error = signal<string | null>(null);
+  readonly selectedIds = signal<string[]>([]);
+  readonly bulkBusy = signal(false);
   readonly formatDuration = formatDuration;
   readonly playerNames = playerNames;
   readonly gameTypeLabel = gameTypeLabel;
@@ -221,6 +251,11 @@ export class AdminDashboardPage implements OnInit, OnDestroy {
       return matches;
     }
     return matches.filter((match) => match.status === filter);
+  });
+
+  readonly allVisibleSelected = computed(() => {
+    const visible = this.visible();
+    return visible.length > 0 && visible.every((match) => this.selectedIds().includes(match.id));
   });
 
   async ngOnInit(): Promise<void> {
@@ -271,6 +306,57 @@ export class AdminDashboardPage implements OnInit, OnDestroy {
       await this.api.stopBroadcast();
       this.realtime.broadcastMatchId.set(null);
     });
+  }
+
+  isSelected(matchId: string): boolean {
+    return this.selectedIds().includes(matchId);
+  }
+
+  toggleSelect(matchId: string): void {
+    this.selectedIds.update((ids) =>
+      ids.includes(matchId) ? ids.filter((id) => id !== matchId) : [...ids, matchId]
+    );
+  }
+
+  toggleSelectAll(): void {
+    if (this.allVisibleSelected()) {
+      const visible = new Set(this.visible().map((match) => match.id));
+      this.selectedIds.update((ids) => ids.filter((id) => !visible.has(id)));
+      return;
+    }
+    this.selectedIds.set(this.visible().map((match) => match.id));
+  }
+
+  async runBulk(action: BulkMatchAction): Promise<void> {
+    const matchIds = this.selectedIds();
+    if (!matchIds.length) {
+      return;
+    }
+    if (action === 'cancel' && !window.confirm(`Cancel ${matchIds.length} selected match(es)?`)) {
+      return;
+    }
+    if (action === 'delete' && !window.confirm(`Delete ${matchIds.length} selected match(es)? This cannot be undone.`)) {
+      return;
+    }
+    this.bulkBusy.set(true);
+    try {
+      await this.run(async () => {
+        const result = await this.api.bulkMatches(action, matchIds);
+        if (action === 'delete') {
+          const removed = new Set(result.ok);
+          this.realtime.matches.update((matches) => matches.filter((match) => !removed.has(match.id)));
+          if (this.realtime.broadcastMatchId() && removed.has(this.realtime.broadcastMatchId()!)) {
+            this.realtime.broadcastMatchId.set(null);
+          }
+        }
+        this.selectedIds.update((ids) => ids.filter((id) => !result.ok.includes(id)));
+        if (result.failed.length) {
+          throw new Error(result.failed.map((row) => row.reason).join(' · '));
+        }
+      });
+    } finally {
+      this.bulkBusy.set(false);
+    }
   }
 
   async remove(match: MatchSummaryDto): Promise<void> {

@@ -1,5 +1,6 @@
 import { Body, Controller, Delete, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
 import {
+  BulkMatchActionResultDto,
   MatchDetailDto,
   MatchResultDto,
   MatchStatus,
@@ -7,7 +8,7 @@ import {
   UserRole,
 } from '@ludo-game/shared-types';
 import { MatchesService } from './matches.service';
-import { AssignPlayersDto, CreateMatchDto, CreateMatchGroupsDto } from './dto/match.dto';
+import { AssignPlayersDto, BulkMatchActionDto, CreateMatchDto, CreateMatchGroupsDto } from './dto/match.dto';
 import { AuthGuard } from '../common/auth.guard';
 import { RolesGuard } from '../common/roles.guard';
 import { Roles } from '../common/roles.decorator';
@@ -61,6 +62,12 @@ export class MatchesController {
     return this.matches.createGroups(dto);
   }
 
+  @Post('bulk')
+  @Roles(UserRole.ADMIN)
+  bulk(@Body() dto: BulkMatchActionDto): Promise<BulkMatchActionResultDto> {
+    return this.matches.bulkAction(dto);
+  }
+
   @Post(':id/assign')
   @Roles(UserRole.ADMIN)
   assign(@Param('id') id: string, @Body() dto: AssignPlayersDto): Promise<MatchDetailDto> {
@@ -77,6 +84,12 @@ export class MatchesController {
   @Roles(UserRole.ADMIN)
   start(@Param('id') id: string): Promise<MatchDetailDto> {
     return this.matches.start(id);
+  }
+
+  @Post(':id/ready')
+  @Roles(UserRole.ADMIN)
+  ready(@Param('id') id: string): Promise<MatchDetailDto> {
+    return this.matches.markReady(id);
   }
 
   @Delete(':id/players/:userId')

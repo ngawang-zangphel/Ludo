@@ -17,6 +17,7 @@ import {
   isSnakesState,
   MARRIAGE_SEAT_COLORS,
   MarriageSeatColor,
+  BulkMatchActionResultDto,
   MatchDetailDto,
   MatchResultDto,
   MatchStatus,
@@ -66,7 +67,7 @@ import { UsersService } from '../users/users.service';
 import { MatchStateService } from './match-state.service';
 import { MatchCommandQueue } from './match-command-queue.service';
 import { toDetail, toPlayerDto, toSummary } from './match-mapper';
-import { AssignPlayersDto, CreateMatchDto, CreateMatchGroupsDto } from './dto/match.dto';
+import { AssignPlayersDto, BulkMatchActionDto, CreateMatchDto, CreateMatchGroupsDto } from './dto/match.dto';
 import { toObjectIdString } from '../common/types';
 import { logEvent } from '../common/logger';
 import { RealtimeService } from '../realtime/realtime.service';
@@ -259,6 +260,52 @@ export class MatchesService implements OnModuleInit {
 
   async start(matchId: string): Promise<MatchDetailDto> {
     return this.enqueue(matchId, () => this.startUnlocked(matchId));
+  }
+
+  async markReady(matchId: string): Promise<MatchDetailDto> {
+    return this.enqueue(matchId, async () => {
+      const match = await this.state.loadMatch(matchId);
+      if (match.status !== MatchStatus.WAITING && match.status !== MatchStatus.READY) {
+        throw new BadRequestException('Only waiting tables can be marked ready');
+      }
+      if (match.players.length < 2) {
+        throw new BadRequestException('Assign players before marking ready');
+      }
+      for (const player of match.players) {
+        player.ready = true;
+      }
+      match.markModified('players');
+      match.status = MatchStatus.READY;
+      const saved = await this.state.persistMatch(match);
+      for (const player of saved.players) {
+        this.emitReady(saved, toObjectIdString(player.userId), true);
+      }
+      logEvent('Match marked ready', { matchId, matchNumber: match.matchNumber });
+      await this.publishAdmin();
+      return this.toDetailDto(saved);
+    });
+  }
+
+  async bulkAction(dto: BulkMatchActionDto): Promise<BulkMatchActionResultDto> {
+    const ok: string[] = [];
+    const failed: BulkMatchActionResultDto['failed'] = [];
+    for (const matchId of dto.matchIds) {
+      try {
+        if (dto.action === 'ready') {
+          await this.markReady(matchId);
+        } else if (dto.action === 'start') {
+          await this.start(matchId);
+        } else if (dto.action === 'cancel') {
+          await this.cancel(matchId);
+        } else {
+          await this.remove(matchId);
+        }
+        ok.push(matchId);
+      } catch (error) {
+        failed.push({ matchId, reason: actionErrorMessage(error) });
+      }
+    }
+    return { ok, failed };
   }
 
   async restart(matchId: string): Promise<MatchDetailDto> {
@@ -1375,4 +1422,26 @@ function shuffle<T>(items: T[]): void {
       items[swap] = current;
     }
   }
+}
+
+function actionErrorMessage(error: unknown): string {
+  if (error instanceof BadRequestException || error instanceof NotFoundException) {
+    const response = error.getResponse();
+    if (typeof response === 'string') {
+      return response;
+    }
+    if (typeof response === 'object' && response && 'message' in response) {
+      const message = (response as { message?: string | string[] }).message;
+      if (typeof message === 'string') {
+        return message;
+      }
+      if (Array.isArray(message)) {
+        return message.join(', ');
+      }
+    }
+  }
+  if (error instanceof Error) {
+    return error.message;
+  }
+  return 'Request failed';
 }
