@@ -9,6 +9,7 @@ import {
   GameType,
   isLudoState,
   isSnakesState,
+  MatchStatus,
   maxPlayersForGame,
   PLAYER_COLOR_ORDER,
   PLAYER_COLOR_OPPOSITE,
@@ -18,6 +19,7 @@ import {
   SnakesBoardLayout,
   SnakesLevelId,
   TurnPhase,
+  ValidMove,
 } from '@ludo-game/shared-types';
 import {
   applyDiceRoll,
@@ -28,6 +30,7 @@ import {
   createSnakesMatchState,
   getPieceCoordinate,
   getSnakesSquareCoordinate,
+  getValidMoves,
 } from '@ludo-game/game-engine';
 import { DiceUiState } from '../models/dice';
 import { PlaceCelebration, celebrationFromEvents } from '../models/celebration';
@@ -40,6 +43,12 @@ export interface HotSeatPlayerSlot {
 }
 
 export type HotSeatCustomSource = 'library' | 'create';
+export type HotSeatPlayMode = 'hotseat' | 'ai';
+
+const AI_PLAYER_ID = 'player-ai';
+const AI_USER_ID = 'user-ai';
+const AI_NAME = 'Arena AI';
+const AI_THINK_MS = 650;
 
 @Injectable()
 export class LocalMatchService {
@@ -51,6 +60,7 @@ export class LocalMatchService {
   readonly customLayout = signal<SnakesBoardLayout>(cloneSnakesLayout(resolveSnakesRules().layout));
   readonly createDraft = signal<SnakesBoardLayout>(emptySnakesLayout());
   private libraryLayout: SnakesBoardLayout | null = null;
+  readonly playMode = signal<HotSeatPlayMode>('hotseat');
   readonly playerCount = signal(4);
   readonly playerSlots = signal<HotSeatPlayerSlot[]>(defaultSlots(4));
   readonly state = signal<GameState | null>(null);
@@ -63,6 +73,7 @@ export class LocalMatchService {
   readonly lastEvent = signal<string | null>(null);
   readonly celebration = signal<PlaceCelebration | null>(null);
   private actionGen = 0;
+  private aiBusy = false;
   private celebrationTimer: ReturnType<typeof setTimeout> | null = null;
 
   readonly currentPlayer = computed(() => {
@@ -111,8 +122,18 @@ export class LocalMatchService {
     return Array.from({ length: max - 1 }, (_, index) => index + 2);
   });
 
+  readonly isAiTurn = computed(() => {
+    const match = this.state();
+    return this.playMode() === 'ai' && !!match && match.currentPlayerId === AI_PLAYER_ID;
+  });
+
   readonly setupReady = computed(() => {
-    if (!this.playerSlots().every((slot) => slot.name.trim().length > 0)) {
+    const slots = this.playerSlots();
+    if (this.playMode() === 'ai') {
+      if (!slots[0]?.name.trim()) {
+        return false;
+      }
+    } else if (!slots.every((slot) => slot.name.trim().length > 0)) {
       return false;
     }
     if (
@@ -133,14 +154,47 @@ export class LocalMatchService {
       this.customSource() === 'create'
   );
 
+  setPlayMode(mode: HotSeatPlayMode): void {
+    if (this.playMode() === mode) {
+      return;
+    }
+    this.playMode.set(mode);
+    if (mode === 'ai') {
+      const human = this.playerSlots()[0]?.name ?? '';
+      this.setPlayerCount(2);
+      this.playerSlots.update((slots) => [
+        { color: slots[0]?.color ?? PlayerColor.RED, name: human },
+        { color: slots[1]?.color ?? PlayerColor.YELLOW, name: AI_NAME },
+      ]);
+    } else {
+      this.playerSlots.update((slots) =>
+        slots.map((slot, index) =>
+          index === 1 && slot.name === AI_NAME ? { ...slot, name: '' } : slot
+        )
+      );
+    }
+    if (this.phase() === 'playing') {
+      this.backToSetup();
+    }
+  }
+
   setGameType(type: GameType): void {
     if (type === GameType.MARRIAGE) {
       return;
     }
     this.gameType.set(type);
-    const nextCount = Math.min(this.playerCount(), maxPlayersForGame(type));
+    const nextCount =
+      this.playMode() === 'ai' ? 2 : Math.min(this.playerCount(), maxPlayersForGame(type));
     this.playerCount.set(nextCount);
-    this.playerSlots.set(defaultSlots(nextCount));
+    const previous = this.playerSlots();
+    const slots = defaultSlots(nextCount).map((slot, index) => ({
+      ...slot,
+      name:
+        this.playMode() === 'ai' && index === 1
+          ? AI_NAME
+          : (previous[index]?.name ?? slot.name),
+    }));
+    this.playerSlots.set(slots);
     if (this.phase() === 'playing') {
       this.backToSetup();
     }
@@ -205,7 +259,14 @@ export class LocalMatchService {
     }
   }
 
+  setHumanName(name: string): void {
+    this.setPlayerName(0, name);
+  }
+
   setPlayerCount(count: number): void {
+    if (this.playMode() === 'ai') {
+      count = 2;
+    }
     const next = Math.min(maxPlayersForGame(this.gameType()), Math.max(2, Math.floor(count)));
     const names = this.playerSlots().map((slot) => slot.name);
     if (next === 2) {
@@ -236,6 +297,9 @@ export class LocalMatchService {
   }
 
   setPlayerName(index: number, name: string): void {
+    if (this.playMode() === 'ai' && index === 1) {
+      return;
+    }
     this.playerSlots.update((slots) =>
       slots.map((slot, i) => (i === index ? { ...slot, name } : slot))
     );
@@ -284,8 +348,13 @@ export class LocalMatchService {
       this.movingPieceId.set(null);
       this.hopTick.set(0);
       this.errorMessage.set(null);
-      this.lastEvent.set('Hot-seat match started. Pass the device each turn.');
+      this.lastEvent.set(
+        this.playMode() === 'ai'
+          ? 'You vs Arena AI. Roll when it is your turn.'
+          : 'Hot-seat match started. Pass the device each turn.'
+      );
       this.syncDisplay(next);
+      void this.maybePlayAi();
     } catch (error) {
       this.errorMessage.set(toMessage(error));
     }
@@ -369,6 +438,9 @@ export class LocalMatchService {
       } else if (result.state.turnPhase === TurnPhase.WAITING_FOR_ROLL) {
         this.diceUi.set('WAITING');
       }
+      if (!this.aiBusy) {
+        await this.maybePlayAi();
+      }
     } catch (error) {
       if (gen !== this.actionGen) {
         return;
@@ -414,6 +486,9 @@ export class LocalMatchService {
       this.diceUi.set('WAITING');
       this.lastEvent.set(summarize(result.events.map((event) => event.type)));
       this.flashCelebration(celebrationFromEvents(result.events, result.state.players));
+      if (!this.aiBusy) {
+        await this.maybePlayAi();
+      }
     } catch (error) {
       this.animating.set(false);
       this.movingPieceId.set(null);
@@ -438,15 +513,58 @@ export class LocalMatchService {
 
   private toCreatePlayers(): CreateMatchPlayer[] {
     return this.playerSlots().map((slot, index) => {
-      const name = slot.name.trim() || `Player ${index + 1}`;
+      const isAi = this.playMode() === 'ai' && index === 1;
+      const name = isAi ? AI_NAME : slot.name.trim() || `Player ${index + 1}`;
       const key = slot.color.toLowerCase();
       return {
-        id: `player-${key}`,
-        userId: `user-${key}`,
+        id: isAi ? AI_PLAYER_ID : `player-${key}`,
+        userId: isAi ? AI_USER_ID : `user-${key}`,
         name,
         color: slot.color,
       };
     });
+  }
+
+  private async maybePlayAi(): Promise<void> {
+    if (this.aiBusy || this.playMode() !== 'ai' || this.phase() !== 'playing') {
+      return;
+    }
+    this.aiBusy = true;
+    const gen = this.actionGen;
+    try {
+      while (gen === this.actionGen) {
+        const match = this.state();
+        if (!match || match.status === MatchStatus.COMPLETED) {
+          break;
+        }
+        if (match.currentPlayerId !== AI_PLAYER_ID) {
+          break;
+        }
+        this.lastEvent.set('Arena AI is thinking…');
+        await delay(AI_THINK_MS);
+        if (gen !== this.actionGen) {
+          break;
+        }
+        const latest = this.state();
+        if (!latest || latest.currentPlayerId !== AI_PLAYER_ID) {
+          break;
+        }
+        if (latest.turnPhase === TurnPhase.WAITING_FOR_ROLL && this.canRoll()) {
+          await this.roll();
+          continue;
+        }
+        if (latest.turnPhase === TurnPhase.WAITING_FOR_MOVE && this.canMove()) {
+          const pieceId = chooseAiPiece(latest);
+          if (pieceId) {
+            await this.move(pieceId);
+            continue;
+          }
+        }
+        break;
+      }
+    } finally {
+      this.aiBusy = false;
+    }
   }
 
   private async playAnimation(pieceId: string, steps: BoardCoordinate[]): Promise<void> {
@@ -520,4 +638,40 @@ function toMessage(error: unknown): string {
 
 function summarize(types: string[]): string {
   return formatGameEvents(types);
+}
+
+function chooseAiPiece(state: GameState): string | null {
+  if (state.validPieceIds.length === 0) {
+    return null;
+  }
+  if (isSnakesState(state)) {
+    return state.validPieceIds[0] ?? null;
+  }
+  if (!isLudoState(state)) {
+    return state.validPieceIds[0] ?? null;
+  }
+  const moves = getValidMoves(state, state.currentPlayerId);
+  if (moves.length === 0) {
+    return state.validPieceIds[0] ?? null;
+  }
+  return moves.slice().sort((left, right) => scoreLudoMove(right) - scoreLudoMove(left))[0]?.pieceId
+    ?? state.validPieceIds[0]
+    ?? null;
+}
+
+function scoreLudoMove(move: ValidMove): number {
+  let score = move.toPosition;
+  if (move.reachesHome) {
+    score += 400;
+  }
+  if (move.captures.length) {
+    score += 280 + move.captures.length * 40;
+  }
+  if (move.entersBoard) {
+    score += 160;
+  }
+  if (move.entersHomePath) {
+    score += 120;
+  }
+  return score;
 }

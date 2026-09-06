@@ -51,7 +51,13 @@ import { readSnakesView3d, writeSnakesView3d } from '../../models/snakes-view';
       >
         <div>
           <p class="text-xs uppercase tracking-[0.3em] text-arena-gold">
-            {{ match.phase() === 'playing' ? 'Hot-seat' : 'Hot-seat · pass and play' }}
+            {{
+              match.phase() === 'playing'
+                ? match.playMode() === 'ai'
+                  ? 'You vs AI'
+                  : 'Hot-seat'
+                : 'Hot-seat · pass and play'
+            }}
           </p>
           <h1 class="font-display text-2xl font-bold text-white md:text-4xl">
             {{ match.phase() === 'playing' ? playTitle() : 'Hot-seat arena' }}
@@ -106,8 +112,41 @@ import { readSnakesView3d, writeSnakesView3d } from '../../models/snakes-view';
           <p class="text-xs uppercase tracking-[0.25em] text-arena-gold/80">Step 1</p>
           <h2 class="mt-1 font-display text-2xl text-white">Choose game & players</h2>
           <p class="mt-2 text-sm text-arena-mist/70">
-            Pick the game, how many people are playing, then set each name and color. Start when ready.
+            Pick the game, then play pass-and-play or a one-on-one match against Arena AI.
           </p>
+
+          <div class="mt-6">
+            <p class="text-xs uppercase tracking-[0.25em] text-arena-gold/80">Mode</p>
+            <div class="mt-2 flex flex-wrap gap-2">
+              <button
+                type="button"
+                class="rounded-full px-4 py-2 text-sm"
+                [class.bg-arena-gold]="match.playMode() === 'hotseat'"
+                [class.text-arena-ink]="match.playMode() === 'hotseat'"
+                [class.border]="match.playMode() !== 'hotseat'"
+                [class.border-arena-line]="match.playMode() !== 'hotseat'"
+                (click)="match.setPlayMode('hotseat')"
+              >
+                Pass and play
+              </button>
+              <button
+                type="button"
+                class="rounded-full px-4 py-2 text-sm"
+                [class.bg-arena-gold]="match.playMode() === 'ai'"
+                [class.text-arena-ink]="match.playMode() === 'ai'"
+                [class.border]="match.playMode() !== 'ai'"
+                [class.border-arena-line]="match.playMode() !== 'ai'"
+                (click)="match.setPlayMode('ai')"
+              >
+                Play vs AI
+              </button>
+            </div>
+            @if (match.playMode() === 'ai') {
+              <p class="mt-2 text-sm text-arena-mist/60">
+                One on one. You take the first seat; Arena AI takes the other.
+              </p>
+            }
+          </div>
 
           <div class="mt-6">
             <p class="text-xs uppercase tracking-[0.25em] text-arena-gold/80">Game</p>
@@ -211,38 +250,51 @@ import { readSnakesView3d, writeSnakesView3d } from '../../models/snakes-view';
               <div>
                 <p class="text-xs uppercase tracking-[0.25em] text-arena-gold/80">Players</p>
                 <p class="mt-1 text-sm text-arena-mist/70">
-                  2 to {{ match.allowedPlayerCounts().at(-1) }} people at this table
+                  @if (match.playMode() === 'ai') {
+                    You vs Arena AI
+                  } @else {
+                    2 to {{ match.allowedPlayerCounts().at(-1) }} people at this table
+                  }
                 </p>
               </div>
-              <div class="flex flex-wrap gap-2">
-                @for (count of match.allowedPlayerCounts(); track count) {
-                  <button
-                    type="button"
-                    class="rounded-full px-3 py-1.5 text-sm"
-                    [class.bg-arena-gold]="match.playerCount() === count"
-                    [class.text-arena-ink]="match.playerCount() === count"
-                    [class.border]="match.playerCount() !== count"
-                    [class.border-arena-line]="match.playerCount() !== count"
-                    (click)="match.setPlayerCount(count)"
-                  >
-                    {{ count }}
-                  </button>
-                }
-              </div>
+              @if (match.playMode() !== 'ai') {
+                <div class="flex flex-wrap gap-2">
+                  @for (count of match.allowedPlayerCounts(); track count) {
+                    <button
+                      type="button"
+                      class="rounded-full px-3 py-1.5 text-sm"
+                      [class.bg-arena-gold]="match.playerCount() === count"
+                      [class.text-arena-ink]="match.playerCount() === count"
+                      [class.border]="match.playerCount() !== count"
+                      [class.border-arena-line]="match.playerCount() !== count"
+                      (click)="match.setPlayerCount(count)"
+                    >
+                      {{ count }}
+                    </button>
+                  }
+                </div>
+              }
             </div>
 
             <div class="mt-4 grid gap-3 sm:grid-cols-2">
               @for (slot of match.playerSlots(); track $index; let index = $index) {
                 <div class="rounded-2xl border border-arena-line/80 bg-black/20 p-3">
                   <label class="block text-xs uppercase tracking-wider text-arena-mist/50">
-                    Player {{ index + 1 }}
+                    @if (match.playMode() === 'ai' && index === 0) {
+                      You
+                    } @else if (match.playMode() === 'ai' && index === 1) {
+                      Opponent
+                    } @else {
+                      Player {{ index + 1 }}
+                    }
                     <input
-                      class="mt-1.5 w-full rounded-xl border border-arena-line bg-arena-ink px-3 py-2 text-sm text-white outline-none focus:border-arena-gold"
+                      class="mt-1.5 w-full rounded-xl border border-arena-line bg-arena-ink px-3 py-2 text-sm text-white outline-none focus:border-arena-gold disabled:opacity-70"
                       [name]="'playerName' + index"
                       [ngModel]="slot.name"
                       (ngModelChange)="match.setPlayerName(index, $event)"
                       maxlength="24"
-                      placeholder="Enter name"
+                      [placeholder]="match.playMode() === 'ai' && index === 0 ? 'Your name' : 'Enter name'"
+                      [disabled]="match.playMode() === 'ai' && index === 1"
                       autocomplete="off"
                     />
                   </label>
@@ -303,12 +355,12 @@ import { readSnakesView3d, writeSnakesView3d } from '../../models/snakes-view';
         <ludo-game-table
           [state]="state"
           [displayCoords]="match.displayCoords()"
-          [interactive]="!match.animating()"
-          [highlightValid]="true"
+          [interactive]="!match.animating() && !match.isAiTurn()"
+          [highlightValid]="!match.isAiTurn()"
           [movingPieceId]="match.movingPieceId()"
           [hopTick]="match.hopTick()"
           [diceUi]="match.diceUi()"
-          [canRoll]="match.canRoll()"
+          [canRoll]="match.canRoll() && !match.isAiTurn()"
           [lastEvent]="match.lastEvent()"
           [errorMessage]="match.errorMessage()"
           [editable]="match.editingOwnBoard()"
@@ -347,6 +399,10 @@ export class LocalMatchPage implements OnInit {
   readonly view3d = signal(readSnakesView3d());
 
   ngOnInit(): void {
+    const name = this.auth.user()?.name?.trim();
+    if (name && !this.match.playerSlots()[0]?.name) {
+      this.match.setHumanName(name);
+    }
     void this.loadBoards();
   }
 
