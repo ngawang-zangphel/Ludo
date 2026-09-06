@@ -8,7 +8,14 @@ import {
   signal,
 } from '@angular/core';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
-import { MatchDetailDto, MatchStatus, isMarriageState, MarriageGameState } from '@ludo-game/shared-types';
+import {
+  GameType,
+  MatchDetailDto,
+  MatchStatus,
+  isMarriageState,
+  isSnakesState,
+  MarriageGameState,
+} from '@ludo-game/shared-types';
 import { ArenaApiService, MatchNeighbors } from '../../../../core/api/arena-api.service';
 import { AdminRealtimeService } from '../../../../core/socket/admin-realtime.service';
 import { GameSocketService } from '../../services/game-socket.service';
@@ -18,6 +25,7 @@ import { MatchStartOverlayComponent } from '../../components/match-start-overlay
 import { FinishCelebrationComponent } from '../../components/finish-celebration/finish-celebration';
 import { StatusBadgeComponent } from '../../../../shared/ui/status-badge';
 import { httpErrorMessage } from '../../../../shared/format';
+import { readSnakesView3d, writeSnakesView3d } from '../../models/snakes-view';
 
 @Component({
   selector: 'ludo-spectator-page',
@@ -54,6 +62,16 @@ import { httpErrorMessage } from '../../../../shared/format';
         <div class="flex flex-wrap items-center gap-2">
           @if (detail(); as match) {
             <ludo-status-badge [status]="matchStatus() ?? match.status" />
+            @if (isSnakes()) {
+              <button
+                type="button"
+                class="spec-btn"
+                [class.spec-btn-gold]="view3d()"
+                (click)="toggleView3d()"
+              >
+                {{ view3d() ? '3D view' : '2D view' }}
+              </button>
+            }
             @if (onBroadcast()) {
               <button type="button" class="spec-btn spec-btn-danger" (click)="stopBroadcast()">
                 Stop broadcast
@@ -163,6 +181,7 @@ import { httpErrorMessage } from '../../../../shared/format';
             [canRoll]="false"
             [lastEvent]="game.lastEvent()"
             [errorMessage]="game.errorMessage()"
+            [view3d]="view3d()"
           />
         }
         <arena-finish-celebration [celebration]="game.celebration()" />
@@ -205,6 +224,7 @@ export class SpectatorPage implements OnInit, OnDestroy {
   readonly detail = signal<MatchDetailDto | null>(null);
   readonly neighbors = signal<MatchNeighbors | null>(null);
   readonly error = signal<string | null>(null);
+  readonly view3d = signal(readSnakesView3d());
 
   asMarriage(state: unknown): MarriageGameState | null {
     return state && typeof state === 'object' && isMarriageState(state as never)
@@ -217,6 +237,14 @@ export class SpectatorPage implements OnInit, OnDestroy {
   readonly onBroadcast = computed(
     () => !!this.detail() && this.adminRt.broadcastMatchId() === this.detail()?.id
   );
+
+  readonly isSnakes = computed(() => {
+    const state = this.game.state();
+    if (state && isSnakesState(state)) {
+      return true;
+    }
+    return this.detail()?.gameType === GameType.SNAKES;
+  });
 
   readonly canStart = computed(() => {
     const status = this.matchStatus();
@@ -256,6 +284,12 @@ export class SpectatorPage implements OnInit, OnDestroy {
 
   ngOnDestroy(): void {
     this.game.detach();
+  }
+
+  toggleView3d(): void {
+    const next = !this.view3d();
+    this.view3d.set(next);
+    writeSnakesView3d(next);
   }
 
   async broadcast(matchId: string): Promise<void> {

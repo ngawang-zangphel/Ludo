@@ -107,6 +107,53 @@ function travelDir(number: number): TravelDir {
   return 'up';
 }
 
+export const SNAKES_TERRACE_STEP = 44;
+
+export interface Span3d {
+  from: number;
+  to: number;
+  left: number;
+  top: number;
+  z: number;
+  length: number;
+  rotateZ: number;
+  rotateY: number;
+  rungs: number[];
+}
+
+export function terraceLiftPx(row: number): number {
+  return ((SNAKES_BOARD_SIZE - 1 - row) / 2) * SNAKES_TERRACE_STEP;
+}
+
+export function buildSpan3d(from: number, to: number, boardPx = 600): Span3d {
+  const start = snakesSquareToCell(from);
+  const end = snakesSquareToCell(to);
+  const left = ((start.col + 0.5) / SNAKES_BOARD_SIZE) * 100;
+  const top = ((start.row + 0.5) / SNAKES_BOARD_SIZE) * 100;
+  const x2 = ((end.col + 0.5) / SNAKES_BOARD_SIZE) * 100;
+  const y2 = ((end.row + 0.5) / SNAKES_BOARD_SIZE) * 100;
+  const z = terraceLiftPx(start.row) + 12;
+  const z2 = terraceLiftPx(end.row) + 12;
+  const dx = x2 - left;
+  const dy = y2 - top;
+  const dxy = Math.hypot(dx, dy) || 0.01;
+  const dxyPx = (dxy / 100) * boardPx;
+  const dz = z2 - z;
+  const lengthPx = Math.hypot(dxyPx, dz);
+  const rungs = Math.max(4, Math.round(lengthPx / 20));
+  return {
+    from,
+    to,
+    left,
+    top,
+    z,
+    length: (lengthPx / boardPx) * 100,
+    rotateZ: (Math.atan2(dy, dx) * 180) / Math.PI,
+    rotateY: (-Math.atan2(dz, dxyPx) * 180) / Math.PI,
+    rungs: Array.from({ length: rungs }, (_, index) => ((index + 1) / (rungs + 1)) * 100),
+  };
+}
+
 export function buildLadderGraphic(from: number, to: number): LadderGraphic {
   const start = cellCenter(from);
   const end = cellCenter(to);

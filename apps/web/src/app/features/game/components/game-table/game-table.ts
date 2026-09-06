@@ -105,7 +105,7 @@ import { SnakesPlayerPanelComponent } from '../snakes-player-panel/snakes-player
         </div>
       </div>
     } @else if (snakes(); as snakes) {
-      <div class="arena-table ludo-table">
+      <div class="arena-table ludo-table" [class.is-snakes-3d]="view3d()">
         <div class="ludo-table-green">
           @if (snakesPlayer(snakes, PlayerColor.GREEN); as green) {
             <arena-snakes-player-panel
@@ -132,6 +132,7 @@ import { SnakesPlayerPanelComponent } from '../snakes-player-panel/snakes-player
             [hopTick]="hopTick()"
             [editable]="editable()"
             [pendingSquare]="pendingSquare()"
+            [view3d]="view3d()"
             (squareSelect)="squareSelect.emit($event)"
           />
         </div>
@@ -225,6 +226,7 @@ export class GameTableComponent {
   readonly squareSelect = output<number>();
   readonly editable = input(false);
   readonly pendingSquare = input<number | null>(null);
+  readonly view3d = input(false);
 
   readonly ludo = computed<LudoGameState | null>(() => {
     const state = this.state();

@@ -1,6 +1,6 @@
 import { ChangeDetectionStrategy, Component, OnDestroy, OnInit, inject, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
-import { isMarriageState, MarriageGameState, MatchStatus } from '@ludo-game/shared-types';
+import { isMarriageState, isSnakesState, MarriageGameState, MatchStatus } from '@ludo-game/shared-types';
 import { GameSocketService } from '../../services/game-socket.service';
 import { ArenaApiService } from '../../../../core/api/arena-api.service';
 import { GameTableComponent } from '../../components/game-table/game-table';
@@ -8,6 +8,7 @@ import { MarriageTableComponent } from '../../components/marriage-table/marriage
 import { MatchStartOverlayComponent } from '../../components/match-start-overlay/match-start-overlay';
 import { FinishCelebrationComponent } from '../../components/finish-celebration/finish-celebration';
 import { AuthService } from '../../../../core/auth/auth.service';
+import { readSnakesView3d } from '../../models/snakes-view';
 
 @Component({
   selector: 'ludo-broadcast-page',
@@ -55,6 +56,7 @@ import { AuthService } from '../../../../core/auth/auth.service';
             [diceUi]="game.diceUi()"
             [canRoll]="false"
             [lastEvent]="game.lastEvent()"
+            [view3d]="isSnakes(state) && view3d"
           />
         }
       } @else {
@@ -85,6 +87,11 @@ export class BroadcastPage implements OnInit, OnDestroy {
   readonly game = inject(GameSocketService);
   readonly message = signal('Waiting for an admin to select a match.');
   readonly MatchStatus = MatchStatus;
+  readonly view3d = readSnakesView3d();
+
+  isSnakes(state: unknown): boolean {
+    return !!state && typeof state === 'object' && isSnakesState(state as never);
+  }
 
   asMarriage(state: unknown): MarriageGameState | null {
     return state && typeof state === 'object' && isMarriageState(state as never)

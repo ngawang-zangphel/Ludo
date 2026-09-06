@@ -222,6 +222,337 @@ body {
   margin-top: calc(100% / 15 * -0.275);
 }
 
+.snakes-board-scene {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.snakes-board-slab {
+  position: relative;
+  transform-style: preserve-3d;
+  transition: transform 280ms ease;
+}
+
+.snakes-board-scene.is-orbiting .snakes-board-slab {
+  transition: none;
+}
+
+.snakes-board-thickness,
+.snakes-board-ground,
+.snakes-board-orbit-hint {
+  display: none;
+}
+
+.snakes-board-scene.is-3d {
+  --terrace-step: 44px;
+  position: relative;
+  justify-content: center;
+  min-height: min(90vw, calc(100dvh - 12rem), 680px);
+  perspective: 1400px;
+  perspective-origin: 50% 22%;
+  padding: 2.2rem 0.4rem 2.4rem;
+  overflow: visible;
+  touch-action: none;
+  cursor: grab;
+  user-select: none;
+}
+
+.snakes-board-scene.is-3d.is-orbiting {
+  cursor: grabbing;
+}
+
+.snakes-board-scene.is-3d .snakes-board-slab {
+  --snakes-tilt: 34deg;
+  --snakes-look: 0deg;
+  transform:
+    rotateX(var(--snakes-tilt))
+    rotateY(var(--snakes-look))
+    scale(1.02);
+  transform-origin: 50% 78%;
+  transform-style: preserve-3d;
+}
+
+.snakes-board-scene.is-3d .snakes-board-frame,
+.snakes-board-scene.is-3d .snakes-board-inner {
+  overflow: visible;
+  transform-style: preserve-3d;
+}
+
+.snakes-board-scene.is-3d .snakes-board-frame {
+  width: min(90vw, calc(100dvh - 13rem), 620px);
+  background:
+    radial-gradient(ellipse at 50% 80%, rgba(36, 90, 48, 0.55), transparent 62%),
+    linear-gradient(165deg, #ffe58a 0%, #e8b84a 38%, #c4841c 72%, #8a5310 100%);
+  box-shadow:
+    inset 0 2px 0 rgba(255, 255, 255, 0.72),
+    inset 0 -3px 0 rgba(90, 45, 8, 0.38),
+    0 0 0 3px rgba(92, 48, 12, 0.45);
+}
+
+.snakes-board-scene.is-3d .snakes-board-inner {
+  background:
+    radial-gradient(ellipse at 50% 88%, #245534 0%, #102016 55%, #0d1220 100%);
+}
+
+.snakes-board-scene.is-3d .snakes-square-number {
+  font-size: 0.78rem;
+}
+
+.snakes-terrace-stack {
+  position: absolute;
+  inset: 0;
+  transform-style: preserve-3d;
+}
+
+.snakes-terrace {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 20%;
+  transform: translateZ(calc(var(--terrace-z) * var(--terrace-step)));
+  transform-style: preserve-3d;
+}
+
+.snakes-terrace-deck {
+  display: grid;
+  grid-template-columns: repeat(10, minmax(0, 1fr));
+  grid-template-rows: repeat(2, minmax(0, 1fr));
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+  border-radius: 0.2rem;
+  box-shadow:
+    0 0 0 2px #5a2a14,
+    0 10px 18px rgba(0, 0, 0, 0.28);
+}
+
+.snakes-terrace-riser {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: var(--terrace-step);
+  transform-origin: bottom center;
+  transform: rotateX(-90deg);
+  background:
+    linear-gradient(180deg, #c4841c 0%, #7a4010 42%, #3f1c08 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 220, 150, 0.28);
+}
+
+.snakes-terrace-side {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 16px;
+  background: linear-gradient(90deg, #5a2e0c, #2a1408);
+}
+
+.snakes-terrace-side.is-left {
+  left: 0;
+  transform-origin: left center;
+  transform: rotateY(90deg);
+}
+
+.snakes-terrace-side.is-right {
+  right: 0;
+  transform-origin: right center;
+  transform: rotateY(-90deg);
+  background: linear-gradient(90deg, #2a1408, #7a4010);
+}
+
+.snakes-board-scene.is-3d .snakes-overlay {
+  display: none;
+}
+
+.snakes-span-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 7;
+  pointer-events: none;
+  overflow: visible;
+  transform-style: preserve-3d;
+}
+
+.snakes-ladder-3d,
+.snakes-snake-3d {
+  position: absolute;
+  height: 1.15rem;
+  margin-top: -0.58rem;
+  transform-origin: left center;
+  transform-style: preserve-3d;
+}
+
+.snakes-ladder-3d-rail {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 0.28rem;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #fff6d4, #e4b14a 40%, #8a5310);
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.4);
+}
+
+.snakes-ladder-3d-rail.is-back {
+  top: 0;
+}
+
+.snakes-ladder-3d-rail.is-front {
+  bottom: 0;
+}
+
+.snakes-ladder-3d-rung {
+  position: absolute;
+  top: 0.14rem;
+  bottom: 0.14rem;
+  width: 0.22rem;
+  margin-left: -0.11rem;
+  border-radius: 2px;
+  background: #ffe9a8;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.28);
+}
+
+.snakes-snake-3d-body {
+  position: absolute;
+  inset: 18% 0;
+  border-radius: 999px;
+  background:
+    repeating-linear-gradient(
+      90deg,
+      var(--snake-fill) 0 12px,
+      var(--snake-spot) 12px 18px
+    );
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.38);
+}
+
+.snakes-snake-3d-head {
+  position: absolute;
+  left: -0.35rem;
+  top: 50%;
+  width: 1.05rem;
+  height: 0.95rem;
+  margin-top: -0.48rem;
+  border-radius: 50%;
+  background: var(--snake-fill);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.35);
+}
+
+.snakes-board-scene.is-3d .snakes-piece-layer {
+  z-index: 8;
+  overflow: visible;
+  transform-style: preserve-3d;
+}
+
+.snakes-board-scene.is-3d .snakes-piece-float {
+  width: calc(100% / 10 * 1.35);
+  height: calc(100% / 10 * 1.6);
+  margin-left: calc(100% / 10 * -0.175);
+  margin-top: calc(100% / 10 * -0.72);
+  transform: translateZ(var(--piece-z, 28px));
+  transform-style: preserve-3d;
+}
+
+.snakes-board-scene.is-3d .snakes-piece-float .piece-token {
+  filter: drop-shadow(0 10px 8px rgba(0, 0, 0, 0.55));
+}
+
+.snakes-board-scene.is-3d .snakes-piece-float.is-hop-a .piece-token {
+  animation: snakes-piece-hop-3d 180ms ease-in-out;
+}
+
+.snakes-board-scene.is-3d .snakes-piece-float.is-hop-b .piece-token {
+  animation: snakes-piece-hop-3d 180ms ease-in-out;
+}
+
+.snakes-board-scene.is-3d .snakes-board-ground,
+.snakes-board-scene.is-3d .snakes-board-orbit-hint {
+  display: block;
+}
+
+.snakes-board-thickness {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  transform-style: preserve-3d;
+}
+
+.snakes-board-face {
+  position: absolute;
+  display: block;
+}
+
+.snakes-board-face-front {
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 28px;
+  transform-origin: bottom center;
+  transform: rotateX(-90deg);
+  background:
+    linear-gradient(180deg, #f0c25a 0%, #c4841c 22%, #8a5310 62%, #3a1808 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 236, 180, 0.45);
+  border-radius: 0 0 0.7rem 0.7rem;
+}
+
+.snakes-board-face-left,
+.snakes-board-face-right {
+  top: 0;
+  bottom: 0;
+  width: 18px;
+  background: linear-gradient(90deg, #6b3410, #3f1c08);
+}
+
+.snakes-board-face-left {
+  left: 0;
+  transform-origin: left center;
+  transform: rotateY(90deg);
+}
+
+.snakes-board-face-right {
+  right: 0;
+  transform-origin: right center;
+  transform: rotateY(-90deg);
+  background: linear-gradient(90deg, #3f1c08, #8a5310);
+}
+
+.snakes-board-ground {
+  position: absolute;
+  left: 6%;
+  right: 6%;
+  bottom: -8%;
+  height: 18%;
+  border-radius: 50%;
+  background: radial-gradient(ellipse at 50% 50%, rgba(0, 0, 0, 0.42), transparent 72%);
+  transform: translateZ(-28px) rotateX(90deg) scale(1.05);
+  filter: blur(6px);
+  pointer-events: none;
+}
+
+.snakes-board-orbit-hint {
+  margin: 0.55rem 0 0;
+  font-size: 0.68rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: rgba(215, 224, 242, 0.48);
+}
+
+@media (max-width: 700px) {
+  .snakes-board-scene.is-3d {
+    --terrace-step: 32px;
+    perspective: 1100px;
+    min-height: min(92vw, calc(100dvh - 13rem), 540px);
+    padding: 1.4rem 0.25rem 1.8rem;
+  }
+
+  .snakes-board-scene.is-3d .snakes-board-slab {
+    --snakes-tilt: 30deg;
+    transform:
+      rotateX(var(--snakes-tilt))
+      rotateY(var(--snakes-look))
+      scale(1);
+  }
+}
+
 .snakes-board-frame {
   position: relative;
   aspect-ratio: 1;
@@ -386,6 +717,11 @@ body {
   overflow: visible;
 }
 
+.snakes-piece-layer {
+  z-index: 6;
+  overflow: visible;
+}
+
 .snakes-piece-float {
   position: absolute;
   width: calc(100% / 10);
@@ -492,7 +828,27 @@ body {
   }
 }
 
+@keyframes snakes-piece-hop-3d {
+  0% {
+    transform: translateZ(0) translateY(0) scale(1);
+  }
+  42% {
+    transform: translateZ(26px) translateY(-18%) scale(1.1);
+  }
+  100% {
+    transform: translateZ(0) translateY(0) scale(1);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
+  .snakes-board-scene.is-3d .snakes-board-slab {
+    --snakes-tilt: 36deg;
+    transform:
+      rotateX(var(--snakes-tilt))
+      rotateY(0deg)
+      scale(1);
+  }
+
   .piece-float,
   .snakes-piece-float {
     transition: none;
@@ -1022,6 +1378,23 @@ body {
   display: flex;
   justify-content: center;
   align-self: center;
+}
+
+.arena-table.is-snakes-3d {
+  padding-bottom: 0.4rem;
+  overflow: visible;
+}
+
+.arena-table.is-snakes-3d::before {
+  display: none;
+}
+
+.ludo-table.is-snakes-3d {
+  row-gap: 0.15rem;
+}
+
+.ludo-table.is-snakes-3d .ludo-table-board {
+  overflow: visible;
 }
 
 .ludo-table-green {

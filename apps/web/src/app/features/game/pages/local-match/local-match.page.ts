@@ -25,6 +25,7 @@ import { SnakesLayoutEditorComponent } from '../../components/snakes-layout-edit
 import { SnakesPresetPickerComponent } from '../../components/snakes-preset-picker/snakes-preset-picker';
 import { PLAYER_SWATCH } from '../../models/theme';
 import { FinishCelebrationComponent } from '../../components/finish-celebration/finish-celebration';
+import { readSnakesView3d, writeSnakesView3d } from '../../models/snakes-view';
 
 @Component({
   selector: 'ludo-local-match-page',
@@ -64,6 +65,20 @@ import { FinishCelebrationComponent } from '../../components/finish-celebration/
             {{ homeLabel() }}
           </a>
           @if (match.phase() === 'playing') {
+            @if (match.gameType() === GameType.SNAKES) {
+              <button
+                type="button"
+                class="rounded-full px-4 py-2 text-sm"
+                [class.bg-arena-gold]="view3d()"
+                [class.text-arena-ink]="view3d()"
+                [class.border]="!view3d()"
+                [class.border-arena-line]="!view3d()"
+                [class.text-arena-mist]="!view3d()"
+                (click)="toggleView3d()"
+              >
+                {{ view3d() ? '3D view' : '2D view' }}
+              </button>
+            }
             <button
               type="button"
               class="rounded-full border border-arena-line px-4 py-2 text-sm text-arena-mist hover:border-arena-gold"
@@ -298,6 +313,7 @@ import { FinishCelebrationComponent } from '../../components/finish-celebration/
           [errorMessage]="match.errorMessage()"
           [editable]="match.editingOwnBoard()"
           [pendingSquare]="editor()?.pendingFrom() ?? null"
+          [view3d]="view3d() && !match.editingOwnBoard()"
           (pieceSelect)="match.move($event)"
           (roll)="match.roll()"
           (squareSelect)="editor()?.applySquare($event)"
@@ -328,6 +344,7 @@ export class LocalMatchPage implements OnInit {
   readonly customBoards = signal<SnakesCustomBoardDto[]>([]);
   readonly boardsLoading = signal(false);
   readonly boardsError = signal<string | null>(null);
+  readonly view3d = signal(readSnakesView3d());
 
   ngOnInit(): void {
     void this.loadBoards();
@@ -365,6 +382,12 @@ export class LocalMatchPage implements OnInit {
 
   playTitle(): string {
     return gameTypeLabel(this.match.gameType());
+  }
+
+  toggleView3d(): void {
+    const next = !this.view3d();
+    this.view3d.set(next);
+    writeSnakesView3d(next);
   }
 
   private async loadBoards(): Promise<void> {
