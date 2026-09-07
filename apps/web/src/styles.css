@@ -210,6 +210,11 @@ body {
   width: calc(100% / 15);
   height: calc(100% / 15);
   pointer-events: none;
+  transition: none;
+}
+
+.piece-float.is-moving {
+  z-index: 40;
   transition:
     left 180ms cubic-bezier(0.22, 0.8, 0.28, 1),
     top 180ms cubic-bezier(0.22, 0.8, 0.28, 1);
@@ -727,9 +732,7 @@ body {
   width: calc(100% / 10);
   height: calc(100% / 10);
   pointer-events: none;
-  transition:
-    left 180ms cubic-bezier(0.22, 0.8, 0.28, 1),
-    top 180ms cubic-bezier(0.22, 0.8, 0.28, 1);
+  transition: none;
 }
 
 .snakes-piece-float .piece-token {
@@ -738,6 +741,9 @@ body {
 
 .snakes-piece-float.is-moving {
   z-index: 40;
+  transition:
+    left 180ms cubic-bezier(0.22, 0.8, 0.28, 1),
+    top 180ms cubic-bezier(0.22, 0.8, 0.28, 1);
 }
 
 .snakes-piece-float.is-hop-a .piece-token {
@@ -750,10 +756,6 @@ body {
 
 .piece-float .piece-token {
   pointer-events: auto;
-}
-
-.piece-float.is-moving {
-  z-index: 40;
 }
 
 .piece-float.is-hop-a .piece-token,

@@ -493,6 +493,10 @@ export class LocalMatchService {
       }
 
       if (result.animation && result.animation.steps.length > 0) {
+        this.displayCoords.update((current) => ({
+          ...current,
+          [result.animation!.pieceId]: result.animation!.from,
+        }));
         this.animating.set(true);
         await this.playAnimation(result.animation.pieceId, result.animation.steps);
       }

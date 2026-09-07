@@ -176,13 +176,24 @@ export class GameSocketService {
       if (payload.matchId !== this.matchId()) {
         return;
       }
+      // Snakes auto-moves on the next event — hold chips so a final-state update cannot snap them.
+      if (isSnakesState(payload.state) && payload.validPieceIds.length > 0) {
+        this.holdPieceDisplay = true;
+      }
       this.applyState(payload.state);
       this.finishDiceRoll(payload.value);
     });
     this.listen('piece-moved', (payload: PieceMovedPayload) => {
+      if (payload.matchId !== this.matchId()) {
+        return;
+      }
+      // Must be synchronous: match-state-updated often arrives in the same tick and would
+      // otherwise syncDisplay to the destination before hops run (chip flicker).
+      this.holdPieceDisplay = true;
       void this.onPieceMoved(payload);
     });
     this.listen('match-error', (payload: MatchErrorPayload) => {
+      this.holdPieceDisplay = false;
       this.clearDiceReveal();
       if (this.diceUi() === 'ROLLING') {
         this.diceUi.set('WAITING');
@@ -508,9 +519,6 @@ export class GameSocketService {
   }
 
   private async onPieceMoved(payload: PieceMovedPayload): Promise<void> {
-    if (payload.matchId !== this.matchId()) {
-      return;
-    }
     // Serialize moves and wait for dice tumble+reveal so the chip doesn't hop mid-roll.
     this.pieceMoveChain = this.pieceMoveChain
       .catch(() => undefined)
@@ -529,6 +537,11 @@ export class GameSocketService {
         return;
       }
       if (payload.animation) {
+        // Ensure we start from the pre-move cell (never the final snapped position).
+        this.displayCoords.update((current) => ({
+          ...current,
+          [payload.animation!.pieceId]: payload.animation!.from,
+        }));
         await this.playAnimation(payload.animation);
       }
       this.applyState(payload.state);

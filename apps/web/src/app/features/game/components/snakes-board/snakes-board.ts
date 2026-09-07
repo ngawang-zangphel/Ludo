@@ -373,8 +373,7 @@ export class SnakesBoardComponent {
     const groups = new Map<string, Array<{ player: SnakesPlayer; coord: BoardCoordinate }>>();
 
     for (const player of match.players) {
-      const square = player.position <= 0 ? 1 : player.position;
-      const coord = coords[player.tokenId] ?? snakesSquareToCell(square);
+      const coord = coords[player.tokenId] ?? snakesSquareToCell(player.position);
       const key = `${coord.row.toFixed(2)}:${coord.col.toFixed(2)}`;
       const group = groups.get(key) ?? [];
       group.push({ player, coord });
