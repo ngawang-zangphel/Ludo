@@ -94,3 +94,13 @@ export function placeLabel(place: number): string {
   if (place === 3) return '3rd';
   return `${place}th`;
 }
+
+/** Ranked finishers from match summary (1st, 2nd, …). */
+export function matchPlacements(
+  match: Pick<MatchSummaryDto, 'winnerNames'>
+): Array<{ place: number; name: string }> {
+  return match.winnerNames.map((name, index) => ({
+    place: index + 1,
+    name,
+  }));
+}

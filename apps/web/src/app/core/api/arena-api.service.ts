@@ -196,7 +196,8 @@ export class ArenaApiService {
     gameType?: string,
     snakesLevelId?: string,
     snakesLayout?: { snakes: Array<{ from: number; to: number }>; ladders: Array<{ from: number; to: number }> },
-    marriageDeckCount?: number
+    marriageDeckCount?: number,
+    snakesWinnerCap?: number
   ): Promise<TournamentDto> {
     return firstValueFrom(
       this.http.post<TournamentDto>('/api/tournaments', {
@@ -206,6 +207,7 @@ export class ArenaApiService {
         snakesLevelId,
         snakesLayout,
         marriageDeckCount,
+        snakesWinnerCap,
       })
     );
   }
@@ -218,7 +220,11 @@ export class ArenaApiService {
 
   updateTournamentSnakesRules(
     id: string,
-    body: { snakesLevelId?: SnakesLevelId; snakesLayout?: SnakesBoardLayout }
+    body: {
+      snakesLevelId?: SnakesLevelId;
+      snakesLayout?: SnakesBoardLayout;
+      winnerCap?: number;
+    }
   ): Promise<TournamentSnakesRulesUpdateDto> {
     return firstValueFrom(
       this.http.patch<TournamentSnakesRulesUpdateDto>(`/api/tournaments/${id}/snakes-rules`, body)

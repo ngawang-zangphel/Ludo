@@ -318,6 +318,30 @@ import { readSnakesView3d, writeSnakesView3d } from '../../models/snakes-view';
             </div>
           </div>
 
+          @if (match.gameType() === GameType.SNAKES) {
+            <div class="mt-6">
+              <p class="text-xs uppercase tracking-[0.25em] text-arena-gold/80">Winners to finish</p>
+              <p class="mt-1 text-sm text-arena-mist/70">
+                Match ends when this many players reach 100. Remaining seats are ranked after.
+              </p>
+              <div class="mt-2 flex flex-wrap gap-2">
+                @for (count of winnerCapOptions(); track count) {
+                  <button
+                    type="button"
+                    class="rounded-full px-3 py-1.5 text-sm"
+                    [class.bg-arena-gold]="match.winnerCap() === count"
+                    [class.text-arena-ink]="match.winnerCap() === count"
+                    [class.border]="match.winnerCap() !== count"
+                    [class.border-arena-line]="match.winnerCap() !== count"
+                    (click)="match.setWinnerCap(count)"
+                  >
+                    {{ count }}
+                  </button>
+                }
+              </div>
+            </div>
+          }
+
           @if (match.errorMessage(); as err) {
             <p class="mt-4 text-sm text-piece-red">{{ err }}</p>
           }
@@ -438,6 +462,10 @@ export class LocalMatchPage implements OnInit {
 
   playTitle(): string {
     return gameTypeLabel(this.match.gameType());
+  }
+
+  winnerCapOptions(): number[] {
+    return Array.from({ length: this.match.playerCount() }, (_, index) => index + 1);
   }
 
   toggleView3d(): void {

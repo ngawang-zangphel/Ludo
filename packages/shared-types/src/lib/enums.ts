@@ -86,7 +86,7 @@ export enum GameEventType {
 
 export const LUDO_MAX_PLAYERS = 4;
 export const SNAKES_MAX_PLAYERS = 6;
-/** Snakes keeps racing until this many players have finished (leftovers are then ranked). */
+/** Default / legacy max finishers before leftovers are ranked. Prefer `rules.winnerCap`. */
 export const SNAKES_WINNER_CAP = 4;
 
 /** Ludo board seats. Purple and orange are Snakes-only. */

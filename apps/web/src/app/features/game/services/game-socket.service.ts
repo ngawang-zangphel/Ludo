@@ -33,6 +33,7 @@ import { DiceUiState } from '../models/dice';
 import { PlaceCelebration, celebrationFromEvents } from '../models/celebration';
 import {
   MARRIAGE_DEAL_CARD_MS,
+  DICE_REVEAL_MS,
   DICE_TUMBLE_MS,
   MATCH_START_COUNTDOWN_FROM,
   MATCH_START_COUNTDOWN_TICK_MS,
@@ -77,6 +78,10 @@ export class GameSocketService {
   private celebrationTimer: ReturnType<typeof setTimeout> | null = null;
   private diceRevealTimer: ReturnType<typeof setTimeout> | null = null;
   private rollStartedAt = 0;
+  private diceResultAt = 0;
+  /** Holds board coords while we wait for dice reveal before hops (online snakes auto-move). */
+  private holdPieceDisplay = false;
+  private pieceMoveChain: Promise<void> = Promise.resolve();
   readonly status = signal<MatchStatus | null>(null);
   readonly roster = signal<MatchPlayerDto[]>([]);
   readonly selectedCardId = signal<string | null>(null);
@@ -294,6 +299,8 @@ export class GameSocketService {
     this.clearDiceReveal();
     this.diceUi.set('WAITING');
     this.celebration.set(null);
+    this.holdPieceDisplay = false;
+    this.pieceMoveChain = Promise.resolve();
     this.matchId.set(null);
     this.state.set(null);
     this.roster.set([]);
@@ -322,6 +329,7 @@ export class GameSocketService {
     this.clearDiceReveal();
     this.diceUi.set('ROLLING');
     this.rollStartedAt = Date.now();
+    this.diceResultAt = 0;
   }
 
   private finishDiceRoll(value: number): void {
@@ -333,6 +341,7 @@ export class GameSocketService {
     this.diceRevealTimer = setTimeout(() => {
       this.diceRevealTimer = null;
       this.diceUi.set('RESULT');
+      this.diceResultAt = Date.now();
       this.lastEvent.set(`Dice ${value}`);
     }, wait);
   }
@@ -502,14 +511,59 @@ export class GameSocketService {
     if (payload.matchId !== this.matchId()) {
       return;
     }
-    if (payload.animation) {
-      await this.playAnimation(payload.animation);
+    // Serialize moves and wait for dice tumble+reveal so the chip doesn't hop mid-roll.
+    this.pieceMoveChain = this.pieceMoveChain
+      .catch(() => undefined)
+      .then(() => this.runPieceMoved(payload));
+    await this.pieceMoveChain;
+  }
+
+  private async runPieceMoved(payload: PieceMovedPayload): Promise<void> {
+    if (payload.matchId !== this.matchId()) {
+      return;
     }
-    this.applyState(payload.state);
-    this.clearDiceReveal();
-    this.diceUi.set('WAITING');
-    this.lastEvent.set(formatGameEvents(payload.events.map((event) => event.type)));
-    this.flashCelebration(celebrationFromEvents(payload.events, payload.state.players));
+    this.holdPieceDisplay = true;
+    try {
+      await this.waitForDiceRevealComplete();
+      if (payload.matchId !== this.matchId()) {
+        return;
+      }
+      if (payload.animation) {
+        await this.playAnimation(payload.animation);
+      }
+      this.applyState(payload.state);
+      this.clearDiceReveal();
+      this.diceUi.set('WAITING');
+      this.lastEvent.set(formatGameEvents(payload.events.map((event) => event.type)));
+      this.flashCelebration(celebrationFromEvents(payload.events, payload.state.players));
+    } finally {
+      this.holdPieceDisplay = false;
+      const latest = this.state();
+      if (latest && !this.animating()) {
+        this.syncDisplay(latest);
+      }
+    }
+  }
+
+  /** Match local hot-seat: tumble fully, show face, then allow the piece to move. */
+  private async waitForDiceRevealComplete(): Promise<void> {
+    const ui = this.diceUi();
+    if (ui !== 'ROLLING' && ui !== 'RESULT') {
+      return;
+    }
+    if (ui === 'ROLLING') {
+      const tumbleLeft = Math.max(0, DICE_TUMBLE_MS - (Date.now() - this.rollStartedAt));
+      await delay(tumbleLeft);
+      if (this.diceUi() === 'ROLLING') {
+        this.clearDiceReveal();
+        this.diceUi.set('RESULT');
+        this.diceResultAt = Date.now();
+      }
+    }
+    if (this.diceUi() === 'RESULT') {
+      const revealLeft = Math.max(0, DICE_REVEAL_MS - (Date.now() - this.diceResultAt));
+      await delay(revealLeft);
+    }
   }
 
   private applyState(state: GameState): void {
@@ -525,7 +579,7 @@ export class GameSocketService {
         stockBonus,
       });
     }
-    if (!this.animating()) {
+    if (!this.animating() && !this.holdPieceDisplay) {
       this.syncDisplay(state);
     }
     this.maybeRequestMaalReveal(state);

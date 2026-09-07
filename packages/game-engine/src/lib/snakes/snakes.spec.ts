@@ -197,6 +197,23 @@ describe('snakes and ladders', () => {
     expect(result.state.status).toBe('COMPLETED');
     expect(result.events.some((event) => event.type === GameEventType.MATCH_FINISHED)).toBe(true);
   });
+
+  it('ends the match at a custom winnerCap of 1', () => {
+    const match = createSnakesMatchState({
+      matchId: 'snakes-cap-1',
+      now: '2026-01-01T00:00:00.000Z',
+      players: [
+        { id: 'red', userId: 'u-red', name: 'Red', color: PlayerColor.RED },
+        { id: 'green', userId: 'u-green', name: 'Green', color: PlayerColor.GREEN },
+        { id: 'yellow', userId: 'u-yellow', name: 'Yellow', color: PlayerColor.YELLOW },
+      ],
+      rules: { winnerCap: 1 },
+    });
+    const result = rollAndMove(place(match, 'red', 97), 'red', 3);
+    expect(result.state.rankings[0]).toBe('red');
+    expect(result.state.rankings).toHaveLength(3);
+    expect(result.state.status).toBe('COMPLETED');
+  });
 });
 
 describe('snakes board editor clicks', () => {

@@ -6,6 +6,7 @@ import {
   SnakesLevelId,
   SNAKES_LEVEL_LAYOUTS,
 } from './snakes-layout';
+import { SNAKES_MAX_PLAYERS } from './enums';
 import type { MarriageRules } from './marriage';
 
 export {
@@ -87,6 +88,8 @@ export const DEFAULT_DISCONNECT_RULES: DisconnectRules = {
 export interface SnakesRules {
   extraTurnOnSix: boolean;
   exactRollRequiredForFinish: boolean;
+  /** Stop the match once this many players have finished (others are then ranked). */
+  winnerCap: number;
   levelId: SnakesLevelId;
   layout: SnakesBoardLayout;
 }
@@ -94,14 +97,22 @@ export interface SnakesRules {
 export const DEFAULT_SNAKES_RULES: SnakesRules = {
   extraTurnOnSix: true,
   exactRollRequiredForFinish: true,
+  winnerCap: 4,
   levelId: SnakesLevelId.CLASSIC,
   layout: cloneSnakesLayout(CLASSIC_SNAKES_LAYOUT),
 };
+
+export function clampSnakesWinnerCap(value: number | undefined | null, playerCount = SNAKES_MAX_PLAYERS): number {
+  const max = Math.max(1, Math.min(SNAKES_MAX_PLAYERS, Math.floor(playerCount)));
+  const raw = value ?? DEFAULT_SNAKES_RULES.winnerCap;
+  return Math.max(1, Math.min(max, Math.floor(raw)));
+}
 
 export function resolveSnakesRules(partial?: Partial<SnakesRules> | null): SnakesRules {
   const extraTurnOnSix = partial?.extraTurnOnSix ?? DEFAULT_SNAKES_RULES.extraTurnOnSix;
   const exactRollRequiredForFinish =
     partial?.exactRollRequiredForFinish ?? DEFAULT_SNAKES_RULES.exactRollRequiredForFinish;
+  const winnerCap = clampSnakesWinnerCap(partial?.winnerCap);
   const levelId = partial?.levelId ?? (partial?.layout ? SnakesLevelId.CUSTOM : SnakesLevelId.CLASSIC);
 
   if (levelId !== SnakesLevelId.CUSTOM) {
@@ -109,6 +120,7 @@ export function resolveSnakesRules(partial?: Partial<SnakesRules> | null): Snake
     return {
       extraTurnOnSix,
       exactRollRequiredForFinish,
+      winnerCap,
       levelId,
       layout: cloneSnakesLayout(preset),
     };
@@ -117,6 +129,7 @@ export function resolveSnakesRules(partial?: Partial<SnakesRules> | null): Snake
   return {
     extraTurnOnSix,
     exactRollRequiredForFinish,
+    winnerCap,
     levelId: SnakesLevelId.CUSTOM,
     layout: cloneSnakesLayout(partial?.layout ?? emptySnakesLayout()),
   };

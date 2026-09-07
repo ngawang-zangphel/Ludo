@@ -62,6 +62,8 @@ export class LocalMatchService {
   private libraryLayout: SnakesBoardLayout | null = null;
   readonly playMode = signal<HotSeatPlayMode>('hotseat');
   readonly playerCount = signal(4);
+  /** How many finishers end a Snakes match (1 = first to 100 wins). */
+  readonly winnerCap = signal(1);
   readonly playerSlots = signal<HotSeatPlayerSlot[]>(defaultSlots(4));
   readonly state = signal<GameState | null>(null);
   readonly diceUi = signal<DiceUiState>('WAITING');
@@ -291,8 +293,24 @@ export class LocalMatchService {
       this.playerCount.set(next);
       this.playerSlots.set(slots);
     }
+    this.clampWinnerCap();
     if (this.phase() === 'playing') {
       this.backToSetup();
+    }
+  }
+
+  setWinnerCap(count: number): void {
+    const max = this.playerCount();
+    this.winnerCap.set(Math.max(1, Math.min(max, Math.floor(count))));
+    if (this.phase() === 'playing') {
+      this.backToSetup();
+    }
+  }
+
+  private clampWinnerCap(): void {
+    const max = this.playerCount();
+    if (this.winnerCap() > max) {
+      this.winnerCap.set(max);
     }
   }
 
@@ -530,9 +548,10 @@ export class LocalMatchService {
       return;
     }
     this.aiBusy = true;
-    const gen = this.actionGen;
     try {
-      while (gen === this.actionGen) {
+      // Do not freeze actionGen across the whole loop: roll()/move() bump it, and
+      // that used to exit after the first AI action (e.g. bonus turn on a six).
+      while (this.playMode() === 'ai' && this.phase() === 'playing') {
         const match = this.state();
         if (!match || match.status === MatchStatus.COMPLETED) {
           break;
@@ -541,8 +560,9 @@ export class LocalMatchService {
           break;
         }
         this.lastEvent.set('Arena AI is thinking…');
+        const gen = this.actionGen;
         await delay(AI_THINK_MS);
-        if (gen !== this.actionGen) {
+        if (gen !== this.actionGen || this.phase() !== 'playing') {
           break;
         }
         const latest = this.state();
@@ -594,10 +614,11 @@ export class LocalMatchService {
 
   private snakesRules() {
     const levelId = this.snakesLevelId();
+    const winnerCap = this.winnerCap();
     if (levelId === SnakesLevelId.CUSTOM) {
-      return { levelId, layout: this.customLayout() };
+      return { levelId, layout: this.customLayout(), winnerCap };
     }
-    return { levelId };
+    return { levelId, winnerCap };
   }
 
   private flashCelebration(value: PlaceCelebration | null): void {

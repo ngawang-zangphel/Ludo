@@ -64,6 +64,12 @@ export class CreateTournamentDto {
 
   @IsOptional()
   @IsInt()
+  @Min(1)
+  @Max(6)
+  snakesWinnerCap?: number;
+
+  @IsOptional()
+  @IsInt()
   @Min(2)
   @Max(8)
   marriageDeckCount?: number;
@@ -89,6 +95,12 @@ export class UpdateTournamentSnakesRulesDto {
   @ValidateNested()
   @Type(() => SnakesBoardLayoutDto)
   snakesLayout?: SnakesBoardLayoutDto;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(6)
+  winnerCap?: number;
 }
 
 export class RegisterParticipantDto {

@@ -17,6 +17,8 @@ import {
   formatDuration,
   gameTypeLabel,
   httpErrorMessage,
+  matchPlacements,
+  placeLabel,
   playerNames,
   readyCountLabel,
 } from '../../../shared/format';
@@ -125,6 +127,17 @@ type Filter = 'ALL' | MatchStatus;
                     · <span class="text-arena-gold">On broadcast</span>
                   }
                 </p>
+                @if (matchPlacements(match); as places) {
+                  @if (places.length) {
+                    <p class="mt-2 text-sm text-arena-gold">
+                      @for (place of places; track place.place; let last = $last) {
+                        <span>{{ placeLabel(place.place) }} {{ place.name }}</span>@if (!last) {
+                          <span class="text-arena-mist/40"> · </span>
+                        }
+                      }
+                    </p>
+                  }
+                }
               </div>
               <ludo-status-badge [status]="match.status" />
             </div>
@@ -243,6 +256,8 @@ export class AdminDashboardPage implements OnInit, OnDestroy {
   readonly gameTypeLabel = gameTypeLabel;
   readonly allPlayersReady = allPlayersReady;
   readonly readyCountLabel = readyCountLabel;
+  readonly matchPlacements = matchPlacements;
+  readonly placeLabel = placeLabel;
 
   readonly visible = computed(() => {
     const filter = this.filter();

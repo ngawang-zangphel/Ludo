@@ -53,6 +53,7 @@ export class TournamentsService {
         ? resolveSnakesRules({
             levelId: dto.snakesLevelId,
             layout: dto.snakesLayout,
+            winnerCap: dto.snakesWinnerCap,
           })
         : gameType === GameType.MARRIAGE
           ? resolveMarriageRules({
@@ -125,12 +126,13 @@ export class TournamentsService {
     if (tournament.gameType !== GameType.SNAKES || !isSnakesRules(tournament.rules)) {
       throw new BadRequestException('This tournament is not Snakes & Ladders');
     }
-    if (!dto.snakesLevelId && !dto.snakesLayout) {
-      throw new BadRequestException('Choose a board preset or send a layout');
+    if (!dto.snakesLevelId && !dto.snakesLayout && dto.winnerCap == null) {
+      throw new BadRequestException('Choose a board preset, layout, or winner count');
     }
     const rules = resolveSnakesRules({
       extraTurnOnSix: tournament.rules.extraTurnOnSix,
       exactRollRequiredForFinish: tournament.rules.exactRollRequiredForFinish,
+      winnerCap: dto.winnerCap ?? tournament.rules.winnerCap,
       levelId: dto.snakesLevelId ?? tournament.rules.levelId,
       layout: dto.snakesLayout ?? tournament.rules.layout,
     });

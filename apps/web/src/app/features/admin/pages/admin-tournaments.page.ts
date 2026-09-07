@@ -35,7 +35,7 @@ import {
 import { ArenaApiService } from '../../../core/api/arena-api.service';
 import { MultiAutocompleteComponent } from '../../../shared/ui/multi-autocomplete';
 import { StatusBadgeComponent } from '../../../shared/ui/status-badge';
-import { httpErrorMessage, readyCountLabel } from '../../../shared/format';
+import { httpErrorMessage, matchPlacements, placeLabel, readyCountLabel } from '../../../shared/format';
 import { SnakesBoardComponent } from '../../game/components/snakes-board/snakes-board';
 import { SnakesLayoutEditorComponent } from '../../game/components/snakes-layout-editor/snakes-layout-editor';
 import { SnakesPresetPickerComponent } from '../../game/components/snakes-preset-picker/snakes-preset-picker';
@@ -193,6 +193,27 @@ import { SnakesPresetPickerComponent } from '../../game/components/snakes-preset
                   <arena-snakes-board [layout]="customLayout" [compact]="true" />
                 </div>
               }
+              <div class="mt-4">
+                <p class="text-xs uppercase tracking-[0.25em] text-arena-gold/80">Winners to finish</p>
+                <p class="mt-1 text-sm text-arena-mist/60">
+                  Tables stop when this many players finish. Others are ranked after.
+                </p>
+                <div class="mt-2 flex flex-wrap gap-2">
+                  @for (count of snakesWinnerCapOptions; track count) {
+                    <button
+                      type="button"
+                      class="rounded-full px-3 py-1.5 text-sm"
+                      [class.bg-arena-gold]="snakesWinnerCap === count"
+                      [class.text-arena-ink]="snakesWinnerCap === count"
+                      [class.border]="snakesWinnerCap !== count"
+                      [class.border-arena-line]="snakesWinnerCap !== count"
+                      (click)="snakesWinnerCap = count"
+                    >
+                      {{ count }}
+                    </button>
+                  }
+                </div>
+              </div>
             </div>
           }
           <button
@@ -244,6 +265,7 @@ import { SnakesPresetPickerComponent } from '../../game/components/snakes-preset
                   {{ GAME_TYPE_LABEL[tournament.gameType] || 'Ludo' }}
                   @if (tournament.gameType === GameType.SNAKES && isSnakesRules(tournament.rules)) {
                     · {{ SNAKES_LEVEL_LABEL[tournament.rules.levelId] || 'Classic' }}
+                    · {{ tournament.rules.winnerCap ?? 4 }} winner{{ (tournament.rules.winnerCap ?? 4) === 1 ? '' : 's' }}
                   }
                   @if (tournament.gameType === GameType.MARRIAGE && isMarriageRules(tournament.rules)) {
                     · {{ tournament.rules.deckCount }} decks
@@ -353,15 +375,37 @@ import { SnakesPresetPickerComponent } from '../../game/components/snakes-preset
                 </div>
               }
               <p class="mt-3 text-sm text-arena-mist/60">
-                Saving updates this tournament board. Live and paused tables restart from the start on the new board.
+                Saving updates this tournament board and winner count. Live and paused tables restart from the start on the new board.
               </p>
+              <div class="mt-4">
+                <p class="text-xs uppercase tracking-[0.25em] text-arena-gold/80">Winners to finish</p>
+                <p class="mt-1 text-sm text-arena-mist/60">
+                  Match ends when this many players reach 100.
+                  Current: {{ tournament.rules.winnerCap ?? 4 }}
+                </p>
+                <div class="mt-2 flex flex-wrap gap-2">
+                  @for (count of snakesWinnerCapOptions; track count) {
+                    <button
+                      type="button"
+                      class="rounded-full px-3 py-1.5 text-sm"
+                      [class.bg-arena-gold]="editWinnerCap === count"
+                      [class.text-arena-ink]="editWinnerCap === count"
+                      [class.border]="editWinnerCap !== count"
+                      [class.border-arena-line]="editWinnerCap !== count"
+                      (click)="editWinnerCap = count"
+                    >
+                      {{ count }}
+                    </button>
+                  }
+                </div>
+              </div>
               <button
                 type="button"
                 class="mt-3 rounded-full bg-arena-gold px-4 py-2 text-sm font-semibold text-arena-ink disabled:opacity-40"
                 [disabled]="!canSaveBoard() || savingBoard()"
                 (click)="saveBoard()"
               >
-                {{ savingBoard() ? 'Saving…' : 'Save board' }}
+                {{ savingBoard() ? 'Saving…' : 'Save board & rules' }}
               </button>
             </div>
           </section>
@@ -386,6 +430,11 @@ import { SnakesPresetPickerComponent } from '../../game/components/snakes-preset
               @for (participant of participants(); track participant.id) {
                 <li class="flex flex-wrap items-center gap-2">
                   <span>{{ participant.seed }}. {{ participant.name }} · {{ participant.status }}</span>
+                  @if (participant.finalRank) {
+                    <span class="rounded-full bg-arena-gold/15 px-2 py-0.5 text-[10px] uppercase tracking-wider text-arena-gold">
+                      {{ placeLabel(participant.finalRank) }}
+                    </span>
+                  }
                   @if (participantSeatLabel(participant.userId); as seat) {
                     <span
                       class="rounded-full px-2 py-0.5 text-[10px] uppercase tracking-wider"
@@ -542,6 +591,17 @@ import { SnakesPresetPickerComponent } from '../../game/components/snakes-preset
                                   </span>
                                 }
                               </div>
+                              @if (matchPlacements(match); as places) {
+                                @if (places.length) {
+                                  <p class="mt-2 text-xs text-arena-gold">
+                                    @for (place of places; track place.place; let last = $last) {
+                                      <span>{{ placeLabel(place.place) }} {{ place.name }}</span>@if (!last) {
+                                        <span class="text-arena-mist/40"> · </span>
+                                      }
+                                    }
+                                  </p>
+                                }
+                              }
                               @if (canAddMembers(match) && addableOptions(match).length) {
                                 <div class="mt-2">
                                   <ludo-multi-autocomplete
@@ -665,6 +725,8 @@ export class AdminTournamentsPage implements OnInit {
   readonly memberBusy = signal(false);
   draftGroupName = '';
   readonly readyCountLabel = readyCountLabel;
+  readonly matchPlacements = matchPlacements;
+  readonly placeLabel = placeLabel;
   readonly MatchStatus = MatchStatus;
   readonly GAME_TYPE_LABEL = GAME_TYPE_LABEL;
   readonly SNAKES_LEVEL_LABEL = SNAKES_LEVEL_LABEL;
@@ -672,6 +734,7 @@ export class AdminTournamentsPage implements OnInit {
   readonly SnakesLevelId = SnakesLevelId;
   readonly isSnakesRules = isSnakesRules;
   readonly isMarriageRules = isMarriageRules;
+  readonly snakesWinnerCapOptions = [1, 2, 3, 4, 5, 6];
 
   readonly rounds = computed(() => this.selected()?.rounds ?? []);
 
@@ -802,11 +865,13 @@ export class AdminTournamentsPage implements OnInit {
   tournamentName = '';
   tournamentGameType = GameType.LUDO;
   snakesLevelId = SnakesLevelId.CLASSIC;
+  snakesWinnerCap = 4;
   marriageDeckCount = 3;
   readonly marriageDeckOptions = [...MARRIAGE_DECK_OPTIONS];
   selectedBoardId = '';
   customLayout: SnakesBoardLayout = cloneSnakesLayout(resolveSnakesRules().layout);
   editSnakesLevelId = SnakesLevelId.CLASSIC;
+  editWinnerCap = 4;
   editBoardId = '';
   editLayout: SnakesBoardLayout = cloneSnakesLayout(resolveSnakesRules().layout);
   readonly savingBoard = signal(false);
@@ -832,6 +897,7 @@ export class AdminTournamentsPage implements OnInit {
       return;
     }
     this.editSnakesLevelId = tournament.rules.levelId;
+    this.editWinnerCap = tournament.rules.winnerCap ?? 4;
     this.editBoardId = '';
     this.editLayout = cloneSnakesLayout(tournament.rules.layout);
   }
@@ -871,8 +937,10 @@ export class AdminTournamentsPage implements OnInit {
     if (this.editSnakesLevelId === SnakesLevelId.CUSTOM && validateSnakesLayout(this.editLayout)) {
       return false;
     }
+    const currentCap = tournament.rules.winnerCap ?? 4;
     return (
       this.editSnakesLevelId !== tournament.rules.levelId ||
+      this.editWinnerCap !== currentCap ||
       JSON.stringify(this.editLayout) !== JSON.stringify(tournament.rules.layout)
     );
   }
@@ -897,6 +965,7 @@ export class AdminTournamentsPage implements OnInit {
         const result = await this.api.updateTournamentSnakesRules(tournament.id, {
           snakesLevelId: this.editSnakesLevelId,
           snakesLayout: this.editLayout,
+          winnerCap: this.editWinnerCap,
         });
         this.selected.set(result.tournament);
         this.tournaments.update((rows) =>
@@ -961,12 +1030,14 @@ export class AdminTournamentsPage implements OnInit {
         this.tournamentGameType === GameType.SNAKES && this.snakesLevelId === SnakesLevelId.CUSTOM
           ? this.customLayout
           : undefined,
-        this.tournamentGameType === GameType.MARRIAGE ? this.marriageDeckCount : undefined
+        this.tournamentGameType === GameType.MARRIAGE ? this.marriageDeckCount : undefined,
+        this.tournamentGameType === GameType.SNAKES ? this.snakesWinnerCap : undefined
       );
       this.tournamentName = '';
       this.tournamentGameType = GameType.LUDO;
       this.marriageDeckCount = 3;
       this.snakesLevelId = SnakesLevelId.CLASSIC;
+      this.snakesWinnerCap = 4;
       this.selectedBoardId = '';
       this.customLayout = cloneSnakesLayout(resolveSnakesRules().layout);
       await this.refresh();
