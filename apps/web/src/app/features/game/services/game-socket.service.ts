@@ -156,6 +156,19 @@ export class GameSocketService {
     return match?.players.find((player) => player.id === winnerId) ?? null;
   });
 
+  readonly placements = computed(() => {
+    const match = this.state();
+    if (!match?.rankings.length) {
+      return [] as Array<{ place: number; name: string }>;
+    }
+    return match.rankings
+      .map((id, index) => {
+        const player = match.players.find((entry) => entry.id === id);
+        return player ? { place: index + 1, name: player.name } : null;
+      })
+      .filter((entry): entry is { place: number; name: string } => !!entry);
+  });
+
   attach(matchId: string | null, mode: GameAttachMode = 'player'): void {
     this.detach();
     this.mode = mode;
@@ -560,11 +573,18 @@ export class GameSocketService {
 
   /** Match local hot-seat: tumble fully, show face, then allow the piece to move. */
   private async waitForDiceRevealComplete(): Promise<void> {
-    const ui = this.diceUi();
-    if (ui !== 'ROLLING' && ui !== 'RESULT') {
+    // If we never saw dice-rolled, still pause long enough that hops cannot beat the tumble.
+    if (this.diceUi() !== 'ROLLING' && this.diceUi() !== 'RESULT') {
+      if (!this.holdPieceDisplay || !this.rollStartedAt) {
+        return;
+      }
+      const remaining = Math.max(0, DICE_TUMBLE_MS + DICE_REVEAL_MS - (Date.now() - this.rollStartedAt));
+      if (remaining > 0) {
+        await delay(remaining);
+      }
       return;
     }
-    if (ui === 'ROLLING') {
+    if (this.diceUi() === 'ROLLING') {
       const tumbleLeft = Math.max(0, DICE_TUMBLE_MS - (Date.now() - this.rollStartedAt));
       await delay(tumbleLeft);
       if (this.diceUi() === 'ROLLING') {

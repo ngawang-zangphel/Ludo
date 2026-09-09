@@ -97,10 +97,26 @@ export function placeLabel(place: number): string {
 
 /** Ranked finishers from match summary (1st, 2nd, …). */
 export function matchPlacements(
-  match: Pick<MatchSummaryDto, 'winnerNames'>
+  match: Pick<MatchSummaryDto, 'winnerNames' | 'winnerIds' | 'players'>
 ): Array<{ place: number; name: string }> {
-  return match.winnerNames.map((name, index) => ({
-    place: index + 1,
-    name,
-  }));
+  if (match.winnerNames.length) {
+    return match.winnerNames.map((name, index) => ({
+      place: index + 1,
+      name,
+    }));
+  }
+  // Fallback if names were dropped but ids remain (e.g. roster rename edge cases).
+  return (match.winnerIds ?? []).map((id, index) => {
+    const player = match.players.find((entry) => entry.userId === id);
+    return {
+      place: index + 1,
+      name: player?.name ?? `Player ${index + 1}`,
+    };
+  });
+}
+
+export function formatPlacementsLine(
+  places: Array<{ place: number; name: string }>
+): string {
+  return places.map((place) => `${placeLabel(place.place)} ${place.name}`).join(' · ');
 }

@@ -219,6 +219,8 @@ export class GameTableComponent {
   readonly hopTick = input(0);
   readonly diceUi = input<DiceUiState>('WAITING');
   readonly canRoll = input(false);
+  /** When false (local hot-seat / AI), no idle auto-roll countdown. */
+  readonly autoRoll = input(true);
   readonly lastEvent = input<string | null>(null);
   readonly errorMessage = input<string | null>(null);
   readonly pieceSelect = output<string>();
@@ -252,6 +254,9 @@ export class GameTableComponent {
 
   /** Shared deadline; falls back so countdown still shows for older live turns. */
   readonly rollDeadlineAt = computed(() => {
+    if (!this.autoRoll()) {
+      return null;
+    }
     const state = this.state();
     if (state.rollDeadlineAt) {
       return state.rollDeadlineAt;

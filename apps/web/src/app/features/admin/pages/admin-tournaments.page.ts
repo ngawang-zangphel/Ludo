@@ -593,13 +593,17 @@ import { SnakesPresetPickerComponent } from '../../game/components/snakes-preset
                               </div>
                               @if (matchPlacements(match); as places) {
                                 @if (places.length) {
-                                  <p class="mt-2 text-xs text-arena-gold">
-                                    @for (place of places; track place.place; let last = $last) {
-                                      <span>{{ placeLabel(place.place) }} {{ place.name }}</span>@if (!last) {
-                                        <span class="text-arena-mist/40"> · </span>
+                                  <div class="mt-2 rounded-xl border border-arena-gold/20 bg-arena-gold/5 px-2.5 py-1.5">
+                                    <p class="text-[10px] uppercase tracking-[0.2em] text-arena-gold/70">Standings</p>
+                                    <ol class="mt-1 space-y-0.5">
+                                      @for (place of places; track place.place) {
+                                        <li class="flex items-baseline gap-1.5 text-xs">
+                                          <span class="w-7 shrink-0 font-display text-arena-gold">{{ placeLabel(place.place) }}</span>
+                                          <span class="text-white/90">{{ place.name }}</span>
+                                        </li>
                                       }
-                                    }
-                                  </p>
+                                    </ol>
+                                  </div>
                                 }
                               }
                               @if (canAddMembers(match) && addableOptions(match).length) {

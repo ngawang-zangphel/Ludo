@@ -8,6 +8,7 @@ import { MarriageTableComponent } from '../../components/marriage-table/marriage
 import { MatchStartOverlayComponent } from '../../components/match-start-overlay/match-start-overlay';
 import { FinishCelebrationComponent } from '../../components/finish-celebration/finish-celebration';
 import { AuthService } from '../../../../core/auth/auth.service';
+import { placeLabel } from '../../../../shared/format';
 import { readSnakesView3d } from '../../models/snakes-view';
 
 @Component({
@@ -71,12 +72,22 @@ import { readSnakesView3d } from '../../models/snakes-view';
 
       <arena-finish-celebration [celebration]="game.celebration()" />
 
-      @if (game.status() === MatchStatus.COMPLETED && game.winner(); as winner) {
-        <div class="pointer-events-none fixed inset-x-0 bottom-10 flex justify-center">
-          <div class="rounded-full bg-arena-gold px-8 py-4 font-display text-2xl font-semibold text-arena-ink shadow-2xl">
-            {{ winner.name }} wins
+      @if (game.status() === MatchStatus.COMPLETED && game.placements(); as places) {
+        @if (places.length) {
+          <div class="pointer-events-none fixed inset-x-0 bottom-10 flex justify-center px-4">
+            <div class="max-w-lg rounded-3xl border border-arena-gold/40 bg-arena-navy/95 px-8 py-5 shadow-2xl">
+              <p class="text-center text-xs uppercase tracking-[0.28em] text-arena-gold/80">Standings</p>
+              <ol class="mt-3 space-y-1.5">
+                @for (place of places; track place.place) {
+                  <li class="flex items-baseline justify-center gap-4 font-display text-2xl text-white">
+                    <span class="text-arena-gold">{{ placeLabel(place.place) }}</span>
+                    <span>{{ place.name }}</span>
+                  </li>
+                }
+              </ol>
+            </div>
           </div>
-        </div>
+        }
       }
     </div>
   `,
@@ -87,6 +98,7 @@ export class BroadcastPage implements OnInit, OnDestroy {
   readonly game = inject(GameSocketService);
   readonly message = signal('Waiting for an admin to select a match.');
   readonly MatchStatus = MatchStatus;
+  readonly placeLabel = placeLabel;
   readonly view3d = readSnakesView3d();
 
   isSnakes(state: unknown): boolean {

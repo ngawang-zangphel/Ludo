@@ -17,7 +17,7 @@ import {
 } from '@ludo-game/shared-types';
 import { ArenaApiService } from '../../../../core/api/arena-api.service';
 import { AuthService } from '../../../../core/auth/auth.service';
-import { httpErrorMessage, gameTypeLabel } from '../../../../shared/format';
+import { httpErrorMessage, gameTypeLabel, placeLabel } from '../../../../shared/format';
 import { LocalMatchService } from '../../services/local-match.service';
 import { GameTableComponent } from '../../components/game-table/game-table';
 import { SnakesBoardComponent } from '../../components/snakes-board/snakes-board';
@@ -385,6 +385,7 @@ import { readSnakesView3d, writeSnakesView3d } from '../../models/snakes-view';
           [hopTick]="match.hopTick()"
           [diceUi]="match.diceUi()"
           [canRoll]="match.canRoll() && !match.isAiTurn()"
+          [autoRoll]="false"
           [lastEvent]="match.lastEvent()"
           [errorMessage]="match.errorMessage()"
           [editable]="match.editingOwnBoard()"
@@ -397,10 +398,20 @@ import { readSnakesView3d, writeSnakesView3d } from '../../models/snakes-view';
 
         <arena-finish-celebration [celebration]="match.celebration()" />
 
-        @if (match.state()?.status === MatchStatus.COMPLETED && match.winner(); as winner) {
-          <div class="pointer-events-none fixed inset-x-0 bottom-10 z-20 flex justify-center">
-            <div class="rounded-full bg-arena-gold px-7 py-3.5 font-display text-xl font-semibold text-arena-ink shadow-[0_12px_40px_rgba(228,193,106,0.45)]">
-              {{ winner.name }} wins
+        @if (match.state()?.status === MatchStatus.COMPLETED && match.placements(); as places) {
+          <div class="pointer-events-none fixed inset-x-0 bottom-8 z-20 flex justify-center px-4">
+            <div
+              class="max-w-md rounded-3xl border border-arena-gold/40 bg-arena-navy/95 px-6 py-4 shadow-[0_12px_40px_rgba(228,193,106,0.35)]"
+            >
+              <p class="text-center text-[10px] uppercase tracking-[0.28em] text-arena-gold/80">Standings</p>
+              <ol class="mt-2 space-y-1">
+                @for (place of places; track place.place) {
+                  <li class="flex items-baseline justify-center gap-3 font-display text-lg text-white">
+                    <span class="text-arena-gold">{{ placeLabel(place.place) }}</span>
+                    <span [class.text-arena-gold]="place.place === 1">{{ place.name }}</span>
+                  </li>
+                }
+              </ol>
             </div>
           </div>
         }
@@ -416,6 +427,7 @@ export class LocalMatchPage implements OnInit {
   readonly MatchStatus = MatchStatus;
   readonly SnakesLevelId = SnakesLevelId;
   readonly PlayerColor = PlayerColor;
+  readonly placeLabel = placeLabel;
   readonly editor = viewChild(SnakesLayoutEditorComponent);
   readonly customBoards = signal<SnakesCustomBoardDto[]>([]);
   readonly boardsLoading = signal(false);

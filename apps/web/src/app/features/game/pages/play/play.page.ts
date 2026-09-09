@@ -22,7 +22,7 @@ import { MarriageTableComponent } from '../../components/marriage-table/marriage
 import { MatchStartOverlayComponent } from '../../components/match-start-overlay/match-start-overlay';
 import { FinishCelebrationComponent } from '../../components/finish-celebration/finish-celebration';
 import { StatusBadgeComponent } from '../../../../shared/ui/status-badge';
-import { httpErrorMessage } from '../../../../shared/format';
+import { httpErrorMessage, placeLabel } from '../../../../shared/format';
 
 @Component({
   selector: 'ludo-play-page',
@@ -137,12 +137,22 @@ import { httpErrorMessage } from '../../../../shared/format';
 
       <arena-finish-celebration [celebration]="game.celebration()" />
 
-      @if (status() === MatchStatus.COMPLETED && game.winner(); as winner) {
-        <div class="pointer-events-none fixed inset-x-0 bottom-8 flex justify-center">
-          <div class="rounded-full bg-arena-gold px-6 py-3 font-display text-lg font-semibold text-arena-ink shadow-2xl">
-            {{ winner.name }} wins the arena
+      @if (status() === MatchStatus.COMPLETED && game.placements(); as places) {
+        @if (places.length) {
+          <div class="pointer-events-none fixed inset-x-0 bottom-8 flex justify-center px-4">
+            <div class="max-w-md rounded-3xl border border-arena-gold/40 bg-arena-navy/95 px-6 py-4 shadow-2xl">
+              <p class="text-center text-[10px] uppercase tracking-[0.28em] text-arena-gold/80">Standings</p>
+              <ol class="mt-2 space-y-1">
+                @for (place of places; track place.place) {
+                  <li class="flex items-baseline justify-center gap-3 font-display text-lg text-white">
+                    <span class="text-arena-gold">{{ placeLabel(place.place) }}</span>
+                    <span>{{ place.name }}</span>
+                  </li>
+                }
+              </ol>
+            </div>
           </div>
-        </div>
+        }
       }
     </div>
   `,
@@ -155,6 +165,7 @@ export class PlayPage implements OnInit, OnDestroy {
   readonly detail = signal<MatchDetailDto | null>(null);
   readonly error = signal<string | null>(null);
   readonly MatchStatus = MatchStatus;
+  readonly placeLabel = placeLabel;
 
   readonly status = computed(() => this.game.status() ?? this.detail()?.status ?? null);
   readonly canPlay = computed(

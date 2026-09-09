@@ -115,6 +115,23 @@ export class LocalMatchService {
     return match.players.find((player) => player.id === winnerId) ?? null;
   });
 
+  /** Full finish order (1st, 2nd, …) for end-of-match standings. */
+  readonly placements = computed(() => {
+    const match = this.state();
+    if (!match?.rankings.length) {
+      return [] as Array<{ place: number; name: string; color: PlayerColor }>;
+    }
+    return match.rankings
+      .map((id, index) => {
+        const player = match.players.find((entry) => entry.id === id);
+        if (!player) {
+          return null;
+        }
+        return { place: index + 1, name: player.name, color: player.color };
+      })
+      .filter((entry): entry is { place: number; name: string; color: PlayerColor } => !!entry);
+  });
+
   readonly colors = computed(() =>
     PLAYER_COLOR_ORDER.slice(0, maxPlayersForGame(this.gameType()))
   );
@@ -408,11 +425,21 @@ export class LocalMatchService {
     const gen = ++this.actionGen;
     this.errorMessage.set(null);
     this.diceUi.set('ROLLING');
+    this.animating.set(true);
     const startedAt = Date.now();
+
+    const releaseIfCurrent = (nextDice: DiceUiState = 'WAITING'): void => {
+      if (gen !== this.actionGen) {
+        return;
+      }
+      this.animating.set(false);
+      this.diceUi.set(nextDice);
+    };
 
     try {
       const current = this.state();
       if (!current) {
+        releaseIfCurrent();
         return;
       }
       const result = isSnakesState(current)
@@ -421,6 +448,7 @@ export class LocalMatchService {
           ? applyDiceRoll(current, current.currentPlayerId)
           : null;
       if (!result) {
+        releaseIfCurrent();
         return;
       }
       const tumbleWait = Math.max(0, DICE_TUMBLE_MS - (Date.now() - startedAt));
@@ -430,7 +458,7 @@ export class LocalMatchService {
       }
 
       const value = result.state.dice.value;
-      this.animating.set(true);
+      // Reveal the face only — keep animating so chips cannot start until the pause ends.
       this.state.set({
         ...current,
         dice: { value, rolled: true },
@@ -448,30 +476,42 @@ export class LocalMatchService {
 
       this.state.set(result.state);
       this.lastEvent.set(summarize(result.events.map((event) => event.type)));
-      this.animating.set(false);
 
       const tokenId = result.validPieceIds[0];
       if (isSnakesState(result.state) && tokenId) {
-        await this.move(tokenId);
-      } else if (result.state.turnPhase === TurnPhase.WAITING_FOR_ROLL) {
-        this.diceUi.set('WAITING');
+        // Stay animating through into move so the token waits for a completed roll.
+        await this.move(tokenId, { fromRoll: true });
+      } else {
+        this.animating.set(false);
+        if (result.state.turnPhase === TurnPhase.WAITING_FOR_ROLL) {
+          this.diceUi.set('WAITING');
+        }
       }
       if (!this.aiBusy) {
         await this.maybePlayAi();
       }
     } catch (error) {
-      if (gen !== this.actionGen) {
-        return;
+      releaseIfCurrent();
+      if (gen === this.actionGen) {
+        this.errorMessage.set(toMessage(error));
       }
-      this.animating.set(false);
-      this.diceUi.set('WAITING');
-      this.errorMessage.set(toMessage(error));
     }
   }
 
-  async move(pieceId: string): Promise<void> {
+  async move(pieceId: string, options?: { fromRoll?: boolean }): Promise<void> {
     const current = this.state();
-    if (!this.canMove() || !current || !current.validPieceIds.includes(pieceId)) {
+    const fromRoll = options?.fromRoll === true;
+    // fromRoll: roll() already held animating through the dice reveal; allow the auto-move.
+    if (
+      (!fromRoll && !this.canMove()) ||
+      !current ||
+      !current.validPieceIds.includes(pieceId) ||
+      current.turnPhase !== TurnPhase.WAITING_FOR_MOVE
+    ) {
+      if (fromRoll) {
+        this.animating.set(false);
+        this.diceUi.set('WAITING');
+      }
       return;
     }
 
@@ -489,12 +529,13 @@ export class LocalMatchService {
             })
           : null;
       if (!result) {
+        this.animating.set(false);
         return;
       }
 
       if (result.animation && result.animation.steps.length > 0) {
-        this.displayCoords.update((current) => ({
-          ...current,
+        this.displayCoords.update((coords) => ({
+          ...coords,
           [result.animation!.pieceId]: result.animation!.from,
         }));
         this.animating.set(true);
@@ -514,6 +555,7 @@ export class LocalMatchService {
     } catch (error) {
       this.animating.set(false);
       this.movingPieceId.set(null);
+      this.diceUi.set('WAITING');
       this.errorMessage.set(toMessage(error));
     }
   }
@@ -521,16 +563,19 @@ export class LocalMatchService {
   private buildMatch(): GameState {
     const players = this.toCreatePlayers();
     if (this.gameType() === GameType.SNAKES) {
-      return createSnakesMatchState({
+      const state = createSnakesMatchState({
         matchId: 'local-snakes-hotseat',
         players,
         rules: this.snakesRules(),
       });
+      // Local / AI play drives rolls from the UI or AI loop — no server auto-roll window.
+      return { ...state, rollDeadlineAt: null };
     }
-    return createMatchState({
+    const state = createMatchState({
       matchId: 'local-hotseat',
       players,
     });
+    return { ...state, rollDeadlineAt: null };
   }
 
   private toCreatePlayers(): CreateMatchPlayer[] {
@@ -563,6 +608,16 @@ export class LocalMatchService {
         if (match.currentPlayerId !== AI_PLAYER_ID) {
           break;
         }
+
+        // Prior action may still be releasing dice/anim flags — wait, don't abort the turn.
+        await this.waitForActionIdle();
+        if (this.phase() !== 'playing' || this.playMode() !== 'ai') {
+          break;
+        }
+        if (this.state()?.currentPlayerId !== AI_PLAYER_ID) {
+          break;
+        }
+
         this.lastEvent.set('Arena AI is thinking…');
         const gen = this.actionGen;
         await delay(AI_THINK_MS);
@@ -573,21 +628,53 @@ export class LocalMatchService {
         if (!latest || latest.currentPlayerId !== AI_PLAYER_ID) {
           break;
         }
-        if (latest.turnPhase === TurnPhase.WAITING_FOR_ROLL && this.canRoll()) {
-          await this.roll();
-          continue;
+        if (latest.status === MatchStatus.COMPLETED) {
+          break;
         }
-        if (latest.turnPhase === TurnPhase.WAITING_FOR_MOVE && this.canMove()) {
-          const pieceId = chooseAiPiece(latest);
-          if (pieceId) {
+
+        // Recover from an aborted roll that left the die stuck on ROLLING.
+        if (this.diceUi() === 'ROLLING' && !this.animating()) {
+          this.diceUi.set('WAITING');
+        }
+        await this.waitForActionIdle();
+
+        if (latest.turnPhase === TurnPhase.WAITING_FOR_ROLL) {
+          if (!this.canRoll()) {
+            this.animating.set(false);
+            if (this.diceUi() === 'ROLLING') {
+              this.diceUi.set('WAITING');
+            }
+          }
+          if (this.canRoll() && this.state()?.currentPlayerId === AI_PLAYER_ID) {
+            await this.roll();
+            continue;
+          }
+          break;
+        }
+        if (latest.turnPhase === TurnPhase.WAITING_FOR_MOVE) {
+          const pieceId = chooseAiPiece(this.state() ?? latest);
+          if (pieceId && this.canMove()) {
             await this.move(pieceId);
             continue;
           }
+          break;
         }
         break;
       }
     } finally {
       this.aiBusy = false;
+    }
+  }
+
+  /** Wait until dice tumble / piece hops finish so the AI can take the turn. */
+  private async waitForActionIdle(timeoutMs = 6000): Promise<void> {
+    const started = Date.now();
+    while (
+      this.phase() === 'playing' &&
+      Date.now() - started < timeoutMs &&
+      (this.animating() || this.diceUi() === 'ROLLING')
+    ) {
+      await delay(40);
     }
   }
 

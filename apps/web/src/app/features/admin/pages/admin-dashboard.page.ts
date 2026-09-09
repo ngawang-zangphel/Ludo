@@ -129,13 +129,17 @@ type Filter = 'ALL' | MatchStatus;
                 </p>
                 @if (matchPlacements(match); as places) {
                   @if (places.length) {
-                    <p class="mt-2 text-sm text-arena-gold">
-                      @for (place of places; track place.place; let last = $last) {
-                        <span>{{ placeLabel(place.place) }} {{ place.name }}</span>@if (!last) {
-                          <span class="text-arena-mist/40"> · </span>
+                    <div class="mt-3 rounded-2xl border border-arena-gold/25 bg-arena-gold/5 px-3 py-2">
+                      <p class="text-[10px] uppercase tracking-[0.22em] text-arena-gold/70">Standings</p>
+                      <ol class="mt-1.5 space-y-1">
+                        @for (place of places; track place.place) {
+                          <li class="flex items-baseline gap-2 text-sm">
+                            <span class="w-8 shrink-0 font-display text-arena-gold">{{ placeLabel(place.place) }}</span>
+                            <span class="text-white">{{ place.name }}</span>
+                          </li>
                         }
-                      }
-                    </p>
+                      </ol>
+                    </div>
                   }
                 }
               </div>

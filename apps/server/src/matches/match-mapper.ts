@@ -26,6 +26,15 @@ export function toSummary(
   const currentId = state?.currentPlayerId ?? (match.currentPlayerId ? toObjectIdString(match.currentPlayerId) : null);
   const current = match.players.find((player) => toObjectIdString(player.userId) === currentId);
   const winnerIds = (state?.rankings ?? match.winnerIds.map((id) => toObjectIdString(id)));
+  const winnerNames = winnerIds
+    .map((id) => {
+      const seated = match.players.find((player) => toObjectIdString(player.userId) === id);
+      if (seated?.name) {
+        return seated.name;
+      }
+      return state?.players.find((player) => player.id === id)?.name ?? null;
+    })
+    .filter((name): name is string => Boolean(name));
   return {
     id: toObjectIdString(match._id),
     tournamentId: toObjectIdString(match.tournamentId),
@@ -40,9 +49,7 @@ export function toSummary(
     currentPlayerId: currentId,
     currentPlayerName: current?.name ?? null,
     winnerIds,
-    winnerNames: winnerIds
-      .map((id) => match.players.find((player) => toObjectIdString(player.userId) === id)?.name)
-      .filter((name): name is string => Boolean(name)),
+    winnerNames,
     startedAt: match.startedAt ? match.startedAt.toISOString() : null,
     finishedAt: match.finishedAt ? match.finishedAt.toISOString() : null,
     durationSeconds: durationSeconds(match.startedAt, match.finishedAt),
