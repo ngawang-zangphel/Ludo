@@ -48,7 +48,7 @@ import { readSnakesView3d } from '../../models/snakes-view';
           />
         } @else {
           <ludo-game-table
-            [state]="state"
+            [state]="game.tableState() ?? state"
             [displayCoords]="game.displayCoords()"
             [interactive]="false"
             [highlightValid]="true"
@@ -56,7 +56,7 @@ import { readSnakesView3d } from '../../models/snakes-view';
             [hopTick]="game.hopTick()"
             [diceUi]="game.diceUi()"
             [canRoll]="false"
-            [lastEvent]="game.lastEvent()"
+            [lastEvent]="game.tableLastEvent()"
             [view3d]="isSnakes(state) && view3d"
           />
         }

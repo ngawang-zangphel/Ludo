@@ -84,12 +84,12 @@ import { httpErrorMessage, placeLabel } from '../../../../shared/format';
             (addMeld)="game.marriageAddMeld($event)"
             (layoutError)="game.flashError($event)"
           />
-          @if (game.lastEvent(); as event) {
+          @if (game.tableLastEvent(); as event) {
             <p class="mx-auto mt-3 max-w-5xl text-center text-xs text-arena-mist/60">{{ event }}</p>
           }
         } @else {
           <ludo-game-table
-            [state]="state"
+            [state]="game.tableState() ?? state"
             [displayCoords]="game.displayCoords()"
             [interactive]="canPlay() && !game.animating()"
             [highlightValid]="canPlay()"
@@ -97,7 +97,7 @@ import { httpErrorMessage, placeLabel } from '../../../../shared/format';
             [hopTick]="game.hopTick()"
             [diceUi]="game.diceUi()"
             [canRoll]="game.canRoll()"
-            [lastEvent]="game.lastEvent()"
+            [lastEvent]="game.tableLastEvent()"
             [errorMessage]="game.errorMessage()"
             (pieceSelect)="game.move($event)"
             (roll)="game.roll()"

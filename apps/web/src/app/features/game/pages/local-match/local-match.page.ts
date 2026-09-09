@@ -377,7 +377,7 @@ import { readSnakesView3d, writeSnakesView3d } from '../../models/snakes-view';
         }
 
         <ludo-game-table
-          [state]="state"
+          [state]="match.tableState() ?? state"
           [displayCoords]="match.displayCoords()"
           [interactive]="!match.animating() && !match.isAiTurn()"
           [highlightValid]="!match.isAiTurn()"
@@ -386,7 +386,7 @@ import { readSnakesView3d, writeSnakesView3d } from '../../models/snakes-view';
           [diceUi]="match.diceUi()"
           [canRoll]="match.canRoll() && !match.isAiTurn()"
           [autoRoll]="false"
-          [lastEvent]="match.lastEvent()"
+          [lastEvent]="match.tableLastEvent()"
           [errorMessage]="match.errorMessage()"
           [editable]="match.editingOwnBoard()"
           [pendingSquare]="editor()?.pendingFrom() ?? null"

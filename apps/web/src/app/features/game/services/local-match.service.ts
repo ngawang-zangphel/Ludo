@@ -50,6 +50,13 @@ const AI_USER_ID = 'user-ai';
 const AI_NAME = 'Arena AI';
 const AI_THINK_MS = 650;
 
+interface HudHold {
+  currentPlayerId: string;
+  turnPhase: TurnPhase;
+  turnNumber: number;
+  lastEvent: string | null;
+}
+
 @Injectable()
 export class LocalMatchService {
   readonly phase = signal<'setup' | 'playing'>('setup');
@@ -74,6 +81,8 @@ export class LocalMatchService {
   readonly errorMessage = signal<string | null>(null);
   readonly lastEvent = signal<string | null>(null);
   readonly celebration = signal<PlaceCelebration | null>(null);
+  /** Freezes Now playing / turn card while the die tumbles and reveals. */
+  private readonly hudHold = signal<HudHold | null>(null);
   private actionGen = 0;
   private aiBusy = false;
   private celebrationTimer: ReturnType<typeof setTimeout> | null = null;
@@ -145,6 +154,23 @@ export class LocalMatchService {
     const match = this.state();
     return this.playMode() === 'ai' && !!match && match.currentPlayerId === AI_PLAYER_ID;
   });
+
+  /** Match state for the table HUD — seat/phase/turn frozen during a roll animation. */
+  readonly tableState = computed(() => {
+    const match = this.state();
+    const hold = this.hudHold();
+    if (!match || !hold) {
+      return match;
+    }
+    return {
+      ...match,
+      currentPlayerId: hold.currentPlayerId,
+      turnPhase: hold.turnPhase,
+      turnNumber: hold.turnNumber,
+    };
+  });
+
+  readonly tableLastEvent = computed(() => this.hudHold()?.lastEvent ?? this.lastEvent());
 
   readonly setupReady = computed(() => {
     const slots = this.playerSlots();
@@ -389,6 +415,7 @@ export class LocalMatchService {
           : 'Hot-seat match started. Pass the device each turn.'
       );
       this.syncDisplay(next);
+      this.hudHold.set(null);
       void this.maybePlayAi();
     } catch (error) {
       this.errorMessage.set(toMessage(error));
@@ -407,6 +434,7 @@ export class LocalMatchService {
     this.errorMessage.set(null);
     this.lastEvent.set(null);
     this.celebration.set(null);
+    this.hudHold.set(null);
     if (this.celebrationTimer) {
       clearTimeout(this.celebrationTimer);
       this.celebrationTimer = null;
@@ -424,6 +452,7 @@ export class LocalMatchService {
 
     const gen = ++this.actionGen;
     this.errorMessage.set(null);
+    this.captureHud();
     this.diceUi.set('ROLLING');
     this.animating.set(true);
     const startedAt = Date.now();
@@ -434,6 +463,7 @@ export class LocalMatchService {
       }
       this.animating.set(false);
       this.diceUi.set(nextDice);
+      this.releaseHud();
     };
 
     try {
@@ -458,24 +488,24 @@ export class LocalMatchService {
       }
 
       const value = result.state.dice.value;
-      // Reveal the face only — keep animating so chips cannot start until the pause ends.
+      // Reveal face only — keep the same seat / phase / event card until the roll pause ends.
       this.state.set({
         ...current,
         dice: { value, rolled: true },
-        turnPhase: TurnPhase.WAITING_FOR_MOVE,
-        validPieceIds: [],
         rollDeadlineAt: null,
       });
       this.diceUi.set('RESULT');
-      this.lastEvent.set(value != null ? `Rolled ${value}` : 'Dice rolled');
 
       await delay(DICE_REVEAL_MS);
       if (gen !== this.actionGen) {
         return;
       }
 
+      this.releaseHud();
       this.state.set(result.state);
-      this.lastEvent.set(summarize(result.events.map((event) => event.type)));
+      this.lastEvent.set(
+        value != null ? `Rolled ${value}` : summarize(result.events.map((event) => event.type))
+      );
 
       const tokenId = result.validPieceIds[0];
       if (isSnakesState(result.state) && tokenId) {
@@ -486,6 +516,7 @@ export class LocalMatchService {
         if (result.state.turnPhase === TurnPhase.WAITING_FOR_ROLL) {
           this.diceUi.set('WAITING');
         }
+        this.lastEvent.set(summarize(result.events.map((event) => event.type)));
       }
       if (!this.aiBusy) {
         await this.maybePlayAi();
@@ -676,6 +707,26 @@ export class LocalMatchService {
     ) {
       await delay(40);
     }
+  }
+
+  private captureHud(): void {
+    if (this.hudHold()) {
+      return;
+    }
+    const match = this.state();
+    if (!match) {
+      return;
+    }
+    this.hudHold.set({
+      currentPlayerId: match.currentPlayerId,
+      turnPhase: match.turnPhase,
+      turnNumber: match.turnNumber,
+      lastEvent: this.lastEvent(),
+    });
+  }
+
+  private releaseHud(): void {
+    this.hudHold.set(null);
   }
 
   private async playAnimation(pieceId: string, steps: BoardCoordinate[]): Promise<void> {

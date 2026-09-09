@@ -43,6 +43,13 @@ import { formatGameEvents } from '../../../shared/format';
 
 export type GameAttachMode = 'player' | 'spectator' | 'broadcast';
 
+interface HudHold {
+  currentPlayerId: string;
+  turnPhase: TurnPhase;
+  turnNumber: number;
+  lastEvent: string | null;
+}
+
 /** Progressive deal reveal for Marriage start animation. */
 export interface MarriageDealProgress {
   /** How many hand cards are visible for each player id. */
@@ -81,6 +88,9 @@ export class GameSocketService {
   private diceResultAt = 0;
   /** Holds board coords while we wait for dice reveal before hops (online snakes auto-move). */
   private holdPieceDisplay = false;
+  /** Freezes Now playing / turn card while the die tumbles and reveals. */
+  private readonly hudHold = signal<HudHold | null>(null);
+  private pendingStateWhileHeld: GameState | null = null;
   private pieceMoveChain: Promise<void> = Promise.resolve();
   readonly status = signal<MatchStatus | null>(null);
   readonly roster = signal<MatchPlayerDto[]>([]);
@@ -169,6 +179,23 @@ export class GameSocketService {
       .filter((entry): entry is { place: number; name: string } => !!entry);
   });
 
+  /** Table HUD state — seat/phase/turn frozen during dice tumble + reveal. */
+  readonly tableState = computed(() => {
+    const match = this.state();
+    const hold = this.hudHold();
+    if (!match || !hold) {
+      return match;
+    }
+    return {
+      ...match,
+      currentPlayerId: hold.currentPlayerId,
+      turnPhase: hold.turnPhase,
+      turnNumber: hold.turnNumber,
+    };
+  });
+
+  readonly tableLastEvent = computed(() => this.hudHold()?.lastEvent ?? this.lastEvent());
+
   attach(matchId: string | null, mode: GameAttachMode = 'player'): void {
     this.detach();
     this.mode = mode;
@@ -181,14 +208,20 @@ export class GameSocketService {
       }
     });
     this.listen('match-state-updated', (payload: MatchStatePayload) => {
-      if (payload.matchId === this.matchId()) {
-        this.applyState(payload.state);
+      if (payload.matchId !== this.matchId()) {
+        return;
       }
+      if (this.hudHold() || this.holdPieceDisplay) {
+        this.pendingStateWhileHeld = payload.state;
+        return;
+      }
+      this.applyState(payload.state);
     });
     this.listen('dice-rolled', (payload: DiceRolledPayload) => {
       if (payload.matchId !== this.matchId()) {
         return;
       }
+      this.captureHud();
       // Snakes auto-moves on the next event — hold chips so a final-state update cannot snap them.
       if (isSnakesState(payload.state) && payload.validPieceIds.length > 0) {
         this.holdPieceDisplay = true;
@@ -207,6 +240,8 @@ export class GameSocketService {
     });
     this.listen('match-error', (payload: MatchErrorPayload) => {
       this.holdPieceDisplay = false;
+      this.pendingStateWhileHeld = null;
+      this.releaseHud();
       this.clearDiceReveal();
       if (this.diceUi() === 'ROLLING') {
         this.diceUi.set('WAITING');
@@ -324,6 +359,8 @@ export class GameSocketService {
     this.diceUi.set('WAITING');
     this.celebration.set(null);
     this.holdPieceDisplay = false;
+    this.pendingStateWhileHeld = null;
+    this.releaseHud();
     this.pieceMoveChain = Promise.resolve();
     this.matchId.set(null);
     this.state.set(null);
@@ -345,6 +382,7 @@ export class GameSocketService {
       return;
     }
     this.errorMessage.set(null);
+    this.captureHud();
     this.startDiceRoll();
     this.sockets.client.emit('roll-dice', { matchId });
   }
@@ -366,7 +404,21 @@ export class GameSocketService {
       this.diceRevealTimer = null;
       this.diceUi.set('RESULT');
       this.diceResultAt = Date.now();
-      this.lastEvent.set(`Dice ${value}`);
+      // Face pause — keep the turn card frozen. Unlock only when no auto-move is pending.
+      this.diceRevealTimer = setTimeout(() => {
+        this.diceRevealTimer = null;
+        if (this.holdPieceDisplay) {
+          return;
+        }
+        this.releaseHud();
+        this.lastEvent.set(value != null ? `Rolled ${value}` : 'Dice rolled');
+        this.diceUi.set('WAITING');
+        const pending = this.pendingStateWhileHeld;
+        this.pendingStateWhileHeld = null;
+        if (pending) {
+          this.applyState(pending);
+        }
+      }, DICE_REVEAL_MS);
     }, wait);
   }
 
@@ -375,6 +427,26 @@ export class GameSocketService {
       clearTimeout(this.diceRevealTimer);
       this.diceRevealTimer = null;
     }
+  }
+
+  private captureHud(): void {
+    if (this.hudHold()) {
+      return;
+    }
+    const match = this.state();
+    if (!match) {
+      return;
+    }
+    this.hudHold.set({
+      currentPlayerId: match.currentPlayerId,
+      turnPhase: match.turnPhase,
+      turnNumber: match.turnNumber,
+      lastEvent: this.lastEvent(),
+    });
+  }
+
+  private releaseHud(): void {
+    this.hudHold.set(null);
   }
 
   move(pieceId: string): void {
@@ -549,6 +621,7 @@ export class GameSocketService {
       if (payload.matchId !== this.matchId()) {
         return;
       }
+      this.releaseHud();
       if (payload.animation) {
         // Ensure we start from the pre-move cell (never the final snapped position).
         this.displayCoords.update((current) => ({
@@ -557,6 +630,7 @@ export class GameSocketService {
         }));
         await this.playAnimation(payload.animation);
       }
+      this.pendingStateWhileHeld = null;
       this.applyState(payload.state);
       this.clearDiceReveal();
       this.diceUi.set('WAITING');
