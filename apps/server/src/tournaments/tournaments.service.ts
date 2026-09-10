@@ -140,12 +140,29 @@ export class TournamentsService {
       disconnectRules: structuredClone(source.disconnectRules),
       rounds: source.rounds.map((round) => ({ name: round.name, number: round.number })),
     });
+
+    const sourceParticipants = await this.participants
+      .find({ tournamentId: source._id })
+      .sort({ seed: 1 })
+      .exec();
+    if (sourceParticipants.length > 0) {
+      await this.participants.insertMany(
+        sourceParticipants.map((participant) => ({
+          tournamentId: copy._id,
+          userId: participant.userId,
+          seed: participant.seed,
+          status: ParticipantStatus.REGISTERED,
+        }))
+      );
+    }
+
     logEvent('Tournament duplicated', {
       tournamentId: toObjectIdString(copy._id),
       sourceId: id,
       name: copy.name,
+      playerCount: sourceParticipants.length,
     });
-    return this.toDto(copy, { playerCount: 0, tableCount: 0 });
+    return this.toDto(copy, { playerCount: sourceParticipants.length, tableCount: 0 });
   }
 
   async updateSnakesRules(
