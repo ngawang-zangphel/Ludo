@@ -1,4 +1,13 @@
-import { ChangeDetectionStrategy, Component, computed, input, output } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  DestroyRef,
+  computed,
+  inject,
+  input,
+  output,
+  signal,
+} from '@angular/core';
 import {
   BoardCoordinate,
   DICE_AUTO_ROLL_MS,
@@ -106,24 +115,24 @@ import { SnakesPlayerPanelComponent } from '../snakes-player-panel/snakes-player
       </div>
     } @else if (snakes(); as snakes) {
       <div class="arena-table ludo-table" [class.is-snakes-3d]="view3d()">
-        <div class="ludo-table-green">
-          @if (snakesPlayer(snakes, PlayerColor.GREEN); as green) {
+        @if (snakesPlayer(snakes, PlayerColor.GREEN); as green) {
+          <div class="ludo-table-green">
             <arena-snakes-player-panel
               [player]="green"
               [active]="isActive(green.id)"
               [align]="'start'"
             />
-          }
-        </div>
-        <div class="ludo-table-red">
-          @if (snakesPlayer(snakes, PlayerColor.RED); as red) {
+          </div>
+        }
+        @if (snakesPlayer(snakes, PlayerColor.RED); as red) {
+          <div class="ludo-table-red">
             <arena-snakes-player-panel
               [player]="red"
               [active]="isActive(red.id)"
               [align]="'start'"
             />
-          }
-        </div>
+          </div>
+        }
         <div class="ludo-table-board">
           <arena-snakes-board
             [state]="snakes"
@@ -136,46 +145,49 @@ import { SnakesPlayerPanelComponent } from '../snakes-player-panel/snakes-player
             (squareSelect)="squareSelect.emit($event)"
           />
         </div>
-        <div class="ludo-table-yellow">
-          @if (snakesPlayer(snakes, PlayerColor.YELLOW); as yellow) {
+        @if (snakesPlayer(snakes, PlayerColor.YELLOW); as yellow) {
+          <div class="ludo-table-yellow">
             <arena-snakes-player-panel
               [player]="yellow"
               [active]="isActive(yellow.id)"
               [align]="'end'"
             />
-          }
-        </div>
-        <div class="ludo-table-extra">
-          @if (snakesPlayer(snakes, PlayerColor.PURPLE); as purple) {
+          </div>
+        }
+        @if (snakesPlayer(snakes, PlayerColor.PURPLE); as purple) {
+          <div class="ludo-table-extra">
             <arena-snakes-player-panel
               [player]="purple"
               [active]="isActive(purple.id)"
               [align]="'start'"
             />
-          }
-        </div>
-        <div class="ludo-table-extra2">
-          @if (snakesPlayer(snakes, PlayerColor.ORANGE); as orange) {
+          </div>
+        }
+        @if (snakesPlayer(snakes, PlayerColor.ORANGE); as orange) {
+          <div class="ludo-table-extra2">
             <arena-snakes-player-panel
               [player]="orange"
               [active]="isActive(orange.id)"
               [align]="'end'"
             />
-          }
-        </div>
-        <div class="ludo-table-blue">
-          @if (snakesPlayer(snakes, PlayerColor.BLUE); as blue) {
+          </div>
+        }
+        @if (snakesPlayer(snakes, PlayerColor.BLUE); as blue) {
+          <div class="ludo-table-blue">
             <arena-snakes-player-panel
               [player]="blue"
               [active]="isActive(blue.id)"
               [align]="'end'"
             />
-          }
-        </div>
+          </div>
+        }
       </div>
     }
 
-    <footer class="arena-hud mx-auto mt-3 grid max-w-4xl shrink-0 gap-3 md:grid-cols-[1fr_auto_1fr] md:items-center">
+    <footer
+      class="arena-hud mx-auto mt-3 grid max-w-4xl shrink-0 gap-2 sm:gap-3"
+      [class.arena-hud-compact]="compactHud()"
+    >
       <ludo-turn-indicator
         [player]="currentPlayer()"
         [phase]="state().turnPhase"
@@ -187,6 +199,7 @@ import { SnakesPlayerPanelComponent } from '../snakes-player-panel/snakes-player
           [state]="diceUi()"
           [canRoll]="canRoll()"
           [rollDeadlineAt]="rollDeadlineAt()"
+          [compact]="compactHud()"
           (roll)="roll.emit()"
         />
       } @else {
@@ -199,7 +212,7 @@ import { SnakesPlayerPanelComponent } from '../snakes-player-panel/snakes-player
           {{ canRoll() ? 'Roll dice' : 'Waiting' }}
         </button>
       }
-      <div class="arena-event px-2 py-1 text-sm">
+      <div class="arena-event px-2 py-1 text-sm" [class.arena-event-hidden]="compactHud()">
         <p class="text-[0.65rem] uppercase tracking-[0.22em] text-arena-gold/80">Turn {{ state().turnNumber }}</p>
         <p class="mt-1 font-display text-base leading-snug text-white">{{ lastEvent() || hint() }}</p>
         @if (errorMessage(); as error) {
@@ -229,6 +242,7 @@ export class GameTableComponent {
   readonly editable = input(false);
   readonly pendingSquare = input<number | null>(null);
   readonly view3d = input(false);
+  readonly compactHud = signal(false);
 
   readonly ludo = computed<LudoGameState | null>(() => {
     const state = this.state();
@@ -276,6 +290,18 @@ export class GameTableComponent {
       ? 'Race to 100. Roll a 6 to leave GO.'
       : 'Roll a 6 to leave the yard.'
   );
+
+  constructor() {
+    const destroyRef = inject(DestroyRef);
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
+      return;
+    }
+    const mq = window.matchMedia('(max-width: 767px)');
+    const sync = () => this.compactHud.set(mq.matches);
+    sync();
+    mq.addEventListener('change', sync);
+    destroyRef.onDestroy(() => mq.removeEventListener('change', sync));
+  }
 
   ludoPlayer(state: LudoGameState, color: PlayerColor): LudoPlayer | null {
     return state.players.find((player) => player.color === color) ?? null;

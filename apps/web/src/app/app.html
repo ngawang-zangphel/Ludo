@@ -1,10 +1,11 @@
 @if (showNav()) {
-  <header class="border-b border-arena-line/80 bg-arena-navy/70 backdrop-blur">
-    <div class="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-2 px-4 py-2">
+  <header class="app-nav relative z-40 border-b border-arena-line/80 bg-arena-navy/70 backdrop-blur">
+    <div class="mx-auto flex max-w-7xl items-center justify-between gap-2 px-3 py-2 sm:px-4">
       <a [routerLink]="auth.isAdmin() ? '/admin' : '/'" class="font-display text-base font-semibold text-white">
         Ludo Arena
       </a>
-      <nav class="flex flex-wrap items-center gap-3 text-sm text-arena-mist/80">
+
+      <nav class="app-nav-links hidden items-center gap-3 text-sm text-arena-mist/80 md:flex">
         @if (auth.user(); as user) {
           @if (auth.isAdmin()) {
             <a routerLink="/admin" class="hover:text-arena-gold">Dashboard</a>
@@ -18,7 +19,7 @@
             <a routerLink="/local" class="hover:text-arena-gold">Hot-seat</a>
             <a routerLink="/profile" class="hover:text-arena-gold">Profile</a>
           }
-          <a routerLink="/profile" class="text-arena-mist/50 hover:text-arena-gold">{{ user.name }}</a>
+          <a routerLink="/profile" class="max-w-[9rem] truncate text-arena-mist/50 hover:text-arena-gold">{{ user.name }}</a>
           <button type="button" class="hover:text-piece-red" (click)="auth.logout()">Sign out</button>
         } @else {
           <a routerLink="/local" class="hover:text-arena-gold">Hot-seat</a>
@@ -27,7 +28,60 @@
           <a routerLink="/register" class="hover:text-arena-gold">Register</a>
         }
       </nav>
+
+      <button
+        type="button"
+        class="app-nav-toggle inline-flex h-9 w-9 items-center justify-center rounded-lg border border-arena-line text-arena-mist md:hidden"
+        [attr.aria-expanded]="menuOpen()"
+        aria-controls="app-mobile-nav"
+        aria-label="Menu"
+        (click)="toggleMenu()"
+      >
+        @if (menuOpen()) {
+          <span aria-hidden="true" class="text-lg leading-none">×</span>
+        } @else {
+          <span aria-hidden="true" class="flex flex-col gap-1.5">
+            <span class="block h-0.5 w-4 rounded bg-current"></span>
+            <span class="block h-0.5 w-4 rounded bg-current"></span>
+            <span class="block h-0.5 w-4 rounded bg-current"></span>
+          </span>
+        }
+      </button>
     </div>
+
+    @if (menuOpen()) {
+      <nav
+        id="app-mobile-nav"
+        class="app-mobile-nav absolute inset-x-0 top-full z-50 border-b border-arena-line/80 bg-arena-navy/95 px-3 py-2 shadow-xl backdrop-blur-md md:hidden"
+        (click)="closeMenu()"
+      >
+        <div class="flex flex-col gap-1 text-sm text-arena-mist/90">
+          @if (auth.user(); as user) {
+            @if (auth.isAdmin()) {
+              <a routerLink="/admin" class="rounded-lg px-3 py-2.5 hover:bg-white/5 hover:text-arena-gold">Dashboard</a>
+              <a routerLink="/admin/users" class="rounded-lg px-3 py-2.5 hover:bg-white/5 hover:text-arena-gold">Users</a>
+              <a routerLink="/admin/tournaments" class="rounded-lg px-3 py-2.5 hover:bg-white/5 hover:text-arena-gold">Tournaments</a>
+              <a routerLink="/broadcast" class="rounded-lg px-3 py-2.5 hover:bg-white/5 hover:text-arena-gold">Broadcast</a>
+              <a routerLink="/local" class="rounded-lg px-3 py-2.5 hover:bg-white/5 hover:text-arena-gold">Hot-seat</a>
+            } @else {
+              <a routerLink="/" class="rounded-lg px-3 py-2.5 hover:bg-white/5 hover:text-arena-gold">Invitations</a>
+              <a routerLink="/broadcast" class="rounded-lg px-3 py-2.5 hover:bg-white/5 hover:text-arena-gold">Live broadcast</a>
+              <a routerLink="/local" class="rounded-lg px-3 py-2.5 hover:bg-white/5 hover:text-arena-gold">Hot-seat</a>
+              <a routerLink="/profile" class="rounded-lg px-3 py-2.5 hover:bg-white/5 hover:text-arena-gold">Profile</a>
+            }
+            <a routerLink="/profile" class="rounded-lg px-3 py-2.5 text-arena-mist/50 hover:bg-white/5 hover:text-arena-gold">{{ user.name }}</a>
+            <button type="button" class="rounded-lg px-3 py-2.5 text-left hover:bg-white/5 hover:text-piece-red" (click)="auth.logout()">
+              Sign out
+            </button>
+          } @else {
+            <a routerLink="/local" class="rounded-lg px-3 py-2.5 hover:bg-white/5 hover:text-arena-gold">Hot-seat</a>
+            <a routerLink="/broadcast" class="rounded-lg px-3 py-2.5 hover:bg-white/5 hover:text-arena-gold">Live broadcast</a>
+            <a routerLink="/login" class="rounded-lg px-3 py-2.5 hover:bg-white/5 hover:text-arena-gold">Sign in</a>
+            <a routerLink="/register" class="rounded-lg px-3 py-2.5 hover:bg-white/5 hover:text-arena-gold">Register</a>
+          }
+        </div>
+      </nav>
+    }
   </header>
 }
 <router-outlet />

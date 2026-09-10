@@ -977,7 +977,10 @@ body {
 }
 
 .dice-shell.is-compact {
-  display: contents;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0;
 }
 
 .dice-scene.is-compact:focus-visible {
@@ -1361,9 +1364,70 @@ body {
   --arena-chrome: 20.5rem;
 }
 
+@media (max-width: 767px) {
+  :root {
+    --app-nav-h: 3rem;
+    /* Extra room for player badges above/below the board */
+    --arena-chrome: 15.5rem;
+    --arena-board-size: min(94vw, calc(100dvh - var(--arena-chrome)), 400px);
+  }
+
+  .arena-fit {
+    --arena-chrome: 15.75rem;
+    padding-inline: 0.4rem;
+    padding-block: 0.2rem;
+  }
+
+  .arena-fit.arena-fit-spectator {
+    --arena-chrome: 18.5rem;
+  }
+
+  .arena-fit .arena-hud {
+    margin-top: 0.25rem;
+  }
+
+  .arena-fit-toolbar h1 {
+    font-size: 1.05rem;
+  }
+}
+
+@media (min-width: 768px) and (max-width: 1024px) {
+  :root {
+    --arena-chrome: 15.5rem;
+    --arena-board-size: min(78vw, calc(100dvh - var(--arena-chrome)), 540px);
+  }
+
+  .arena-fit {
+    --arena-chrome: 15.75rem;
+  }
+
+  .arena-fit.arena-fit-spectator {
+    --arena-chrome: 19rem;
+  }
+}
+
 @media (max-width: 900px) {
   .arena-fit.arena-fit-spectator {
-    --arena-chrome: 22.5rem;
+    --arena-chrome: 18.5rem;
+  }
+}
+
+@media (max-width: 767px) and (orientation: landscape) {
+  :root {
+    --arena-chrome: 10.5rem;
+    --arena-board-size: min(58dvh, 48vw, 340px);
+  }
+
+  .arena-fit {
+    --arena-chrome: 10.75rem;
+  }
+
+  .arena-fit.arena-fit-spectator {
+    --arena-chrome: 13rem;
+  }
+
+  .arena-fit-toolbar {
+    display: none;
   }
 }
 
@@ -1431,6 +1495,129 @@ body {
   row-gap: 0.35rem;
   align-items: center;
   justify-content: center;
+}
+
+@media (max-width: 767px) {
+  .arena-table {
+    padding: 0.2rem 0;
+  }
+
+  .ludo-table {
+    position: relative;
+    width: min(100%, var(--arena-board-size));
+    grid-template-columns: 1fr 1fr;
+    grid-template-areas:
+      "green yellow"
+      "extra extra"
+      "board board"
+      "red blue"
+      "extra2 extra2";
+    column-gap: 0.35rem;
+    row-gap: 0.28rem;
+    align-items: center;
+  }
+
+  .ludo-table-green,
+  .ludo-table-red,
+  .ludo-table-yellow,
+  .ludo-table-blue,
+  .ludo-table-extra,
+  .ludo-table-extra2 {
+    position: static;
+    z-index: auto;
+    padding: 0;
+    transform: none;
+  }
+
+  .ludo-table-board {
+    width: 100%;
+    justify-self: stretch;
+  }
+
+  .ludo-table-board .snakes-board-frame,
+  .ludo-table-board .ludo-board-frame {
+    width: min(100%, var(--arena-board-size));
+    margin-inline: auto;
+  }
+
+  .ludo-table-green {
+    grid-area: green;
+    justify-self: start;
+    align-self: center;
+  }
+
+  .ludo-table-yellow {
+    grid-area: yellow;
+    justify-self: end;
+    align-self: center;
+  }
+
+  .ludo-table-extra {
+    grid-area: extra;
+    justify-self: center;
+    align-self: center;
+  }
+
+  .ludo-table-red {
+    grid-area: red;
+    justify-self: start;
+    align-self: center;
+  }
+
+  .ludo-table-blue {
+    grid-area: blue;
+    justify-self: end;
+    align-self: center;
+  }
+
+  .ludo-table-extra2 {
+    grid-area: extra2;
+    justify-self: center;
+    align-self: center;
+  }
+
+  .ludo-table-green:empty,
+  .ludo-table-red:empty,
+  .ludo-table-yellow:empty,
+  .ludo-table-blue:empty,
+  .ludo-table-extra:empty,
+  .ludo-table-extra2:empty {
+    display: none;
+  }
+
+  .snakes-badge {
+    gap: 0.28rem;
+    padding: 0.22rem 0.4rem 0.22rem 0.28rem;
+  }
+
+  .snakes-badge-name {
+    max-width: 6.5rem;
+    font-size: 0.68rem;
+  }
+
+  .snakes-badge-meta {
+    font-size: 0.6rem;
+  }
+
+  .king-pin {
+    width: 1.35rem;
+    height: 1.4rem;
+  }
+
+  .king-pin svg {
+    width: 1.05rem;
+    height: 1.4rem;
+  }
+
+  .snakes-board-frame,
+  .ludo-board-frame {
+    padding: 0.45rem;
+    border-radius: 1rem;
+  }
+
+  .snakes-square-number {
+    font-size: clamp(0.45rem, 2.4vw, 0.62rem);
+  }
 }
 
 .ludo-table-board {
@@ -1656,11 +1843,87 @@ body {
   background: linear-gradient(180deg, rgba(22, 32, 56, 0.94), rgba(10, 14, 26, 0.94));
   border: 1px solid rgba(228, 193, 106, 0.18);
   box-shadow: 0 16px 40px rgba(0, 0, 0, 0.4);
+  grid-template-columns: 1fr;
+  align-items: center;
+}
+
+@media (min-width: 768px) {
+  .arena-hud {
+    grid-template-columns: 1fr auto 1fr;
+  }
+}
+
+.arena-hud.arena-hud-compact {
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.5rem 0.75rem;
+  margin-top: 0.3rem;
+  padding: 0.4rem 0.55rem;
+  border-radius: 1rem;
+  width: min(100%, 28rem);
+}
+
+.arena-hud.arena-hud-compact .arena-event-hidden {
+  display: none;
 }
 
 .arena-turn {
   text-align: left;
   padding: 0.15rem 0.35rem;
+  min-width: 0;
+}
+
+.arena-turn-kicker {
+  margin: 0;
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.22em;
+  color: color-mix(in srgb, var(--color-arena-mist) 50%, transparent);
+}
+
+.arena-turn-name {
+  margin: 0.25rem 0 0;
+  font-family: var(--font-display);
+  font-size: 1.25rem;
+  font-weight: 600;
+  line-height: 1.15;
+}
+
+.arena-turn-hint {
+  margin: 0.25rem 0 0;
+  font-size: 0.875rem;
+  color: color-mix(in srgb, var(--color-arena-mist) 70%, transparent);
+}
+
+.arena-turn-hint-compact {
+  display: none;
+}
+
+.arena-hud.arena-hud-compact .arena-turn-name {
+  margin-top: 0.1rem;
+  font-size: 1rem;
+}
+
+.arena-hud.arena-hud-compact .arena-turn-hint {
+  margin-top: 0.1rem;
+  font-size: 0.72rem;
+}
+
+.arena-hud.arena-hud-compact .arena-turn-hint-full {
+  display: none;
+}
+
+.arena-hud.arena-hud-compact .arena-turn-hint-compact {
+  display: block;
+}
+
+.arena-turn-compact .arena-turn-name {
+  margin-top: 0.1rem;
+  font-size: 1rem;
+}
+
+.arena-turn-compact .arena-turn-hint {
+  margin-top: 0.1rem;
+  font-size: 0.72rem;
 }
 
 .dice-roll-btn {

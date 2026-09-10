@@ -1,4 +1,4 @@
-import { Component, computed, inject } from '@angular/core';
+import { Component, computed, effect, inject, signal } from '@angular/core';
 import { NavigationEnd, Router, RouterLink, RouterOutlet } from '@angular/router';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { filter, map, startWith } from 'rxjs';
@@ -13,6 +13,7 @@ import { AuthService } from './core/auth/auth.service';
 export class App {
   readonly auth = inject(AuthService);
   private readonly router = inject(Router);
+  readonly menuOpen = signal(false);
 
   private readonly url = toSignal(
     this.router.events.pipe(
@@ -27,4 +28,19 @@ export class App {
     const url = this.url();
     return !url.startsWith('/broadcast') && !url.startsWith('/local');
   });
+
+  constructor() {
+    effect(() => {
+      this.url();
+      this.menuOpen.set(false);
+    });
+  }
+
+  toggleMenu(): void {
+    this.menuOpen.update((open) => !open);
+  }
+
+  closeMenu(): void {
+    this.menuOpen.set(false);
+  }
 }
