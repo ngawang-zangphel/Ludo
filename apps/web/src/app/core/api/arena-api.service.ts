@@ -218,6 +218,16 @@ export class ArenaApiService {
     );
   }
 
+  renameTournament(id: string, name: string): Promise<TournamentDto> {
+    return firstValueFrom(
+      this.http.patch<TournamentDto>(`/api/tournaments/${id}/name`, { name })
+    );
+  }
+
+  duplicateTournament(id: string): Promise<TournamentDto> {
+    return firstValueFrom(this.http.post<TournamentDto>(`/api/tournaments/${id}/duplicate`, {}));
+  }
+
   updateTournamentSnakesRules(
     id: string,
     body: {

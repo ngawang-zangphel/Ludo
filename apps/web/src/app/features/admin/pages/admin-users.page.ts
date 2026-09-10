@@ -117,20 +117,30 @@ type UserFilter = 'ALL' | 'ONLINE' | 'PLAYER' | 'ADMIN';
         }
       </form>
 
-      <div class="mt-6 flex flex-wrap gap-2">
-        @for (item of filters; track item) {
-          <button
-            type="button"
-            class="rounded-full px-4 py-1.5 text-sm"
-            [class.bg-arena-gold]="filter() === item"
-            [class.text-arena-ink]="filter() === item"
-            [class.border]="filter() !== item"
-            [class.border-arena-line]="filter() !== item"
-            (click)="filter.set(item)"
-          >
-            {{ item }}
-          </button>
-        }
+      <div class="mt-6 flex flex-wrap items-center gap-3">
+        <input
+          class="field max-w-sm flex-1"
+          name="userSearch"
+          type="search"
+          placeholder="Search by name or email…"
+          [ngModel]="search()"
+          (ngModelChange)="search.set($event)"
+        />
+        <div class="flex flex-wrap gap-2">
+          @for (item of filters; track item) {
+            <button
+              type="button"
+              class="rounded-full px-4 py-1.5 text-sm"
+              [class.bg-arena-gold]="filter() === item"
+              [class.text-arena-ink]="filter() === item"
+              [class.border]="filter() !== item"
+              [class.border-arena-line]="filter() !== item"
+              (click)="filter.set(item)"
+            >
+              {{ item }}
+            </button>
+          }
+        </div>
       </div>
 
       <div class="mt-4 overflow-x-auto rounded-3xl border border-arena-line">
@@ -203,7 +213,9 @@ type UserFilter = 'ALL' | 'ONLINE' | 'PLAYER' | 'ADMIN';
               </tr>
             } @empty {
               <tr>
-                <td class="px-4 py-8 text-arena-mist/60" colspan="4">No users in this filter.</td>
+                <td class="px-4 py-8 text-arena-mist/60" colspan="4">
+                  {{ search().trim() ? 'No users match your search.' : 'No users in this filter.' }}
+                </td>
               </tr>
             }
           </tbody>
@@ -230,6 +242,7 @@ export class AdminUsersPage implements OnInit, OnDestroy {
   readonly filters: UserFilter[] = ['ALL', 'ONLINE', 'PLAYER', 'ADMIN'];
   readonly users = signal<UserDto[]>([]);
   readonly filter = signal<UserFilter>('ALL');
+  readonly search = signal('');
   readonly error = signal<string | null>(null);
   readonly editingId = signal<string | null>(null);
   readonly me = this.auth.user;
@@ -253,18 +266,24 @@ export class AdminUsersPage implements OnInit, OnDestroy {
 
   readonly visible = computed(() => {
     const filter = this.filter();
+    const query = this.search().trim().toLowerCase();
     const online = new Set(this.realtime.onlineUserIds());
     return this.users().filter((user) => {
-      if (filter === 'ONLINE') {
-        return online.has(user.id);
+      if (filter === 'ONLINE' && !online.has(user.id)) {
+        return false;
       }
-      if (filter === 'PLAYER') {
-        return user.role === UserRole.PLAYER;
+      if (filter === 'PLAYER' && user.role !== UserRole.PLAYER) {
+        return false;
       }
-      if (filter === 'ADMIN') {
-        return user.role === UserRole.ADMIN;
+      if (filter === 'ADMIN' && user.role !== UserRole.ADMIN) {
+        return false;
       }
-      return true;
+      if (!query) {
+        return true;
+      }
+      return (
+        user.name.toLowerCase().includes(query) || user.email.toLowerCase().includes(query)
+      );
     });
   });
 

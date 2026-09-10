@@ -1,4 +1,6 @@
-const BACKEND_URL = 'https://zludo.apps.selise.dev';
+// Local API by default so new routes work during development.
+// Remote: BACKEND_URL=https://zludo.apps.selise.dev nx serve web
+const BACKEND_URL = process.env.BACKEND_URL || 'http://localhost:3000';
 
 function rewriteProxiedCookies(proxy) {
   proxy.on('error', () => undefined);
@@ -22,7 +24,7 @@ function rewriteProxiedCookies(proxy) {
 module.exports = {
   '/api': {
     target: BACKEND_URL,
-    secure: true,
+    secure: BACKEND_URL.startsWith('https'),
     changeOrigin: true,
     cookieDomainRewrite: 'localhost',
     configure: rewriteProxiedCookies,
@@ -30,9 +32,10 @@ module.exports = {
   },
   '/socket.io': {
     target: BACKEND_URL,
-    secure: true,
+    secure: BACKEND_URL.startsWith('https'),
     changeOrigin: true,
     cookieDomainRewrite: 'localhost',
+    ws: true,
     configure: rewriteProxiedCookies,
     headers: { origin: BACKEND_URL },
   },

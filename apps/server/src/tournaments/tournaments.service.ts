@@ -118,6 +118,36 @@ export class TournamentsService {
     return this.withCounts(tournament);
   }
 
+  async rename(id: string, name: string): Promise<TournamentDto> {
+    const trimmed = name.trim();
+    if (!trimmed) {
+      throw new BadRequestException('Tournament name is required');
+    }
+    const tournament = await this.require(id);
+    tournament.name = trimmed;
+    await tournament.save();
+    logEvent('Tournament renamed', { tournamentId: id, name: trimmed });
+    return this.withCounts(tournament);
+  }
+
+  async duplicate(id: string): Promise<TournamentDto> {
+    const source = await this.require(id);
+    const copy = await this.tournaments.create({
+      name: `${source.name} (copy)`,
+      status: TournamentStatus.REGISTRATION,
+      gameType: source.gameType,
+      rules: structuredClone(source.rules),
+      disconnectRules: structuredClone(source.disconnectRules),
+      rounds: source.rounds.map((round) => ({ name: round.name, number: round.number })),
+    });
+    logEvent('Tournament duplicated', {
+      tournamentId: toObjectIdString(copy._id),
+      sourceId: id,
+      name: copy.name,
+    });
+    return this.toDto(copy, { playerCount: 0, tableCount: 0 });
+  }
+
   async updateSnakesRules(
     id: string,
     dto: UpdateTournamentSnakesRulesDto

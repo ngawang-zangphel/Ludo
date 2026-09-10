@@ -9,6 +9,7 @@ import { TournamentsService } from './tournaments.service';
 import {
   CreateTournamentDto,
   RegisterParticipantDto,
+  RenameTournamentDto,
   UpdateTournamentSnakesRulesDto,
   UpdateTournamentStatusDto,
 } from './dto/tournament.dto';
@@ -35,6 +36,18 @@ export class TournamentsController {
   @Roles(UserRole.ADMIN)
   create(@Body() dto: CreateTournamentDto): Promise<TournamentDto> {
     return this.tournaments.create(dto);
+  }
+
+  @Post(':id/duplicate')
+  @Roles(UserRole.ADMIN)
+  duplicate(@Param('id') id: string): Promise<TournamentDto> {
+    return this.tournaments.duplicate(id);
+  }
+
+  @Patch(':id/name')
+  @Roles(UserRole.ADMIN)
+  rename(@Param('id') id: string, @Body() dto: RenameTournamentDto): Promise<TournamentDto> {
+    return this.tournaments.rename(id, dto.name);
   }
 
   @Patch(':id/status')

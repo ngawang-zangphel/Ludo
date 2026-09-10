@@ -299,19 +299,35 @@ import { SnakesPresetPickerComponent } from '../../game/components/snakes-preset
                   </div>
                 </div>
                 <div class="mt-auto pt-4">
-                  <div class="flex items-center justify-between gap-3 border-t border-arena-line/60 pt-3 text-xs">
+                  <div class="flex flex-wrap items-center justify-between gap-3 border-t border-arena-line/60 pt-3 text-xs">
                     @if (selected()?.id === tournament.id) {
                       <span class="font-medium text-arena-gold">Managing this tournament</span>
                     } @else {
                       <span class="text-arena-mist/40 transition group-hover:text-arena-mist/80">Open to manage</span>
                     }
-                    <button
-                      type="button"
-                      class="rounded-full border border-piece-red px-3 py-1.5 text-xs text-piece-red hover:bg-piece-red/10"
-                      (click)="removeTournament(tournament, $event)"
-                    >
-                      Delete
-                    </button>
+                    <div class="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        class="rounded-full border border-arena-line px-3 py-1.5 text-xs text-arena-mist hover:border-arena-gold hover:text-arena-gold"
+                        (click)="duplicateTournament(tournament, $event)"
+                      >
+                        Duplicate
+                      </button>
+                      <button
+                        type="button"
+                        class="rounded-full border border-arena-line px-3 py-1.5 text-xs text-arena-mist hover:border-arena-gold hover:text-arena-gold"
+                        (click)="startRename(tournament, $event)"
+                      >
+                        Rename
+                      </button>
+                      <button
+                        type="button"
+                        class="rounded-full border border-piece-red px-3 py-1.5 text-xs text-piece-red hover:bg-piece-red/10"
+                        (click)="removeTournament(tournament, $event)"
+                      >
+                        Delete
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -325,6 +341,57 @@ import { SnakesPresetPickerComponent } from '../../game/components/snakes-preset
       </section>
 
       @if (selected(); as tournament) {
+        <section class="mt-8 rounded-3xl border border-arena-line bg-arena-navy/80 p-5">
+          <div class="flex flex-wrap items-end justify-between gap-3">
+            <div class="min-w-0 flex-1">
+              <p class="text-xs uppercase tracking-[0.25em] text-arena-gold">Selected</p>
+              @if (renamingId() === tournament.id) {
+                <form class="mt-2 flex max-w-xl flex-wrap gap-2" (ngSubmit)="saveRename()">
+                  <input
+                    class="field min-w-[12rem] flex-1"
+                    name="renameTournamentName"
+                    [(ngModel)]="renameName"
+                    placeholder="Tournament name"
+                    autofocus
+                  />
+                  <button
+                    type="submit"
+                    class="rounded-full bg-arena-gold px-4 py-2 text-sm font-semibold text-arena-ink disabled:opacity-40"
+                    [disabled]="renamingBusy()"
+                  >
+                    {{ renamingBusy() ? 'Saving…' : 'Save name' }}
+                  </button>
+                  <button
+                    type="button"
+                    class="rounded-full border border-arena-line px-4 py-2 text-sm text-arena-mist"
+                    (click)="cancelRename()"
+                  >
+                    Cancel
+                  </button>
+                </form>
+              } @else {
+                <div class="mt-1 flex flex-wrap items-center gap-3">
+                  <h2 class="font-display text-xl text-white">{{ tournament.name }}</h2>
+                  <button
+                    type="button"
+                    class="text-xs text-arena-gold hover:underline"
+                    (click)="startRename(tournament)"
+                  >
+                    Rename
+                  </button>
+                  <button
+                    type="button"
+                    class="text-xs text-arena-mist/70 hover:text-arena-gold"
+                    (click)="duplicateTournament(tournament)"
+                  >
+                    Duplicate
+                  </button>
+                </div>
+              }
+            </div>
+          </div>
+        </section>
+
         @if (tournament.gameType === GameType.SNAKES && isSnakesRules(tournament.rules)) {
           <section class="mt-8 rounded-3xl border border-arena-line bg-arena-navy/80 p-5">
             <div class="flex flex-wrap items-end justify-between gap-3">
@@ -727,6 +794,9 @@ export class AdminTournamentsPage implements OnInit {
   readonly registerUserIds = signal<string[]>([]);
   readonly editingGroupId = signal<string | null>(null);
   readonly memberBusy = signal(false);
+  readonly renamingId = signal<string | null>(null);
+  readonly renamingBusy = signal(false);
+  renameName = '';
   draftGroupName = '';
   readonly readyCountLabel = readyCountLabel;
   readonly matchPlacements = matchPlacements;
@@ -888,6 +958,9 @@ export class AdminTournamentsPage implements OnInit {
   }
 
   async select(tournament: TournamentDto): Promise<void> {
+    if (this.renamingId() && this.renamingId() !== tournament.id) {
+      this.cancelRename();
+    }
     this.selected.set(tournament);
     this.selectedPlayerIds.set([]);
     this.registerUserIds.set([]);
@@ -1364,6 +1437,54 @@ export class AdminTournamentsPage implements OnInit {
       if (!this.selected() && tournaments[0]) {
         await this.select(tournaments[0]);
       }
+    });
+  }
+
+  startRename(tournament: TournamentDto, event?: Event): void {
+    event?.preventDefault();
+    event?.stopPropagation();
+    void this.select(tournament);
+    this.renamingId.set(tournament.id);
+    this.renameName = tournament.name;
+  }
+
+  cancelRename(): void {
+    this.renamingId.set(null);
+    this.renameName = '';
+  }
+
+  async saveRename(): Promise<void> {
+    const id = this.renamingId();
+    const name = this.renameName.trim();
+    if (!id) {
+      return;
+    }
+    if (!name) {
+      this.error.set('Enter a tournament name.');
+      return;
+    }
+    this.renamingBusy.set(true);
+    try {
+      await this.guard(async () => {
+        const updated = await this.api.renameTournament(id, name);
+        this.selected.set(updated);
+        this.tournaments.update((rows) =>
+          rows.map((row) => (row.id === id ? { ...row, name: updated.name } : row))
+        );
+        this.cancelRename();
+      });
+    } finally {
+      this.renamingBusy.set(false);
+    }
+  }
+
+  async duplicateTournament(tournament: TournamentDto, event?: Event): Promise<void> {
+    event?.preventDefault();
+    event?.stopPropagation();
+    await this.guard(async () => {
+      const copy = await this.api.duplicateTournament(tournament.id);
+      await this.refresh();
+      await this.select(copy);
     });
   }
 

@@ -86,6 +86,11 @@ export class UpdateTournamentStatusDto {
   status!: TournamentStatus;
 }
 
+export class RenameTournamentDto {
+  @IsString()
+  name!: string;
+}
+
 export class UpdateTournamentSnakesRulesDto {
   @IsOptional()
   @IsEnum(SnakesLevelId)
