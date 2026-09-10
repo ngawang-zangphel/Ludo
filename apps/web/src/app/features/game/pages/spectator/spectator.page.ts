@@ -40,165 +40,169 @@ import { readSnakesView3d, writeSnakesView3d } from '../../models/snakes-view';
     StatusBadgeComponent,
   ],
   template: `
-    <div class="px-3 py-2 lg:px-6">
+    <div class="arena-fit arena-fit-spectator lg:px-4">
       <arena-match-start-overlay
         [countdown]="game.startCountdown()"
         [dealing]="!!game.marriageDeal()"
       />
-      <div class="mx-auto mb-2 flex max-w-7xl flex-wrap items-center justify-between gap-2">
-        <div>
-          <a routerLink="/admin" class="text-[0.65rem] uppercase tracking-[0.3em] text-arena-gold hover:underline">Admin</a>
-          <h1 class="font-display text-xl font-bold text-white md:text-2xl">Spectator</h1>
-          <p class="text-xs text-arena-mist/70">
-            {{ detail()?.tournamentName }} · {{ detail()?.groupName || detail()?.round }} · Match {{ detail()?.matchNumber }}
-            @if (neighbors(); as nav) {
-              · Live {{ nav.index }} / {{ nav.total }}
-            }
-            @if (onBroadcast()) {
-              · <span class="text-arena-gold">On broadcast</span>
-            }
-          </p>
-        </div>
-        <div class="flex flex-wrap items-center gap-2">
-          @if (detail(); as match) {
-            <ludo-status-badge [status]="matchStatus() ?? match.status" />
-            @if (isSnakes()) {
-              <button
-                type="button"
-                class="spec-btn"
-                [class.spec-btn-gold]="view3d()"
-                (click)="toggleView3d()"
-              >
-                {{ view3d() ? '3D view' : '2D view' }}
-              </button>
-            }
-            @if (onBroadcast()) {
-              <button type="button" class="spec-btn spec-btn-danger" (click)="stopBroadcast()">
-                Stop broadcast
-              </button>
-            } @else {
-              <button type="button" class="spec-btn" (click)="broadcast(match.id)">Broadcast</button>
-            }
-            @if (matchStatus() === MatchStatus.READY || matchStatus() === MatchStatus.WAITING) {
-              <button
-                type="button"
-                class="spec-btn spec-btn-gold disabled:cursor-not-allowed disabled:opacity-40"
-                [disabled]="!canStart()"
-                [title]="canStart() ? '' : 'Every seated player must join the match first'"
-                (click)="startMatch()"
-              >
-                Start
-              </button>
-            }
-            @if (matchStatus() === MatchStatus.LIVE) {
-              <button type="button" class="spec-btn" (click)="pauseMatch()">Pause</button>
-            }
-            @if (matchStatus() === MatchStatus.PAUSED) {
-              <button type="button" class="spec-btn spec-btn-gold" (click)="resumeMatch()">Resume</button>
-            }
-            @if (
-              matchStatus() === MatchStatus.LIVE ||
-              matchStatus() === MatchStatus.PAUSED ||
-              matchStatus() === MatchStatus.COMPLETED
-            ) {
-              <button type="button" class="spec-btn" (click)="restartMatch()">Restart</button>
-            }
-            @if (matchStatus() !== MatchStatus.COMPLETED && matchStatus() !== MatchStatus.CANCELLED) {
-              <button type="button" class="spec-btn spec-btn-danger" (click)="cancelMatch()">Cancel</button>
-            }
-            <button type="button" class="spec-btn spec-btn-danger" (click)="deleteMatch()">Delete</button>
-          }
-          <button
-            type="button"
-            class="spec-btn disabled:opacity-40"
-            [disabled]="!neighbors()?.previousId"
-            (click)="go(neighbors()?.previousId)"
-          >
-            Previous live
-          </button>
-          <button
-            type="button"
-            class="spec-btn disabled:opacity-40"
-            [disabled]="!neighbors()?.nextId"
-            (click)="go(neighbors()?.nextId)"
-          >
-            Next live
-          </button>
-        </div>
-      </div>
-
-      @if (error()) {
-        <p class="mx-auto max-w-7xl text-piece-red">{{ error() }}</p>
-      }
-
-      @if (seats().length) {
-        <div class="mx-auto mb-2 flex max-w-7xl flex-wrap gap-1.5">
-          @for (player of seats(); track player.userId) {
-            <span class="inline-flex items-center gap-2 rounded-full border border-arena-line px-2.5 py-0.5 text-[0.7rem]">
-              {{ player.name }}
-              @if (player.eliminated) {
-                <span class="text-piece-red">Removed</span>
-              } @else if (!game.state()) {
-                <span [class.text-arena-gold]="player.ready" [class.text-arena-mist/50]="!player.ready">
-                  {{ player.ready ? 'Ready' : 'Waiting' }}
-                </span>
+      <div class="arena-fit-toolbar mx-auto w-full max-w-7xl">
+        <div class="mb-1 flex flex-wrap items-center justify-between gap-1.5">
+          <div class="min-w-0">
+            <a routerLink="/admin" class="text-[0.6rem] uppercase tracking-[0.3em] text-arena-gold hover:underline">Admin</a>
+            <h1 class="font-display text-lg font-bold leading-tight text-white md:text-xl">Spectator</h1>
+            <p class="truncate text-[0.7rem] text-arena-mist/70">
+              {{ detail()?.tournamentName }} · {{ detail()?.groupName || detail()?.round }} · Match {{ detail()?.matchNumber }}
+              @if (neighbors(); as nav) {
+                · Live {{ nav.index }} / {{ nav.total }}
               }
-              @if (canRemove() && !player.eliminated) {
+              @if (onBroadcast()) {
+                · <span class="text-arena-gold">On broadcast</span>
+              }
+            </p>
+          </div>
+          <div class="flex flex-wrap items-center gap-1.5">
+            @if (detail(); as match) {
+              <ludo-status-badge [status]="matchStatus() ?? match.status" />
+              @if (isSnakes()) {
                 <button
                   type="button"
-                  class="text-piece-red hover:underline"
-                  (click)="removePlayer(player.userId)"
+                  class="spec-btn"
+                  [class.spec-btn-gold]="view3d()"
+                  (click)="toggleView3d()"
                 >
-                  Remove
+                  {{ view3d() ? '3D view' : '2D view' }}
                 </button>
               }
-            </span>
-          }
+              @if (onBroadcast()) {
+                <button type="button" class="spec-btn spec-btn-danger" (click)="stopBroadcast()">
+                  Stop broadcast
+                </button>
+              } @else {
+                <button type="button" class="spec-btn" (click)="broadcast(match.id)">Broadcast</button>
+              }
+              @if (matchStatus() === MatchStatus.READY || matchStatus() === MatchStatus.WAITING) {
+                <button
+                  type="button"
+                  class="spec-btn spec-btn-gold disabled:cursor-not-allowed disabled:opacity-40"
+                  [disabled]="!canStart()"
+                  [title]="canStart() ? '' : 'Every seated player must join the match first'"
+                  (click)="startMatch()"
+                >
+                  Start
+                </button>
+              }
+              @if (matchStatus() === MatchStatus.LIVE) {
+                <button type="button" class="spec-btn" (click)="pauseMatch()">Pause</button>
+              }
+              @if (matchStatus() === MatchStatus.PAUSED) {
+                <button type="button" class="spec-btn spec-btn-gold" (click)="resumeMatch()">Resume</button>
+              }
+              @if (
+                matchStatus() === MatchStatus.LIVE ||
+                matchStatus() === MatchStatus.PAUSED ||
+                matchStatus() === MatchStatus.COMPLETED
+              ) {
+                <button type="button" class="spec-btn" (click)="restartMatch()">Restart</button>
+              }
+              @if (matchStatus() !== MatchStatus.COMPLETED && matchStatus() !== MatchStatus.CANCELLED) {
+                <button type="button" class="spec-btn spec-btn-danger" (click)="cancelMatch()">Cancel</button>
+              }
+              <button type="button" class="spec-btn spec-btn-danger" (click)="deleteMatch()">Delete</button>
+            }
+            <button
+              type="button"
+              class="spec-btn disabled:opacity-40"
+              [disabled]="!neighbors()?.previousId"
+              (click)="go(neighbors()?.previousId)"
+            >
+              Previous live
+            </button>
+            <button
+              type="button"
+              class="spec-btn disabled:opacity-40"
+              [disabled]="!neighbors()?.nextId"
+              (click)="go(neighbors()?.nextId)"
+            >
+              Next live
+            </button>
+          </div>
         </div>
-      }
 
-      @if (game.state(); as state) {
-        @if (asMarriage(state); as marriage) {
-          <arena-marriage-table
-            [state]="marriage"
-            [interactive]="false"
-            [viewerPlayerId]="null"
-            [showAllHands]="true"
-            [canOpen]="false"
-            [canShow]="false"
-            [selectedCardId]="null"
-            [deal]="game.marriageDeal()"
-          />
-        } @else {
-          <ludo-game-table
-            [state]="game.tableState() ?? state"
-            [displayCoords]="game.displayCoords()"
-            [interactive]="false"
-            [highlightValid]="true"
-            [movingPieceId]="game.movingPieceId()"
-            [hopTick]="game.hopTick()"
-            [diceUi]="game.diceUi()"
-            [canRoll]="false"
-            [lastEvent]="game.tableLastEvent()"
-            [errorMessage]="game.errorMessage()"
-            [view3d]="view3d()"
-          />
+        @if (error()) {
+          <p class="mb-1 text-sm text-piece-red">{{ error() }}</p>
         }
-        <arena-finish-celebration [celebration]="game.celebration()" />
-      } @else {
-        <div class="mx-auto max-w-xl rounded-3xl border border-dashed border-arena-line p-10 text-center text-arena-mist/70">
-          This match has not started yet.
-          <p class="mt-2 text-sm">Players must join from their invite before you can start.</p>
-        </div>
-      }
+
+        @if (seats().length) {
+          <div class="mb-1 flex flex-wrap gap-1">
+            @for (player of seats(); track player.userId) {
+              <span class="inline-flex items-center gap-1.5 rounded-full border border-arena-line px-2 py-0.5 text-[0.65rem]">
+                {{ player.name }}
+                @if (player.eliminated) {
+                  <span class="text-piece-red">Removed</span>
+                } @else if (!game.state()) {
+                  <span [class.text-arena-gold]="player.ready" [class.text-arena-mist/50]="!player.ready">
+                    {{ player.ready ? 'Ready' : 'Waiting' }}
+                  </span>
+                }
+                @if (canRemove() && !player.eliminated) {
+                  <button
+                    type="button"
+                    class="text-piece-red hover:underline"
+                    (click)="removePlayer(player.userId)"
+                  >
+                    Remove
+                  </button>
+                }
+              </span>
+            }
+          </div>
+        }
+      </div>
+
+      <div class="arena-fit-stage">
+        @if (game.state(); as state) {
+          @if (asMarriage(state); as marriage) {
+            <arena-marriage-table
+              [state]="marriage"
+              [interactive]="false"
+              [viewerPlayerId]="null"
+              [showAllHands]="true"
+              [canOpen]="false"
+              [canShow]="false"
+              [selectedCardId]="null"
+              [deal]="game.marriageDeal()"
+            />
+          } @else {
+            <ludo-game-table
+              [state]="game.tableState() ?? state"
+              [displayCoords]="game.displayCoords()"
+              [interactive]="false"
+              [highlightValid]="true"
+              [movingPieceId]="game.movingPieceId()"
+              [hopTick]="game.hopTick()"
+              [diceUi]="game.diceUi()"
+              [canRoll]="false"
+              [lastEvent]="game.tableLastEvent()"
+              [errorMessage]="game.errorMessage()"
+              [view3d]="view3d()"
+            />
+          }
+          <arena-finish-celebration [celebration]="game.celebration()" />
+        } @else {
+          <div class="mx-auto max-w-xl rounded-3xl border border-dashed border-arena-line p-8 text-center text-arena-mist/70">
+            This match has not started yet.
+            <p class="mt-2 text-sm">Players must join from their invite before you can start.</p>
+          </div>
+        }
+      </div>
     </div>
   `,
   styles: `
     .spec-btn {
       border-radius: 999px;
       border: 1px solid var(--color-arena-line);
-      padding: 0.35rem 0.8rem;
-      font-size: 0.75rem;
+      padding: 0.25rem 0.65rem;
+      font-size: 0.7rem;
       color: inherit;
       background: transparent;
     }

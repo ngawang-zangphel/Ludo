@@ -34,10 +34,19 @@ body {
   font-family: var(--font-sans);
 }
 
+:root {
+  /* Top app nav height used by arena-fit pages */
+  --app-nav-h: 3.25rem;
+  /* Nav + title + seat badges + HUD around the board */
+  --arena-chrome: 16.5rem;
+  --arena-board-cap: 620px;
+  --arena-board-size: min(92vw, calc(100dvh - var(--arena-chrome)), var(--arena-board-cap));
+}
+
 .ludo-board-frame {
   position: relative;
   aspect-ratio: 1;
-  width: min(92vw, calc(100dvh - 13.5rem), 620px);
+  width: var(--arena-board-size);
   padding: 0.72rem;
   overflow: hidden;
   border-radius: 1.45rem;
@@ -253,7 +262,7 @@ body {
   --terrace-step: 44px;
   position: relative;
   justify-content: center;
-  min-height: min(90vw, calc(100dvh - 12rem), 680px);
+  min-height: min(90vw, calc(100dvh - var(--arena-chrome) + 1.5rem), 680px);
   perspective: 1400px;
   perspective-origin: 50% 22%;
   padding: 2.2rem 0.4rem 2.4rem;
@@ -285,7 +294,7 @@ body {
 }
 
 .snakes-board-scene.is-3d .snakes-board-frame {
-  width: min(90vw, calc(100dvh - 13rem), 620px);
+  width: min(90vw, calc(100dvh - var(--arena-chrome)), var(--arena-board-cap));
   background:
     radial-gradient(ellipse at 50% 80%, rgba(36, 90, 48, 0.55), transparent 62%),
     linear-gradient(165deg, #ffe58a 0%, #e8b84a 38%, #c4841c 72%, #8a5310 100%);
@@ -545,7 +554,7 @@ body {
   .snakes-board-scene.is-3d {
     --terrace-step: 32px;
     perspective: 1100px;
-    min-height: min(92vw, calc(100dvh - 13rem), 540px);
+    min-height: min(92vw, calc(100dvh - var(--arena-chrome) + 1rem), 540px);
     padding: 1.4rem 0.25rem 1.8rem;
   }
 
@@ -561,7 +570,7 @@ body {
 .snakes-board-frame {
   position: relative;
   aspect-ratio: 1;
-  width: min(92vw, calc(100dvh - 13.5rem), 620px);
+  width: var(--arena-board-size);
   padding: 0.78rem;
   overflow: hidden;
   border-radius: 1.45rem;
@@ -1335,6 +1344,55 @@ body {
     var(--color-arena-ink);
 }
 
+/* Match pages: keep board + chrome inside one viewport (no vertical scroll). */
+.arena-fit {
+  --arena-chrome: 17.5rem;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  height: calc(100dvh - var(--app-nav-h, 3.25rem));
+  max-height: calc(100dvh - var(--app-nav-h, 3.25rem));
+  overflow: hidden;
+  padding-inline: 0.75rem;
+  padding-block: 0.35rem;
+}
+
+.arena-fit.arena-fit-spectator {
+  --arena-chrome: 20.5rem;
+}
+
+@media (max-width: 900px) {
+  .arena-fit.arena-fit-spectator {
+    --arena-chrome: 22.5rem;
+  }
+}
+
+.arena-fit-toolbar {
+  flex-shrink: 0;
+}
+
+.arena-fit-stage {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  overflow: auto;
+}
+
+.arena-fit .arena-hud {
+  margin-top: 0.35rem;
+  padding: 0.45rem 0.7rem;
+}
+
+.arena-fit .arena-event {
+  min-height: 0;
+}
+
+.arena-fit .ludo-table {
+  row-gap: 0.2rem;
+}
+
 .arena-table {
   position: relative;
   padding: 0.75rem 0.5rem 0.25rem;
@@ -1344,7 +1402,7 @@ body {
   content: "";
   position: absolute;
   inset: 0 4% auto;
-  height: min(92vw, calc(100dvh - 13.5rem), 620px);
+  height: var(--arena-board-size);
   margin: 0 auto;
   max-width: 760px;
   border-radius: 2rem;

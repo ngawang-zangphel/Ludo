@@ -37,92 +37,96 @@ import { httpErrorMessage, placeLabel } from '../../../../shared/format';
     StatusBadgeComponent,
   ],
   template: `
-    <div class="px-3 py-2 lg:px-6">
+    <div class="arena-fit lg:px-4">
       <arena-match-start-overlay
         [countdown]="game.startCountdown()"
         [dealing]="!!game.marriageDeal()"
       />
-      <div class="mx-auto mb-2 flex max-w-7xl flex-wrap items-center justify-between gap-2">
-        <div>
-          <a routerLink="/" class="text-[0.65rem] uppercase tracking-[0.3em] text-arena-gold hover:underline">Invitations</a>
-          <h1 class="font-display text-xl font-bold text-white md:text-2xl">
-            {{ detail()?.tournamentName || 'Match room' }}
-          </h1>
-          <p class="text-xs text-arena-mist/70">
-            {{ detail()?.round }} · Match {{ detail()?.matchNumber }}
-          </p>
+      <div class="arena-fit-toolbar mx-auto w-full max-w-7xl">
+        <div class="mb-1 flex flex-wrap items-center justify-between gap-1.5">
+          <div class="min-w-0">
+            <a routerLink="/" class="text-[0.6rem] uppercase tracking-[0.3em] text-arena-gold hover:underline">Invitations</a>
+            <h1 class="truncate font-display text-lg font-bold leading-tight text-white md:text-xl">
+              {{ detail()?.tournamentName || 'Match room' }}
+            </h1>
+            <p class="text-[0.7rem] text-arena-mist/70">
+              {{ detail()?.round }} · Match {{ detail()?.matchNumber }}
+            </p>
+          </div>
+          @if (status(); as current) {
+            <ludo-status-badge [status]="current" />
+          }
         </div>
-        @if (status(); as current) {
-          <ludo-status-badge [status]="current" />
+
+        @if (error()) {
+          <p class="mb-1 text-sm text-piece-red">{{ error() }}</p>
         }
       </div>
 
-      @if (error()) {
-        <p class="mx-auto max-w-7xl text-piece-red">{{ error() }}</p>
-      }
-
-      @if (game.state(); as state) {
-        @if (asMarriage(state); as marriage) {
-          <arena-marriage-table
-            [state]="marriage"
-            [interactive]="canPlay()"
-            [viewerPlayerId]="auth.user()?.id ?? null"
-            [canOpen]="game.marriageCanOpen()"
-            [canShow]="game.marriageCanShowWin()"
-            [selectedCardId]="game.selectedCardId()"
-            [deal]="game.marriageDeal()"
-            (drawStock)="game.marriageDraw('stock')"
-            (drawDiscard)="game.marriageDraw('discard')"
-            (open)="game.marriageOpen()"
-            (show)="game.marriageShow()"
-            (discard)="game.marriageDiscard($event)"
-            (selectCard)="game.selectCard($event)"
-            (reorder)="game.marriageReorder($event)"
-            (extendMeld)="game.marriageExtendMeld($event.cardId, $event.meldIndex)"
-            (joinMelds)="game.marriageJoinMelds($event.meldIndexA, $event.meldIndexB)"
-            (meldCardRemove)="onMeldCardRemove($event)"
-            (addMeld)="game.marriageAddMeld($event)"
-            (layoutError)="game.flashError($event)"
-          />
-          @if (game.tableLastEvent(); as event) {
-            <p class="mx-auto mt-3 max-w-5xl text-center text-xs text-arena-mist/60">{{ event }}</p>
-          }
-        } @else {
-          <ludo-game-table
-            [state]="game.tableState() ?? state"
-            [displayCoords]="game.displayCoords()"
-            [interactive]="canPlay() && !game.animating()"
-            [highlightValid]="canPlay()"
-            [movingPieceId]="game.movingPieceId()"
-            [hopTick]="game.hopTick()"
-            [diceUi]="game.diceUi()"
-            [canRoll]="game.canRoll()"
-            [lastEvent]="game.tableLastEvent()"
-            [errorMessage]="game.errorMessage()"
-            (pieceSelect)="game.move($event)"
-            (roll)="game.roll()"
-          />
-        }
-      } @else if (removed()) {
-        <div class="mx-auto max-w-xl rounded-3xl border border-dashed border-piece-red/40 p-10 text-center text-piece-red">
-          You are not in this match.
-        </div>
-      } @else {
-        <div class="mx-auto max-w-xl rounded-3xl border border-dashed border-arena-line p-10 text-center text-arena-mist/70">
-          <p>Waiting for the admin to start this match.</p>
-          <p class="mt-2 text-xs uppercase tracking-[0.2em] text-arena-gold">You are ready</p>
-          <ul class="mt-6 space-y-2 text-left text-sm">
-            @for (player of game.roster(); track player.userId) {
-              <li class="flex items-center justify-between rounded-2xl border border-arena-line px-4 py-2">
-                <span>{{ player.name }}</span>
-                <span [class.text-arena-gold]="player.ready" [class.text-arena-mist/50]="!player.ready">
-                  {{ player.ready ? 'Ready' : 'Waiting' }}
-                </span>
-              </li>
+      <div class="arena-fit-stage">
+        @if (game.state(); as state) {
+          @if (asMarriage(state); as marriage) {
+            <arena-marriage-table
+              [state]="marriage"
+              [interactive]="canPlay()"
+              [viewerPlayerId]="auth.user()?.id ?? null"
+              [canOpen]="game.marriageCanOpen()"
+              [canShow]="game.marriageCanShowWin()"
+              [selectedCardId]="game.selectedCardId()"
+              [deal]="game.marriageDeal()"
+              (drawStock)="game.marriageDraw('stock')"
+              (drawDiscard)="game.marriageDraw('discard')"
+              (open)="game.marriageOpen()"
+              (show)="game.marriageShow()"
+              (discard)="game.marriageDiscard($event)"
+              (selectCard)="game.selectCard($event)"
+              (reorder)="game.marriageReorder($event)"
+              (extendMeld)="game.marriageExtendMeld($event.cardId, $event.meldIndex)"
+              (joinMelds)="game.marriageJoinMelds($event.meldIndexA, $event.meldIndexB)"
+              (meldCardRemove)="onMeldCardRemove($event)"
+              (addMeld)="game.marriageAddMeld($event)"
+              (layoutError)="game.flashError($event)"
+            />
+            @if (game.tableLastEvent(); as event) {
+              <p class="mx-auto mt-2 max-w-5xl text-center text-xs text-arena-mist/60">{{ event }}</p>
             }
-          </ul>
-        </div>
-      }
+          } @else {
+            <ludo-game-table
+              [state]="game.tableState() ?? state"
+              [displayCoords]="game.displayCoords()"
+              [interactive]="canPlay() && !game.animating()"
+              [highlightValid]="canPlay()"
+              [movingPieceId]="game.movingPieceId()"
+              [hopTick]="game.hopTick()"
+              [diceUi]="game.diceUi()"
+              [canRoll]="game.canRoll()"
+              [lastEvent]="game.tableLastEvent()"
+              [errorMessage]="game.errorMessage()"
+              (pieceSelect)="game.move($event)"
+              (roll)="game.roll()"
+            />
+          }
+        } @else if (removed()) {
+          <div class="mx-auto max-w-xl rounded-3xl border border-dashed border-piece-red/40 p-8 text-center text-piece-red">
+            You are not in this match.
+          </div>
+        } @else {
+          <div class="mx-auto max-w-xl rounded-3xl border border-dashed border-arena-line p-8 text-center text-arena-mist/70">
+            <p>Waiting for the admin to start this match.</p>
+            <p class="mt-2 text-xs uppercase tracking-[0.2em] text-arena-gold">You are ready</p>
+            <ul class="mt-4 space-y-2 text-left text-sm">
+              @for (player of game.roster(); track player.userId) {
+                <li class="flex items-center justify-between rounded-2xl border border-arena-line px-4 py-2">
+                  <span>{{ player.name }}</span>
+                  <span [class.text-arena-gold]="player.ready" [class.text-arena-mist/50]="!player.ready">
+                    {{ player.ready ? 'Ready' : 'Waiting' }}
+                  </span>
+                </li>
+              }
+            </ul>
+          </div>
+        }
+      </div>
 
       @if (game.errorMessage(); as err) {
         <div class="pointer-events-none fixed inset-x-0 bottom-8 z-[100] flex justify-center px-4">

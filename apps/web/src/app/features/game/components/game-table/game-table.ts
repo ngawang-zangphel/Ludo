@@ -175,7 +175,7 @@ import { SnakesPlayerPanelComponent } from '../snakes-player-panel/snakes-player
       </div>
     }
 
-    <footer class="arena-hud mx-auto mt-3 grid max-w-4xl gap-3 md:grid-cols-[1fr_auto_1fr] md:items-center">
+    <footer class="arena-hud mx-auto mt-3 grid max-w-4xl shrink-0 gap-3 md:grid-cols-[1fr_auto_1fr] md:items-center">
       <ludo-turn-indicator
         [player]="currentPlayer()"
         [phase]="state().turnPhase"
