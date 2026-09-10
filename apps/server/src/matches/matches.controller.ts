@@ -12,6 +12,7 @@ import {
   AddPlayerDto,
   AssignPlayersDto,
   BulkMatchActionDto,
+  CreateEmptyMatchesDto,
   CreateMatchDto,
   CreateMatchGroupsDto,
   UpdateMatchDto,
@@ -67,6 +68,12 @@ export class MatchesController {
   @Roles(UserRole.ADMIN)
   createGroups(@Body() dto: CreateMatchGroupsDto): Promise<MatchDetailDto[]> {
     return this.matches.createGroups(dto);
+  }
+
+  @Post('empty')
+  @Roles(UserRole.ADMIN)
+  createEmpty(@Body() dto: CreateEmptyMatchesDto): Promise<MatchDetailDto[]> {
+    return this.matches.createEmpty(dto);
   }
 
   @Post('bulk')

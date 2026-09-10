@@ -558,7 +558,7 @@ import { SnakesPresetPickerComponent } from '../../game/components/snakes-preset
               <div>
                 <h2 class="font-display text-lg">Group tables</h2>
                 <p class="mt-1 text-sm text-arena-mist/70">
-                  One tournament can run many groups at once. Each group of 2–{{ maxTableSeats() }} players gets its own table.
+                  One tournament can run many groups at once. Create empty tables first, then add players — or seat 2–{{ maxTableSeats() }} players into a new group.
                 </p>
               </div>
               @if (rounds().length > 1) {
@@ -656,6 +656,8 @@ import { SnakesPresetPickerComponent } from '../../game/components/snakes-preset
                                       </button>
                                     }
                                   </span>
+                                } @empty {
+                                  <span class="text-xs text-arena-mist/50">Empty — add players below</span>
                                 }
                               </div>
                               @if (matchPlacements(match); as places) {
@@ -704,9 +706,34 @@ import { SnakesPresetPickerComponent } from '../../game/components/snakes-preset
                 </div>
               } @empty {
                 <p class="rounded-2xl border border-dashed border-arena-line px-4 py-6 text-sm text-arena-mist/60">
-                  No groups yet. Seat players below, or split everyone into groups.
+                  No tables yet. Create empty tables below, seat players into a group, or split everyone.
                 </p>
               }
+            </div>
+
+            <div class="mt-6 border-t border-arena-line/80 pt-5">
+              <p class="text-sm font-medium text-white">Create empty tables</p>
+              <p class="mt-1 text-sm text-arena-mist/70">
+                Pre-create tables now and fill seats later from each table card.
+              </p>
+              <div class="mt-3 flex flex-wrap items-center gap-2">
+                <input
+                  class="field w-24"
+                  name="emptyTableCount"
+                  type="number"
+                  min="1"
+                  max="100"
+                  [(ngModel)]="emptyTableCount"
+                />
+                <button
+                  type="button"
+                  class="rounded-full border border-arena-gold px-4 py-2 text-sm text-arena-gold disabled:opacity-40"
+                  [disabled]="creatingEmptyTables() || emptyTableCount < 1"
+                  (click)="createEmptyTables()"
+                >
+                  {{ creatingEmptyTables() ? 'Creating…' : 'Create ' + emptyTableCount + ' table' + (emptyTableCount === 1 ? '' : 's') }}
+                </button>
+              </div>
             </div>
 
             <div class="mt-6 border-t border-arena-line/80 pt-5">
@@ -759,7 +786,7 @@ import { SnakesPresetPickerComponent } from '../../game/components/snakes-preset
                 </p>
               } @else {
                 <p class="mt-2 text-sm text-arena-mist/60">
-                  Add at least 2 participants on the left, then you can seat a table.
+                  Add participants on the left when you’re ready, then fill empty tables or seat a new group here.
                 </p>
               }
             </div>
@@ -796,8 +823,10 @@ export class AdminTournamentsPage implements OnInit {
   readonly memberBusy = signal(false);
   readonly renamingId = signal<string | null>(null);
   readonly renamingBusy = signal(false);
+  readonly creatingEmptyTables = signal(false);
   renameName = '';
   draftGroupName = '';
+  emptyTableCount = 4;
   readonly readyCountLabel = readyCountLabel;
   readonly matchPlacements = matchPlacements;
   readonly placeLabel = placeLabel;
@@ -1175,6 +1204,32 @@ export class AdminTournamentsPage implements OnInit {
       this.selectedPlayerIds.set([]);
       await this.refreshSelected();
     });
+  }
+
+  async createEmptyTables(): Promise<void> {
+    const tournament = this.selected();
+    const count = Math.floor(Number(this.emptyTableCount));
+    if (!tournament) {
+      return;
+    }
+    if (!Number.isFinite(count) || count < 1 || count > 100) {
+      this.error.set('Enter a table count between 1 and 100.');
+      return;
+    }
+    this.creatingEmptyTables.set(true);
+    try {
+      await this.guard(async () => {
+        await this.api.createEmptyMatches({
+          tournamentId: tournament.id,
+          count,
+          round: this.round,
+          roundNumber: this.roundNumber,
+        });
+        await this.refreshSelected();
+      });
+    } finally {
+      this.creatingEmptyTables.set(false);
+    }
   }
 
   maxTableSeats(): number {

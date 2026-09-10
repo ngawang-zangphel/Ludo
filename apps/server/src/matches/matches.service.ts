@@ -71,6 +71,7 @@ import {
   AddPlayerDto,
   AssignPlayersDto,
   BulkMatchActionDto,
+  CreateEmptyMatchesDto,
   CreateMatchDto,
   CreateMatchGroupsDto,
   UpdateMatchDto,
@@ -201,6 +202,20 @@ export class MatchesService implements OnModuleInit {
     return created;
   }
 
+  async createEmpty(dto: CreateEmptyMatchesDto): Promise<MatchDetailDto[]> {
+    const created: MatchDetailDto[] = [];
+    for (let index = 0; index < dto.count; index += 1) {
+      created.push(
+        await this.create({
+          tournamentId: dto.tournamentId,
+          round: dto.round,
+          roundNumber: dto.roundNumber,
+        })
+      );
+    }
+    return created;
+  }
+
   async updateMatch(matchId: string, dto: UpdateMatchDto): Promise<MatchDetailDto> {
     return this.enqueue(matchId, async () => {
       const match = await this.state.loadMatch(matchId);
@@ -285,8 +300,8 @@ export class MatchesService implements OnModuleInit {
     const tournament = await this.requireTournament(toObjectIdString(match.tournamentId));
     const gameType = match.gameType ?? tournament.gameType ?? GameType.LUDO;
     const maxPlayers = maxSeatsForTournament(gameType, tournament.rules);
-    if (dto.playerUserIds.length < 2 || dto.playerUserIds.length > maxPlayers) {
-      throw new BadRequestException(`A match needs 2 to ${maxPlayers} players`);
+    if (dto.playerUserIds.length > maxPlayers) {
+      throw new BadRequestException(`A match can have at most ${maxPlayers} players`);
     }
     await this.assertPlayersAvailable(toObjectIdString(match.tournamentId), dto.playerUserIds, matchId);
     const colors =

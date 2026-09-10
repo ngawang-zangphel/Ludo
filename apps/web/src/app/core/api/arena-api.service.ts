@@ -78,6 +78,15 @@ export class ArenaApiService {
     return firstValueFrom(this.http.post<MatchDetailDto[]>('/api/matches/groups', body));
   }
 
+  createEmptyMatches(body: {
+    tournamentId: string;
+    count: number;
+    round?: string;
+    roundNumber?: number;
+  }): Promise<MatchDetailDto[]> {
+    return firstValueFrom(this.http.post<MatchDetailDto[]>('/api/matches/empty', body));
+  }
+
   updateMatch(matchId: string, body: { groupName?: string }): Promise<MatchDetailDto> {
     return firstValueFrom(this.http.patch<MatchDetailDto>(`/api/matches/${matchId}`, body));
   }
